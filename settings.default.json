@@ -1,0 +1,30 @@
+{
+ "_readme": "Public values. Do not change them for your machine: write yours in settings.json (same shape, only the keys to change), or through the environment variables (see tools/settings.py). {data} = paths.data; a relative path starts from the repository root.",
+ "paths": {
+  "data": "data",
+  "skeletons": "{data}/squelettes"
+ },
+ "programs": {
+  "blender": "blender",
+  "python": null
+ },
+ "compute": {
+  "slots": null,
+  "launcher": "",
+  "queue_dir": null
+ },
+ "workshop": {
+  "_readme": "body: the VRoid base (tools/vroid_base/build.py <model.vrm>). Without a VRM, the free MakeHuman base (tools/free_base/build.py): body {data}/base-libre/corps.pmx, cache {data}/atelier-base-libre. One cache per body. skeleton: custom (bones with readable names, when its data exists) or zzz (the bones of the base body).",
+  "cache": "{data}/atelier-base-vroid",
+  "body": "{data}/base-vroid/corps.pmx",
+  "skeleton": "custom"
+ },
+ "library": {
+  "_readme": "url: where tools/library/library.py install fetches the ready-made library (a Hugging Face dataset, the folder that holds index.json); a local folder also works.",
+  "url": "https://huggingface.co/datasets/Rose-and-Knight/chimera-vroid-library/resolve/main"
+ },
+ "games": {
+  "_readme": "active: the game the models come from (its description: tools/games/<game>/game.json). Each description gives the public default of its source folders; games.<game>.<source> (e.g. games.zzz.mmd_extrait) changes them for your machine.",
+  "active": "vroid"
+ }
+}

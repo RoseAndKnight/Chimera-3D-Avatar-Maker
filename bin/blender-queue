@@ -1,0 +1,24 @@
+#!/bin/bash
+# Queue for Blender runs: as many slots as the machine can carry
+# (one per physical core, 2.5 GB of free memory each, at least 2; BLENDER_SLOTS, CHIMERA_SLOTS or compute.slots override it).
+# Blender: programs.blender from the settings (CHIMERA_BLENDER), otherwise blender from the PATH; lock folder:
+# compute.queue_dir, otherwise $TMPDIR/blender-queue-<uid>. See tools/settings.py.
+# Usage: bin/blender-queue <blender arguments>   (e.g. -b --python tools/free_base/view_body.py -- <arguments>)
+R="$(cd "$(dirname "$(readlink -f "$0")")/.." && pwd)"
+lire() { python3 -I "$R/tools/settings.py" "$@" 2>/dev/null; }
+B=$(lire program blender); B=${B:-blender}
+D=$(lire path compute.queue_dir); D=${D:-${TMPDIR:-/tmp}/blender-queue-$(id -u)}
+mkdir -p "$D"
+N=${BLENDER_SLOTS:-$(lire value compute.slots)}
+if [ -z "$N" ]; then
+  c=$(( $(nproc) / 2 )); m=$(( $(awk '/MemAvailable/ {print $2}' /proc/meminfo) / 2621440 ))
+  N=$(( c < m ? c : m )); [ "$N" -lt 2 ] && N=2
+fi
+while true; do
+  for i in $(seq 1 "$N"); do
+    exec 9>"$D/slot$i"
+    if flock -n 9; then "$B" "$@"; exit $?; fi
+    exec 9>&-
+  done
+  sleep 5
+done

@@ -48,15 +48,15 @@ The interface is in English and French. The documentation and the code comments 
 | Skeleton: MMD standard bones (the official Zenless Zone Zero MMD models) | proven |
 | Skeleton: VRM 0.x humanoid (VRoid) | partial |
 
-The Library page shows this list for your installation. Details and limits: [COMPATIBILITE.md](COMPATIBILITE.md).
+The Library page shows this list for your installation. Details and limits: [COMPATIBILITY.md](COMPATIBILITY.md).
 
 ## Quick start
 
 Linux, Python 3 with numpy, Blender 5.2, a WebGL2 browser. From the repository root:
 
-    python3 -I outils/base_vroid/fabriquer.py MyCharacter.vrm   # the base body, from a VRoid Studio character of yours (seconds)
-    python3 -I outils/atelier/catalogue.py preparer             # the catalogue of the page (needs Blender)
-    bin/atelier                                                 # http://127.0.0.1:8767
+    python3 -I tools/vroid_base/build.py MyCharacter.vrm   # the base body, from a VRoid Studio character of yours (seconds)
+    python3 -I tools/workshop/catalog.py prepare             # the catalogue of the page (needs Blender)
+    bin/chimera                                                 # http://127.0.0.1:8767
 
 Then, in the page: **Library** → drop your models → **Extract parts** → **Create**.
 
@@ -72,8 +72,8 @@ Their authors allow redistribution and modification, and each model keeps its au
 library's `CREDITS.md`). It is about 8.6 GB to download,
 checked with sha256 and resumable:
 
-    python3 -I outils/bibliotheque/bibliotheque.py installer
-    bin/atelier
+    python3 -I tools/library/library.py install
+    bin/chimera
 
 The page then opens on the whole catalogue. Models of your own can still be added, and existing ones are never
 overwritten. Details: [INSTALLATION.md](INSTALLATION.md).
@@ -91,23 +91,23 @@ and neither may parts of them. Never attach a model, a texture or an extract to 
 
 ## Adding a game or a format
 
-Each game or model family is described by one file, `outils/jeux/<jeu>/jeu.json`.
-[CONTRIBUER.md](CONTRIBUER.md) explains what a description alone can do and which files of the core must
+Each game or model family is described by one file, `tools/games/<game>/game.json`.
+[CONTRIBUTING.md](CONTRIBUTING.md) explains what a description alone can do and which files of the core must
 change otherwise.
 
 ## Layout
 
 | path | role |
 |---|---|
-| `outils/atelier` | the app: catalogue, local server, web page, light and shadow settings, assembly in Blender |
-| `outils/atelier/page/rendus` | render presets (JSON) |
-| `outils/base_vroid` | the base body, face and hairstyle, from a VRoid character you provide |
-| `outils/base_libre` | fallback base built from the MakeHuman mesh (CC0) |
-| `outils/vroid` | VRM 0.x import |
-| `outils/jeux` | one description per game or model family |
-| `outils/tete`, `outils/vetements`, `outils/cheveux` | faces, clothes and hair: extraction, fitting, checks |
-| `outils/corps_refait`, `outils/corps_maison`, `outils/tete_refaite` | building one's own body, skeleton and head |
-| `outils/reglages.py`, `reglages.defaut.json` | settings; yours go in `reglages.json` (not tracked) |
+| `tools/workshop` | the app: catalogue, local server, web page, light and shadow settings, assembly in Blender |
+| `tools/workshop/page/presets` | render presets (JSON) |
+| `tools/vroid_base` | the base body, face and hairstyle, from a VRoid character you provide |
+| `tools/free_base` | fallback base built from the MakeHuman mesh (CC0) |
+| `tools/vroid` | VRM 0.x import |
+| `tools/games` | one description per game or model family |
+| `tools/head`, `tools/clothes`, `tools/hair` | faces, clothes and hair: extraction, fitting, checks |
+| `tools/rebuilt_body`, `tools/custom_body`, `tools/rebuilt_head` | building one's own body, skeleton and head |
+| `tools/settings.py`, `settings.default.json` | settings; yours go in `settings.json` (not tracked) |
 
 ## Licence
 

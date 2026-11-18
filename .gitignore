@@ -1,10 +1,10 @@
-# Dérivés des références de jeux et réponses des juges : jamais d'assets suivis.
+# Derived from game references and judges' answers: never tracked assets.
 banc/cache/
 banc/godot/.godot/
 banc/godot/*.uid
 __pycache__/
 
-# Réglages propres à la machine (chemins des données, de Blender) : voir outils/reglages.py.
-/reglages.json
-# Données de l'utilisateur (modèles de jeux, cache) quand chemins.donnees garde sa valeur par défaut : jamais suivies.
-/donnees/
+# Machine-specific settings (data paths, Blender): see tools/settings.py.
+/settings.json
+# The user's data (game models, cache) when paths.data keeps its default value: never tracked.
+/data/

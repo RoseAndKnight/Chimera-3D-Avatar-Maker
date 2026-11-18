@@ -1,0 +1,90 @@
+{
+ "layers": {
+  "_readme": "Chimera's layers: garment types, kinds of accessories, ranks (what goes over what), stacking thresholds. Public values, read after settings.default.json. Do not change them here: write in settings.json, under \"layers\", only the keys to change (merged key by key; a list is replaced whole). See tools/workshop/README.md, the section on tuning the layers.",
+
+  "garments": {
+   "_help": "garment type (the one in fiche.json) -> tab of the page (haut, bas, chaussures, accessoires: the page knows only these; type names and tab ids are the vocabulary of the part records, fiche.json, and stay as they are), slot (two parts with the same slot are not worn together), rank (from inside to outside: the smallest is worn underneath), displayed name, also_takes (slots it takes in addition to its own). A type missing from here does not enter the catalogue.",
+   "culotte": {"tab": "bas", "slot": "dessous", "rank": 10, "name": "underwear"},
+   "chaussettes": {"tab": "chaussures", "slot": "chaussettes", "rank": 15, "name": "socks"},
+   "haut": {"tab": "haut", "slot": "haut", "rank": 20, "name": "top"},
+   "manches": {"tab": "haut", "slot": "manches", "rank": 26, "name": "sleeves"},
+   "short": {"tab": "bas", "slot": "bas", "rank": 30, "name": "shorts"},
+   "pantalon": {"tab": "bas", "slot": "bas", "rank": 30, "name": "trousers"},
+   "jupe": {"tab": "bas", "slot": "jupe", "rank": 32, "name": "skirt"},
+   "robe": {"tab": "bas", "slot": "robe", "rank": 34, "name": "dress", "also_takes": ["jupe"]},
+   "combinaison": {"tab": "bas", "slot": "robe", "rank": 34, "name": "jumpsuit", "also_takes": ["bas", "jupe"]},
+   "chaussures": {"tab": "chaussures", "slot": "chaussures", "rank": 40, "name": "shoes"},
+   "bottes": {"tab": "chaussures", "slot": "chaussures", "rank": 42, "name": "boots"},
+   "gants": {"tab": "accessoires", "slot": "mains", "rank": 44, "name": "gloves"},
+   "col": {"tab": "haut", "slot": "col", "rank": 48, "name": "collar"},
+   "gilet": {"tab": "haut", "slot": "gilet", "rank": 52, "name": "waistcoat"},
+   "veste": {"tab": "haut", "slot": "dessus", "rank": 55, "name": "jacket"},
+   "manteau": {"tab": "haut", "slot": "dessus", "rank": 60, "name": "coat"},
+   "capuche": {"tab": "haut", "slot": "capuche", "rank": 62, "name": "hood"}
+  },
+
+  "accessories": {
+   "_help": "kind of accessory (the one in fiche.json) -> rank, exclusive (only one of this kind at a time), displayed name, belt_like (goes around the body: fitted with the clothes, laid on the fabric without ever squeezing it; the other accessories are laid over what they touch). Tab: always accessoires. A kind missing from here does not enter the catalogue.",
+   "ceinture": {"rank": 70, "exclusive": true, "name": "belt", "belt_like": true},
+   "harnais": {"rank": 72, "exclusive": true, "name": "harness"},
+   "jarretiere": {"rank": 66, "exclusive": false, "name": "garter"},
+   "chevillere": {"rank": 67, "exclusive": false, "name": "anklet"},
+   "brassard": {"rank": 68, "exclusive": false, "name": "armband"},
+   "bracelet": {"rank": 69, "exclusive": false, "name": "bracelet"},
+   "bague": {"rank": 69, "exclusive": false, "name": "ring"},
+   "cravate": {"rank": 75, "exclusive": true, "name": "tie"},
+   "echarpe": {"rank": 76, "exclusive": true, "name": "scarf"},
+   "collier": {"rank": 78, "exclusive": true, "name": "necklace"},
+   "bijou": {"rank": 78, "exclusive": false, "name": "jewel"},
+   "sac": {"rank": 80, "exclusive": true, "name": "bag"},
+   "lunettes": {"rank": 84, "exclusive": true, "name": "glasses"},
+   "masque": {"rank": 84, "exclusive": true, "name": "mask"},
+   "couvre_chef": {"rank": 86, "exclusive": true, "name": "headwear"},
+   "casque_audio": {"rank": 86, "exclusive": true, "name": "headphones"},
+   "queue": {"rank": 88, "exclusive": true, "name": "tail"},
+   "ailes": {"rank": 88, "exclusive": true, "name": "wings"},
+   "oreilles": {"rank": 88, "exclusive": true, "name": "ears"}
+  },
+
+  "outfit": {
+   "_help": "Rules of a worn outfit (tools/workshop/outfit.py). ranks_in_outfit: rank forced on a type during fitting, instead of its own (a belt is worn over the bottom and under the open jacket). closed_bottoms: the bottoms that cover the underwear (it is then not worn). tops and bottoms: a top whose hem comes out of the bottom by more than top_over_mm is worn over that bottom.",
+   "ranks_in_outfit": {"ceinture": 36},
+   "closed_bottoms": ["short", "pantalon"],
+   "tops": ["haut"],
+   "bottoms": ["short", "pantalon", "jupe"]
+  },
+
+  "thresholds": {
+   "_help": {
+    "accessory_gap_mm": "gap between a laid accessory (necklace, bag) and what it touches",
+    "layer_gap_mm": "gap between two layers, along a line (more for wide meshes, see max_sag_mm)",
+    "floor_mm": "height above the skin below which a part is not crushed (except under a boot)",
+    "free_flap_mm": "a free flap (skirt hem, frill) farther than this in front of the outer part flares over it and is left untouched; it is also the most a belt sticks out",
+    "max_outward_mm": "an outer part never moves out by more than this (a jacket does not puff up); the rest is reported",
+    "limb_radius_mm": "curvature of a limb: an edge of length e deviates from it by e² / (8 × radius), added to the gap between layers",
+    "max_sag_mm": "the most that the edge length adds to the gap between layers",
+    "top_over_mm": "median protrusion of a top out of the bottom from which the top is worn over it",
+    "hide_tolerance_mm": "an inner face is hidden (removed) if it is under the outer part, or in front of it by less than this",
+    "hide_reach_mm": "beyond this, the outer part floats: you see underneath through the opening, nothing is removed",
+    "ray_reach_mm": "beyond this, two parts are no longer on top of each other (length of the measuring rays; longer = slower)",
+    "flag_depth_mm": "an inner point that passes in front of the outer part by more than this counts as poking through",
+    "flag_share": "share of poking-through points (0.01 = 1 %) from which the page flags a pair",
+    "passes": "fitting passes per part (more = slower, recovers difficult parts better)"
+   },
+   "accessory_gap_mm": 3,
+   "layer_gap_mm": 1.5,
+   "floor_mm": 1,
+   "free_flap_mm": 25,
+   "max_outward_mm": 8,
+   "limb_radius_mm": 50,
+   "max_sag_mm": 3,
+   "top_over_mm": 3,
+   "hide_tolerance_mm": 6,
+   "hide_reach_mm": 30,
+   "ray_reach_mm": 60,
+   "flag_depth_mm": 0.5,
+   "flag_share": 0.01,
+   "passes": 4
+  }
+ }
+}

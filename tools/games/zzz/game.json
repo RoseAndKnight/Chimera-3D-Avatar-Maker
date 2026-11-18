@@ -1,0 +1,263 @@
+{
+ "_lisez_moi": "Description of Zenless Zone Zero (ZZZ): where its models are, which ones, the base head, the special cases per character, the studies made on its models. The models are not provided: sources.mmd_extrait is the folder of the extracted official PMX files (MMD archives published by the studio). See tools/games/README.md.",
+ "titre": "Zenless Zone Zero",
+ "abrege": "ZZZ",
+ "format": "pmx",
+ "compatibilite": {
+  "_lisez_moi": "What the tool does with this game's models, according to the code and the data of 15/11/2026. Read by python3 -I tools/games (list, table, check); COMPATIBILITY.md is drawn from it. No other tool reads it.",
+  "niveau": "eprouve",
+  "resume": "The game the pipeline was written for: faces, hairstyles, clothes and accessories of its MMD models all go through Chimera, measured and sorted automatically.",
+  "formats": ["PMX (MMD)"],
+  "provenance": "The MMD model archives that the studio publishes for this game, one per character, unpacked as they are (one folder per character, the PMX and its textures). Each archive has its terms of use: read them.",
+  "sources": {
+   "mmd_extrait": {
+    "contenu": "one folder per character, at the path given in \"modeles\" (e.g. `Anby/安比.pmx`), with the textures next to the PMX",
+    "verifier": {"fichiers_de": ["modeles"]}
+   }
+  },
+  "prise_en_charge": {
+   "tetes": {"niveau": "eprouve", "detail": "Each character's face measured on the pivot head, then stitched into the oval of the base head; 16 faces offered (list \"catalogue.tetes\"), 16 kept out of 16 on 15/11/2026."},
+   "coiffures": {"niveau": "eprouve", "detail": "Hair, headwear and animal ears measured for the 49 characters; 44 of the game's hairstyles kept out of 49 on 15/11/2026 (rejected: fits cleanly on no head, or fails on its own head)."},
+   "vetements": {"niveau": "eprouve", "detail": "Outfit cut into parts (top, bottom, shoes…), each part worn on the base body, then checked; 210 clothing parts kept on 15/11/2026; 25 of the game's parts rejected out of 484 (clothes and accessories; reasons in COMPATIBILITY.md)."},
+   "accessoires": {"niveau": "eprouve", "detail": "Belts, gloves, jewellery, straps… cut with the outfit and checked the same way; 249 accessories kept on 15/11/2026."},
+   "expressions": {"niveau": "partiel", "detail": "Built from the model's MMD morphs (まばたき, あ, 笑い…), with a strength specific to some heads (\"personnages\"); computed on demand (tools/workshop/expressions.py), only for Jane in the cache of 15/11/2026."}
+  },
+  "etapes": [
+   "Put the extracted PMX files in the `mmd_extrait` folder (or write its path in `settings.json` under `jeux.zzz.mmd_extrait`). Check: `python3 -I tools/games` must say \"49/49 expected files\".",
+   "The base body (setting `workshop.body`) must exist: `<python> -I tools/free_base/build.py` builds a free one. If Chimera has already been used without a game model, give another cache (`workshop.cache`): the base head changes.",
+   "`<python> -I tools/head/pivot.py --output <data>/tete-pivot`: the pivot head, through which all faces go.",
+   "`<python> -I tools/head/library.py extract --output <data>/bibliotheque-visage`: each character's face.",
+   "`<python> -I tools/head/hairstyle.py extract --library <data>/bibliotheque-visage`: hairstyles.",
+   "`<python> -I tools/clothes/library.py extract --output <data>/bibliotheque-vetements`: outfits cut into parts (trims and index included).",
+   "`<python> -I tools/workshop/catalog.py prepare` (short trial: `--level small`): Chimera's cache; then `catalog.py summary` for the parts kept and rejected.",
+   "`bin/chimera`: the page."
+  ],
+  "limites": [
+   "The paths in \"modeles\" follow a specific layout of the archives (English folder name of the character, Chinese file name). Another layout requires correcting \"modeles\" in the description: no setting changes it.",
+   "49 human characters only. Not listed: non-human or helmeted heads (Ben, Billy, Lycaon, Pan Yinhu, Pyrois, Banyue), Trigger (eyes closed under the blindfold), Rina (painted eyebrows), Norma and Verina (material 脸 instead of 颜, which the core does not recognize).",
+   "The first-pass head (Belle) is required by the pivot head, the base head (Yuzuha) by the catalogue: without them, nothing gets prepared.",
+   "The measurement thresholds (eye radius, mouth, distance between the eyes) are tuned to the scale of these models (MMD units).",
+   "Outfit variants of the same character are left out: same head, they would count twice.",
+   "`clothes/library.py extract` without `--only` cuts every entry of the face library, Outerplane included if there are any (never tried on them)."
+  ]
+ },
+ "sources": {"mmd_extrait": "{data}/sources/zzz/mmd-extrait"},
+ "_modeles": "One model per human character, path relative to sources.mmd_extrait (outfit variants left out: same head, they would count twice). Not listed: Ben, Billy, Lycaon, Pan Yinhu, Pyrois, Banyue (non-human or helmeted heads), Trigger (eyes closed under the blindfold), Rina (painted eyebrows, no geometry), Norma and Verina (other material naming: 脸 instead of 颜).",
+ "modeles": {
+  "Alice": "Alice/爱丽丝.pmx",
+  "Anby": "Anby/安比.pmx",
+  "Anton": "Anton/安东.pmx",
+  "Aria": "Aria/爱芮_人形/爱芮.pmx",
+  "Astra": "Astra/耀嘉音.pmx",
+  "Belle": "Belle/铃.pmx",
+  "Burnice": "Burnice/柏妮思.pmx",
+  "Caesar": "Caesar/凯撒.pmx",
+  "Chinatsu": "Chinatsu/2.6千夏_午后茶歇/千夏皮肤.pmx",
+  "Cissia": "Cissia/希希芙.pmx",
+  "Claret": "Claret/克拉蕾.pmx",
+  "Corin": "Corin/可琳.pmx",
+  "Dialyn": "Dialyn/琉音.pmx",
+  "Ellen": "Ellen/艾莲.pmx",
+  "Evelyn": "Evelyn/伊芙琳.pmx",
+  "Grace": "Grace/格莉丝.pmx",
+  "Harumasa": "Harumasa/浅羽悠真.pmx",
+  "Hugo": "Hugo/雨果.pmx",
+  "Jane": "Jane/简.pmx",
+  "JuFufu": "JuFufu/橘福福.pmx",
+  "Koleda": "Koleda/珂雷妲.pmx",
+  "Lighter": "Lighter/莱特.pmx",
+  "Lucia": "Lucia/卢西娅.pmx",
+  "Lucy": "Lucy/露西.pmx",
+  "Manato": "Manato/2.3狛野真斗/狛野真斗.pmx",
+  "Miyabi": "Miyabi/星见雅.pmx",
+  "NangongYu": "NangongYu/南宫羽_狂想缪斯/南宫羽.pmx",
+  "Nekomata": "Nekomata/猫又.pmx",
+  "Nicole": "Nicole/妮可.pmx",
+  "Orphie": "Orphie-Magus/Brujas.pmx",
+  "Phionie": "Phionie/菲欧妮皮肤/菲欧妮皮肤/菲欧妮-白.pmx",
+  "Piper": "Piper/派派.pmx",
+  "Promeia": "Promeia/普罗米娅.pmx",
+  "Pulchra": "Pulchra/波可娜.pmx",
+  "Qingyi": "Qingyi/青衣.pmx",
+  "Remielle": "Remielle/蕾米埃尔-白/蕾米埃尔-白带大翅膀.pmx",
+  "Seed": "Seed/席德/席德.pmx",
+  "Seth": "Seth/赛斯.pmx",
+  "Soldat11": "Soldat11/11号.pmx",
+  "Soukaku": "Soukaku/苍角.pmx",
+  "Vivian": "Vivian/2.3薇薇安/薇薇安.pmx",
+  "Wise": "Wise/哲.pmx",
+  "Yanagi": "Yanagi/月城柳.pmx",
+  "YeShunguang": "YeShunguang/叶瞬光.pmx",
+  "Yidhari": "Yidhari/伊德海莉.pmx",
+  "Yixuan": "Yixuan/仪玄/仪玄.pmx",
+  "Yuzuha": "Yuzuha/柚叶.pmx",
+  "Zhao": "Zhao/照.pmx",
+  "ZhuYuan": "ZhuYuan/朱鸢.pmx"
+ },
+ "tete_base": {
+  "_note": "Base head (pivot head, tools/head/pivot.py: the human head closest to the average): its whole head (face, ears and neck in one piece) is stitched once onto the common body; each face of the catalogue is stitched into its oval. ecart_yeux and centre_yeux: distance between the eye centres and midpoint of the eyes of this head (MMD units); the absolute thresholds of tete.Tete (eye radius 0.35, mouth at |x| < 0.05) are tuned to this scale.",
+  "nom": "Yuzuha",
+  "ecart_yeux": 0.9699,
+  "centre_yeux": [0.0043, 18.414, -0.5325],
+  "premier_passage": "Belle"
+ },
+ "tetes": {
+  "_note": "ecart_yeux_typique: typical distance between the eyes of the game's heads (MMD units), which brings a head read from a GLB (another studio) to a similar scale.",
+  "ecart_yeux_typique": 0.44
+ },
+ "catalogue": {
+  "_note": "Faces offered by Chimera: each is stitched into the oval of the base head (itself in the catalogue). coiffures \"toutes\": every head of the library whose hairstyle is measured and whose outfit is cut. petit: the trial level of catalog.py prepare --level small.",
+  "tetes": [
+   "Yuzuha",
+   "Jane",
+   "Miyabi",
+   "Nicole",
+   "Anby",
+   "Yanagi",
+   "Evelyn",
+   "Grace",
+   "Yixuan",
+   "ZhuYuan",
+   "Astra",
+   "Pulchra",
+   "Belle",
+   "Promeia",
+   "Yidhari",
+   "Caesar"
+  ],
+  "coiffures": "toutes",
+  "petit": {"tetes": ["Jane", "Miyabi"], "coiffures": ["Anby", "Miyabi"]}
+ },
+ "personnages": {
+  "_note": "Special cases, sorted by character. expressions: strength specific to the head, replaces the named weights of the common expression (tools/workshop/expressions.py). exception_vetement: a cut that the mesh alone does not find (tools/clothes/library.py), from an entry of etudes.vetements.",
+  "Jane": {"expressions": {"Yandere": {"びっくり": 1.35, "@iris": 0.66}}},
+  "Yanagi": {
+   "_expressions": "her own eyes are large and round; opened too wide, she looked frightened → little opening, lower eyelid raised by the smile, iris shrunk less",
+   "expressions": {"Yandere": {"びっくり": 0.25, "にこり": 0.6, "下眼上": 0.35, "@iris": 0.72}}
+  },
+  "Yuzuha": {
+   "_exception_vetement": "The material 体 carries the cardigan AND the dress, welded into one piece, of the same colour at the seams: nothing in the mesh separates them. The cut by texture area already measured is reused (etudes.vetements, \"yuzuha_cardigan\"), with no new entry.",
+   "exception_vetement": {
+    "spec": "yuzuha_cardigan",
+    "type": "veste",
+    "pourquoi": "cardigan and dress welded in 体: cut by UV area (mesure.PULLS)"
+   }
+  }
+ },
+ "etudes": {
+  "_note": "Choices made by looking at the game's models, for the measuring tools. vetements: the clothes of tools/clothes/measure.py (one per requested type, on different characters when possible, and contrasting constructions: single sheet, closed shell, double-sided, garment = body; preview of the 16 outfits of 7/11/2026), then the real sweaters (long-sleeved tops in thick knit, without physics chains of their own). cheveux: the hairstyles measured by tools/hair/measure.py. tenues_couches: reference outfits of tools/workshop/check_layers.py (house and game parts, from tight layers to loose ones).",
+  "_yuzuha_cardigan": "the material 体 carries the whole outfit, welded into one piece: the cardigan is cut by its texture area (front/back, sleeve, cuff, bottom ribbing), measured on the UV map; uv_exclure: dark bands of the cuffs, ends of straps and lower laces (not pink knit)",
+  "vetements": [
+   {
+    "id": "lucy_tshirt",
+    "perso": "Lucy",
+    "type": "haut_moulant",
+    "mats": ["T恤"],
+    "calques": ["T恤+"],
+    "pourquoi": "short tight t-shirt worn under the jacket: a single piece that stands in for the torso skin, with a \"+\" layer."
+   },
+   {
+    "id": "belle_haut",
+    "perso": "Belle",
+    "type": "haut_ample",
+    "mats": ["背心"],
+    "exclure_os": "徽章",
+    "pourquoi": "open, loose sleeveless hooded vest: floats over the top, front flaps on BX chains; badge (bone 徽章) left out."
+   },
+   {
+    "id": "anby_blouson",
+    "perso": "Anby",
+    "type": "haut_epais",
+    "mats": ["上衣"],
+    "pourquoi": "short jacket with big padded sleeves, no physics: the thick volume closest to a thick sweater in the library."
+   },
+   {
+    "id": "wise_veste",
+    "perso": "Wise",
+    "type": "veste_ouverte",
+    "mats": ["外套"],
+    "pourquoi": "open sleeveless vest over a t-shirt, free flaps with bone chains: the open-vest case."
+   },
+   {
+    "id": "evelyn_chemise",
+    "perso": "Evelyn",
+    "type": "chemise",
+    "mats": ["衬衣"],
+    "pourquoi": "white shirt with collar under a corset and coat: collar and shirt front as separate pieces, weights copied from the body."
+   },
+   {
+    "id": "anby_jupe",
+    "perso": "Anby",
+    "type": "jupe",
+    "mats": ["裙"],
+    "exclure_pieces": [1, 2, 3, 4, 5],
+    "pourquoi": "short pleated skirt: geometric pleats and skirt physics; belt and buckle (pieces 1-5, 100 % on 上半身) left out."
+   },
+   {
+    "id": "grace_pantalon",
+    "perso": "Grace",
+    "type": "pantalon",
+    "mats": ["裤子"],
+    "pourquoi": "tight trousers down to the ankles, own material; the knee pad is welded into the piece (not separable)."
+   },
+   {
+    "id": "belle_short",
+    "perso": "Belle",
+    "type": "short",
+    "mats": ["裤"],
+    "pourquoi": "tight one-piece shorts, thigh hems welded to the thigh skin, free waist."
+   },
+   {
+    "id": "evelyn_manteau",
+    "perso": "Evelyn",
+    "type": "manteau_long",
+    "mats": ["外套"],
+    "calques": ["外套+"],
+    "pourquoi": "long open coat with hanging sleeves, one piece with physics chains; double-sided through a layer."
+   },
+   {
+    "id": "belle_chaussette",
+    "perso": "Belle",
+    "type": "peint_sur_corps",
+    "mats": ["袜1"],
+    "pourquoi": "high sock of the left leg: no skin underneath, the garment mesh is the leg (garment painted on the body)."
+   },
+   {
+    "id": "yuzuha_cardigan",
+    "perso": "Yuzuha",
+    "type": "pull",
+    "mats": ["体"],
+    "uv_boites": [
+     [[0, 0.64], [0.58, 1]],
+     [[0.57, 0.72], [0.93, 1]],
+     [[0.4, 0.22], [0.72, 0.28]],
+     [[0.93, 0.1], [1, 0.45]],
+     [[0.68, 0], [0.86, 0.08]]
+    ],
+    "uv_exclure": [[[0.35, 0.62], [0.47, 0.7]]],
+    "uv_clarte_min": 0.35,
+    "exclure_os": "Bowtie|BkStraps|Backpack|Armband|裙",
+    "pourquoi": "pink chunky cable-knit cardigan, very loose long sleeves, buttoned, worn over a sailor-collar dress, in the same mesh as the dress. The bottom follows the 裙 skirt chains of the dress. The dress bow, the bag straps, the armband, the dark cuffs and the lower laces are left out."
+   },
+   {
+    "id": "wise_pull",
+    "perso": "WiseTenue",
+    "pmx": "Belle-Wise-tenue/哲皮肤/哲.pmx",
+    "type": "pull",
+    "mats": ["衣"],
+    "calques": ["衣+"],
+    "garder_pieces": [0, 8],
+    "pourquoi": "diamond-pattern jacquard sweater, ribbed crew neck, long sleeves, worn over a shirt (Wise's alternate outfit). Small helper bones at the sleeves and hem, no hanging chain. Pieces 0 (body and sleeves) and 8 (collar ribbing); collar, cuffs and shirt tails, belt and brooches left out."
+   }
+  ],
+  "cheveux": ["Anton", "Anby", "Lighter", "Burnice", "Jane", "Evelyn", "Miyabi", "Koleda", "Qingyi", "Astra"],
+  "tenues_couches": {
+   "pull-veste": ["Atelier__pull", "Atelier__pantalon", "Anby__bottes", "Lucy__veste"],
+   "haut-jupe-ceinture": ["Nicole__haut", "Yanagi__jupe", "Alice__chaussettes", "Belle__chaussures", "Maelys__ceinture"],
+   "collant-manteau": ["Evelyn__haut", "Ellen__pantalon", "Evelyn__manteau", "Hugo__chaussures"],
+   "robe-veste": ["Ellen__robe", "Hugo__veste", "Yuzuha__bottes", "Yuzuha__chaussettes"],
+   "tshirt-gilet-short": ["Atelier__tshirt", "Belle__gilet", "Maelys__culotte", "Lucy__jupe", "Anby__bottes"],
+   "debardeur-manteau": ["Maelys__debardeur", "Maelys__jupe", "Maelys__culotte", "Evelyn__manteau", "Yuzuha__chaussettes"]
+  }
+ }
+}

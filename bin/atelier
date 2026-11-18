@@ -1,6 +1,0 @@
-#!/bin/bash
-# Opens Chimera in the browser: bin/atelier [port]
-# Python: programmes.python from the settings (reglages.json, ATELIER_PYTHON), otherwise python3; see outils/reglages.py.
-R="$(cd "$(dirname "$(readlink -f "$0")")/.." && pwd)"
-PY=$(python3 -I "$R/outils/reglages.py" programme python 2>/dev/null); PY=${PY:-python3}
-exec "$PY" -I "$R/outils/atelier/serveur.py" --port "${1:-8767}" --ouvrir

@@ -1,0 +1,6 @@
+#!/bin/bash
+# Opens Chimera in the browser: bin/chimera [port]
+# Python: programs.python from the settings (settings.json, CHIMERA_PYTHON), otherwise python3; see tools/settings.py.
+R="$(cd "$(dirname "$(readlink -f "$0")")/.." && pwd)"
+PY=$(python3 -I "$R/tools/settings.py" program python 2>/dev/null); PY=${PY:-python3}
+exec "$PY" -I "$R/tools/workshop/server.py" --port "${1:-8767}" --open
