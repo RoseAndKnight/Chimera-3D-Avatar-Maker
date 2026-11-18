@@ -1,0 +1,107 @@
+{
+ "_note": "Classifications made by hand when P-01 or P-02 find nothing through the regular expressions of primitives.py. Never guessed: each entry is a written choice, with its evidence. P-01 order: \"os\" (exact PMX name or normalized identifier), then \"motifs_os\" in order (the first that matches wins, searched in the whole NFKC name), then the patterns of primitives.FAMILLES. An entry can give the P-02 region when the name does not say it (otherwise REGIONS_OS).",
+ "os": {
+  "Skn_Ill_L_Clavicle": {"famille": "bras", "region": "tronc_haut", "pourquoi": "Phionie-Peau: no weights, child of 左腕補助; clavicle helper of the arm"},
+  "Skn_Ill_R_Clavicle": {"famille": "bras", "region": "tronc_haut", "pourquoi": "mirror of Skn_Ill_L_Clavicle"}
+ },
+ "motifs_os": [
+  {"motif": "^Skn_[LR]_Eye[BF]_\\d+$", "famille": "visage", "pourquoi": "Phionie: eye bones, weights on the 目 material (iris)"},
+  {"motif": "^Ctr_(Up|Down)_Teeth$", "famille": "visage", "pourquoi": "Phionie-Peau: weights on 齿 (teeth), like 齿上/齿下"},
+  {"motif": "^Skn_[LR]_Chest_Cj_\\d+", "famille": "poitrine", "region": "poitrine", "pourquoi": "Phionie: child of 左胸/右胸, weights on 体 and 体-alpha at chest height"},
+  {"motif": "^おっぱい調整$", "famille": "poitrine", "region": "poitrine", "pourquoi": "breast adjustment (name), child of 上半身 2, no weights"},
+  {"motif": "^[左右]?xs\\d*$", "famille": "poitrine", "region": "poitrine", "pourquoi": "NangongYu-Muse: child of 胸上2, sibling of 胸先, in front of the chest, own rigid body, 108 vertices of 体"},
+  {"motif": "^[左右]?ws\\d+$", "famille": "bras", "region": "bras", "pourquoi": "NangongYu-Muse: child of 腕捩2, on the upper arm, own rigid body, 126 vertices of 体"},
+  {"motif": "^[左右]?td\\d+_\\d+", "famille": "jambe", "region": "cuisse", "pourquoi": "NangongYu-Muse: children of 足D, no weights"},
+  {"motif": "足指", "famille": "jambe", "region": "pied", "pourquoi": "toes (NangongYu): the 指 pattern of FAMILLES would put them in the hand"},
+  {"motif": "胸针|腕甲", "famille": "accessoire", "pourquoi": "ZhuYuan: brooch (胸针) and armband (腕甲), rigid pieces worn on the 髮 and 体饰 materials; FAMILLES would put them in the chest and the arm"},
+  {"motif": "[Bb]owknot|HeadRing|Necklace|LegOrn|Ill_Mon|LegRing|Ill_BowTie|Badge|Label|Jar|Ctr_Back$|Cell|Tube|Coil|Tape|Breastplate|Armor|Wings|^[左右]?wing|挂件|耳机|背饰|腿饰|^[左右]?饰_|String", "famille": "accessoire", "pourquoi": "bows, halo (HeadRing, material 光环), necklace, leg and arm ornaments, bow brooch on accessory materials (体-金属, 胸前饰), badge, label, jar and its holder (Ctr_Back), cells, tube, springs, adhesive tape, breastplate, armour, wings (materials 翼/翅膀), pendants (挂件), earphones (耳机), back ornament (背饰), cords: worn pieces, like 发带/穗/珠 on Evelyn"},
+  {"motif": "Sleeve|Gusset|Jacket|Collar|Shawl|Scarf|Cloth|Part|Shoulder|Spine|Belt|Shoe|shoelace|Fur|Tie|Ste|^PF_|^pf_|^[左右]?WT\\d|^[左右]?q\\d|^后q|^[左右]?領|^後領", "famille": "vetement", "pourquoi": "sleeves, gussets, jacket, collar, shawl, scarf, cloth, flaps (Part), shoulder piece, outfit back (Skn_Spine, material 衣饰), belt, shoes, laces, fur, ties (like 领带 on Evelyn), Ste flaps (materials 衣饰), cape (PF/pf, material 披风), WT jacket (ZhuYuan, material 外套), q/后q skirt (NangongYu: chains under 足D and 下半身, on 体 at hip height), 領 collar"},
+  {"motif": "Hair|Bangs|Pigtail|^髮_", "famille": "cheveux", "pourquoi": "locks, fringe, pigtails, 髮 (traditional form of 发, missing from FAMILLES)"}
+ ],
+ "materiaux_accessoire": ["武器", "珠宝", "穗", "发带"],
+ "_materiaux_accessoire": "P-02 says \"the rest is outfit or accessory\" without saying which: weapon (武器), jewellery (珠宝), tassels (穗) and hair ribbon (发带, same family as the 发带 bones of P-01) are classified as accessories, the rest as outfit. Only used for the models missing from \"materiaux\".",
+ "doigts_gantes": {
+  "_note": "Fingers whose surface is the outfit. Measured (dominant bone on the finger chain, P-02 group); no skin under the glove: the layer that gives the finger surface, the one read by `SQ.anneau_membre` after the skin alone fails and by `MP.groupe_doigt`, is the outfit. Elsewhere, skin first.",
+  "Evelyn": {"couche": "tenue", "doigts": 9, "nu": "左小指"},
+  "ZhuYuan": {"couche": "tenue", "doigts": 10}
+ },
+ "materiaux": {
+  "_note": "ZZ-04 as a table: canonical class of each material, per model, classified by hand with the ZZ-04 rules in order (1. vertices welded and shared with the skin, 2. region of the dominant bone, 3. name). \"doublet\": \"+\" copy of another material (same faces), takes the group of \"de\". \"mixte\": material that carries several kinds of parts; each geometric island (P-05) takes the group of the majority of its vertices' bone families among cheveux, accessoire, vetement, otherwise \"defaut\". A \"=Model\" string reuses the table of another file (same material names). Missing class = unclassified, reported by IN.",
+  "groupes": {
+   "peau": "peau", "visage": "visage", "bouche": "visage", "trait_bouche": "visage", "dents": "visage",
+   "langue": "visage", "sourcils": "visage", "sclere": "yeux", "iris": "yeux", "reflets": "yeux",
+   "ombre_oeil": "yeux", "cils": "yeux", "cils_sourcils": "yeux", "pli_paupiere": "yeux", "cheveux": "cheveux",
+   "tenue": "tenue", "accessoire": "accessoire"
+  },
+  "par_modele": {
+   "Evelyn": {
+    "肌": "peau", "颜": "visage", "痣": "visage", "眉": "sourcils", "眉睫影": "ombre_oeil", "白目": "sclere",
+    "目": "iris", "目光": "reflets", "目光2": "reflets", "睫": "cils", "口": "bouche", "舌": "langue",
+    "齿": "dents", "衣": "tenue", "外套": "tenue", "外套+": {"classe": "doublet", "de": "外套"},
+    "发带": "accessoire", "金属": "accessoire", "领带": "tenue", "领带+": {"classe": "doublet", "de": "领带"},
+    "皮裤": "tenue", "衬衣": "tenue", "珠宝": "accessoire", "武器": "accessoire", "黑丝衣": "tenue",
+    "穗": "accessoire", "胸衣": "tenue", "目影": "ombre_oeil", "发": "cheveux", "侧发": "cheveux",
+    "前发": "cheveux",
+    "_pourquoi": "takes exactly the groups of wave 1 (regression); 痣 is on the face (bone 頭)"
+   },
+   "NangongYu": {
+    "颜": "visage", "颜2": "bouche", "口线": "trait_bouche", "白目": "sclere", "目": "iris", "目光": "reflets",
+    "目影": "ombre_oeil", "睫眉": "cils_sourcils", "口舌": "bouche", "齿": "dents", "髮": "cheveux", "髮粉": "cheveux",
+    "光环": "accessoire", "体": "tenue", "袖": "tenue", "翼": "accessoire", "肌": "peau",
+    "_pourquoi": "颜2: bones 口中/口左/口右, shares its vertices with 颜 and 口线 → mouth; 睫眉 = eyelashes and eyebrows in a single piece: class cils_sourcils (eyes group); 肌 exactly covers faces of 体 (duplicates): the skin wins at the weld"
+   },
+   "NangongYu-Muse": {
+    "颜": "visage", "颜2": "bouche", "口线": "trait_bouche", "白目": "sclere", "目": "iris", "目光": "reflets",
+    "目影": "ombre_oeil", "睫眉": "cils_sourcils", "口舌": "bouche", "齿": "dents", "髮": "cheveux", "髮粉": "cheveux",
+    "髮+": {"classe": "doublet", "de": "髮"}, "光环": "accessoire", "体": "tenue", "饰": "accessoire",
+    "肌": "peau", "袜": "tenue", "屏幕": "accessoire", "翼": "accessoire",
+    "_pourquoi": "饰 (ornament, bone 上半身) and 屏幕 (screen, shares 96 % of its vertices with 饰) as accessories"
+   },
+   "Phionie": {
+    "颜": "visage", "体": "tenue", "体肌+": "peau", "肌": "peau", "前发": "cheveux", "后发": "cheveux",
+    "前发饰": "accessoire", "后发饰": "accessoire", "前发+": {"classe": "doublet", "de": "前发"},
+    "后发+": {"classe": "doublet", "de": "后发"}, "眉": "sourcils", "睫": "cils", "二重": "pli_paupiere",
+    "目": "iris", "目光": "reflets", "目光2": "reflets", "目白": "sclere", "口": "bouche", "舌": "langue",
+    "齿": "dents", "口线": "trait_bouche", "体-alpha": "tenue", "体下": "tenue",
+    "袜+": {"classe": "doublet", "de": "体下"}, "体下肌+": "peau", "鞋": "tenue", "指甲": "peau",
+    "鞋2": "tenue", "金属": "accessoire", "药丸": "accessoire", "翅膀": "accessoire", "衣饰": "tenue",
+    "目影": "ombre_oeil",
+    "_pourquoi": "体肌+ and 体下肌+: \"+\" copies of faces of 体 and 体下, named 肌 (skin) → skin, the skin wins at the weld; 指甲 (nails) shares 63 % of its vertices with 肌 → skin (rule 1); 二重 (eyelid fold): added class, eyes group; 金属 as outfit, like on Evelyn; 药丸 (pills on the thigh), 翅膀 (wings) as accessories"
+   },
+   "Phionie-SansCollision": "=Phionie",
+   "Phionie-Peau-Noir": {
+    "颜": "visage", "脖": "peau", "手": "peau", "指甲": "peau", "肌下": "peau", "眉": "sourcils", "睫": "cils",
+    "二重": "pli_paupiere", "目": "iris", "目光": "reflets", "目光2": "reflets", "目白": "sclere", "齿": "dents",
+    "口": "bouche", "舌": "langue", "口线": "trait_bouche", "前发": "cheveux", "后发": "cheveux",
+    "前发+": {"classe": "doublet", "de": "前发"}, "后发+": {"classe": "doublet", "de": "后发"},
+    "发饰": "accessoire", "发饰2": "accessoire", "体": "tenue", "体-金属": "accessoire", "颈饰": "accessoire",
+    "胸前饰": "accessoire", "胸前饰2": "accessoire", "臂饰": "accessoire", "衣饰": "tenue", "衣饰2": "tenue",
+    "翅膀": "accessoire", "眼罩": "accessoire", "腿饰": "accessoire", "腿饰2": "accessoire", "袜": "tenue",
+    "袜+": {"classe": "doublet", "de": "袜"}, "痣": "peau", "鞋": "tenue", "鞋2-alpha": "tenue",
+    "目影": "ombre_oeil",
+    "_pourquoi": "skin in four materials: 脖 (neck, bones 頭/首), 手 (arms and hands), 肌下 (legs), 指甲 (nails, 63 % shared with 手); 痣 is on the thigh here (bone 左足D) → skin, not face as on Evelyn; 眼罩 (blindfold, bone 頭) and the 饰 (ornaments) as accessories; 体-金属: bone Ctr_Ill_BowTie, like 胸前饰"
+   },
+   "Phionie-Peau-Blanc": "=Phionie-Peau-Noir",
+   "Qingyi": {
+    "颜": "visage", "颜2": "bouche", "白目": "sclere", "口线": "trait_bouche", "眉": "sourcils",
+    "二重": "pli_paupiere", "睫": "cils", "目光": "reflets", "目": "iris", "口舌": "bouche", "齿": "dents",
+    "目影": "ombre_oeil", "髮": "cheveux", "髮1": "cheveux", "体": "tenue", "肌": "peau",
+    "饰1": {"classe": "mixte", "defaut": "accessoire"}, "髮+": {"classe": "doublet", "de": "髮"},
+    "_pourquoi": "髮1: bone Ctr_Bangs (fringe); 饰1 carries the belt (Ctr_Belt, vetement), the badge, the label and head ornaments (bone 頭) → mixte; 肌 exactly covers faces of 体"
+   },
+   "Trigger": {
+    "颜": "visage", "颜2": "bouche", "口线": "trait_bouche", "口舌": "bouche", "齿": "dents", "髮": "cheveux",
+    "髮+": {"classe": "doublet", "de": "髮"}, "耳": "peau", "饰": "accessoire", "披风": "tenue", "首": "peau",
+    "体": "tenue", "肌": "peau",
+    "_pourquoi": "no iris, no sclera, no eyelashes: the model has no eyes (no 両目/目 bones); 耳 (ears, bone 頭) and 首 (neck, bones 頭/首) → skin, like the ears and neck inside 肌 on Evelyn; 饰: breastplate (Breastplate), tube, tape, head ornaments → accessory; 披风 (cape) → outfit"
+   },
+   "ZhuYuan": {
+    "颜": "visage", "白目": "sclere", "目": "iris", "目光": "reflets", "二重": "pli_paupiere", "睫": "cils",
+    "眉": "sourcils", "口线": "trait_bouche", "口舌": "bouche", "齿": "dents", "目影": "ombre_oeil",
+    "体1": "tenue", "披风": "tenue", "外套": "tenue", "肌": "peau",
+    "髮": {"classe": "mixte", "defaut": "cheveux", "vetement": "accessoire"}, "体饰": "accessoire", "体饰2": "accessoire",
+    "_pourquoi": "髮 carries the hair but also the earphones (耳机), the pendant (挂件), the leg ornaments (腿饰) and the brooch (胸针) → mixte; 体饰: armbands (腕甲), weapon (武器1), leg ornaments; 体饰2: bone 挂件2"
+   }
+  }
+ }
+}

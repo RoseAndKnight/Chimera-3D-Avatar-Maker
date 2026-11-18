@@ -1,0 +1,34 @@
+{
+ "_lisez_moi": "Our own heads and parts (not a game), described as a game so that the core names none of them: Maëlys (house character), Orpheya (head made from an image, Keijo) and the clothes built in the workshop. Their files are in the data ({donnees}), not in the repository. The material names (内裤, 针织…) are those of the common language of the parts (see outils/jeux/README.md).",
+ "titre": "Homemade",
+ "format": "pmx",
+ "tetes": {
+  "_note": "Heads computed separately (no folder in the face library): pmx = the measured model, nom = displayed name.",
+  "Maelys": {"pmx": "{donnees}/bibliotheque-visage/essais/maelys/coupe-neuve/resultat.pmx", "nom": "Maëlys"},
+  "Orpheya": {"pmx": "{donnees}/essais/orpheya/image-3/resultat.pmx", "nom": "Orpheya"}
+ },
+ "catalogue": {
+  "_note": "Offered by Chimera before those of the active game; petit: the trial level of catalogue.py preparer --niveau petit.",
+  "tetes": ["Maelys", "Orpheya"],
+  "coiffures": ["Maelys", "Orpheya"],
+  "petit": {"tetes": ["Maelys", "Orpheya"], "coiffures": ["Maelys"]}
+ },
+ "fabriquees": [
+  {"perso": "Maelys", "id": "culotte", "type": "culotte", "mats": ["内裤"], "pmx": "{donnees}/vetements/tenue-maelys-2/resultat.pmx",
+   "atelier": {"onglet": "bas", "emplacement": "dessous", "rang": 10, "nom": "culotte"}},
+  {"perso": "Maelys", "id": "debardeur", "type": "haut", "mats": ["针织"], "pmx": "{donnees}/vetements/tenue-maelys-2/resultat.pmx",
+   "atelier": {"onglet": "haut", "emplacement": "haut", "rang": 20, "nom": "débardeur"}},
+  {"perso": "Maelys", "id": "jupe", "type": "jupe", "mats": ["裙"], "pmx": "{donnees}/vetements/tenue-maelys-2/resultat.pmx",
+   "atelier": {"onglet": "bas", "emplacement": "bas", "rang": 32, "nom": "jupe"}},
+  {"perso": "Maelys", "id": "ceinture", "type": "ceinture", "mats": ["腰带"], "pmx": "{donnees}/vetements/tenue-maelys-2/resultat.pmx",
+   "atelier": {"onglet": "accessoires", "emplacement": "ceinture", "rang": 70, "nom": "ceinture"}},
+  {"perso": "Maelys", "id": "collier", "type": "collier", "mats": ["项链", "吊坠"], "pmx": "{donnees}/vetements/tenue-maelys-2/resultat.pmx",
+   "atelier": {"onglet": "accessoires", "emplacement": "collier", "rang": 78, "nom": "collier"}},
+  {"perso": "Atelier", "id": "tshirt", "type": "haut", "mats": ["T恤"], "pmx": "{donnees}/vetements/tshirt/resultat.pmx",
+   "atelier": {"onglet": "haut", "emplacement": "haut", "rang": 20, "nom": "t-shirt"}},
+  {"perso": "Atelier", "id": "pantalon", "type": "pantalon", "mats": ["裤子"], "pmx": "{donnees}/vetements/pantalon/resultat.pmx",
+   "atelier": {"onglet": "bas", "emplacement": "bas", "rang": 30, "nom": "pantalon"}},
+  {"perso": "Atelier", "id": "pull", "type": "haut", "mats": ["毛衣"], "pmx": "{donnees}/vetements/pull/resultat.pmx",
+   "atelier": {"onglet": "haut", "emplacement": "haut", "rang": 20, "nom": "pull"}}
+ ]
+}

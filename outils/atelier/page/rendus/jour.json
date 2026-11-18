@@ -1,0 +1,111 @@
+{
+ "format": "chimera-rendu",
+ "version": 1,
+ "nom": "Day",
+ "lumiere": {
+  "angle": 28.64788975654116,
+  "hauteur": 36.86989764584401,
+  "couleur": [
+   1,
+   1,
+   0.98
+  ],
+  "force": 1,
+  "contour": [
+   1,
+   1,
+   1
+  ],
+  "forceContour": 1,
+  "ciel": [
+   0.05,
+   0.07,
+   0.1
+  ],
+  "terre": [
+   0.05,
+   0.04,
+   0.03
+  ]
+ },
+ "ombre": {
+  "seuil": 0.46,
+  "douceur": 0.025,
+  "teinte": [
+   0.4,
+   0.3915,
+   0.69
+  ],
+  "teinteCheveux": [
+   0.45,
+   0.3915,
+   0.66
+  ],
+  "saturation": 1.15,
+  "lisere": 1,
+  "creux": 1,
+  "portees": true,
+  "forcePortees": 1,
+  "contact": 1
+ },
+ "peau": {
+  "seuil": 0.46,
+  "douceur": 0.09,
+  "teinte": [
+   0.75,
+   0.522,
+   0.705
+  ],
+  "transmission": 1,
+  "rose": 1,
+  "ombreYeux": 1
+ },
+ "matiere": {
+  "vetements": true,
+  "cheveux": 1
+ },
+ "trait": {
+  "actif": false,
+  "epaisseur": 1,
+  "opacite": 1,
+  "couleur": [
+   0.16,
+   0.09,
+   0.13
+  ],
+  "partCouleur": 0
+ },
+ "fond": {
+  "centre": [
+   0.58,
+   0.61,
+   0.68
+  ],
+  "bord": [
+   0.36,
+   0.4,
+   0.5
+  ]
+ },
+ "sol": {
+  "actif": true,
+  "lumiere": [
+   0.56,
+   0.58,
+   0.64
+  ],
+  "ombre": [
+   0.3,
+   0.32,
+   0.42
+  ]
+ },
+ "image": {
+  "exposition": 0.77,
+  "saturation": 1.08,
+  "halo": 1,
+  "flou": 1,
+  "vignette": 0.2,
+  "grain": 0.045
+ }
+}

@@ -1,0 +1,22 @@
+[
+ {
+  "id": "maison",
+  "nom": "Studio"
+ },
+ {
+  "id": "jour",
+  "nom": "Day"
+ },
+ {
+  "id": "couchant",
+  "nom": "Sunset"
+ },
+ {
+  "id": "nuit",
+  "nom": "Night"
+ },
+ {
+  "id": "simple",
+  "nom": "Plain"
+ }
+]

@@ -1,0 +1,90 @@
+{
+ "couches": {
+  "_lisez_moi": "Chimera's layers: garment types, kinds of accessories, ranks (what goes over what), stacking thresholds. Public values, read after reglages.defaut.json. Do not change them here: write in reglages.json, under \"couches\", only the keys to change (merged key by key; a list is replaced whole). See outils/atelier/README.md, the section on tuning the layers.",
+
+  "vetements": {
+   "_aide": "garment type (the one in fiche.json) -> tab of the page (haut, bas, chaussures, accessoires: the page knows only these), slot (two parts with the same slot are not worn together), rank (from inside to outside: the smallest is worn underneath), displayed name, occupe (slots it takes in addition to its own). A type missing from here does not enter the catalogue.",
+   "culotte": {"onglet": "bas", "emplacement": "dessous", "rang": 10, "nom": "underwear"},
+   "chaussettes": {"onglet": "chaussures", "emplacement": "chaussettes", "rang": 15, "nom": "socks"},
+   "haut": {"onglet": "haut", "emplacement": "haut", "rang": 20, "nom": "top"},
+   "manches": {"onglet": "haut", "emplacement": "manches", "rang": 26, "nom": "sleeves"},
+   "short": {"onglet": "bas", "emplacement": "bas", "rang": 30, "nom": "shorts"},
+   "pantalon": {"onglet": "bas", "emplacement": "bas", "rang": 30, "nom": "trousers"},
+   "jupe": {"onglet": "bas", "emplacement": "jupe", "rang": 32, "nom": "skirt"},
+   "robe": {"onglet": "bas", "emplacement": "robe", "rang": 34, "nom": "dress", "occupe": ["jupe"]},
+   "combinaison": {"onglet": "bas", "emplacement": "robe", "rang": 34, "nom": "jumpsuit", "occupe": ["bas", "jupe"]},
+   "chaussures": {"onglet": "chaussures", "emplacement": "chaussures", "rang": 40, "nom": "shoes"},
+   "bottes": {"onglet": "chaussures", "emplacement": "chaussures", "rang": 42, "nom": "boots"},
+   "gants": {"onglet": "accessoires", "emplacement": "mains", "rang": 44, "nom": "gloves"},
+   "col": {"onglet": "haut", "emplacement": "col", "rang": 48, "nom": "collar"},
+   "gilet": {"onglet": "haut", "emplacement": "gilet", "rang": 52, "nom": "waistcoat"},
+   "veste": {"onglet": "haut", "emplacement": "dessus", "rang": 55, "nom": "jacket"},
+   "manteau": {"onglet": "haut", "emplacement": "dessus", "rang": 60, "nom": "coat"},
+   "capuche": {"onglet": "haut", "emplacement": "capuche", "rang": 62, "nom": "hood"}
+  },
+
+  "accessoires": {
+   "_aide": "kind of accessory (the one in fiche.json) -> rank, exclusive (only one of this kind at a time), displayed name, comme_ceinture (goes around the body: fitted with the clothes, laid on the fabric without ever squeezing it; the other accessories are laid over what they touch). Tab: always accessoires. A kind missing from here does not enter the catalogue.",
+   "ceinture": {"rang": 70, "exclusif": true, "nom": "belt", "comme_ceinture": true},
+   "harnais": {"rang": 72, "exclusif": true, "nom": "harness"},
+   "jarretiere": {"rang": 66, "exclusif": false, "nom": "garter"},
+   "chevillere": {"rang": 67, "exclusif": false, "nom": "anklet"},
+   "brassard": {"rang": 68, "exclusif": false, "nom": "armband"},
+   "bracelet": {"rang": 69, "exclusif": false, "nom": "bracelet"},
+   "bague": {"rang": 69, "exclusif": false, "nom": "ring"},
+   "cravate": {"rang": 75, "exclusif": true, "nom": "tie"},
+   "echarpe": {"rang": 76, "exclusif": true, "nom": "scarf"},
+   "collier": {"rang": 78, "exclusif": true, "nom": "necklace"},
+   "bijou": {"rang": 78, "exclusif": false, "nom": "jewel"},
+   "sac": {"rang": 80, "exclusif": true, "nom": "bag"},
+   "lunettes": {"rang": 84, "exclusif": true, "nom": "glasses"},
+   "masque": {"rang": 84, "exclusif": true, "nom": "mask"},
+   "couvre_chef": {"rang": 86, "exclusif": true, "nom": "headwear"},
+   "casque_audio": {"rang": 86, "exclusif": true, "nom": "headphones"},
+   "queue": {"rang": 88, "exclusif": true, "nom": "tail"},
+   "ailes": {"rang": 88, "exclusif": true, "nom": "wings"},
+   "oreilles": {"rang": 88, "exclusif": true, "nom": "ears"}
+  },
+
+  "tenue": {
+   "_aide": "Rules of a worn outfit (outils/atelier/combinaison.py). rangs_dans_la_tenue: rank forced on a type during fitting, instead of its own (a belt is worn over the bottom and under the open jacket). bas_fermes: the bottoms that cover the underwear (it is then not worn). hauts and bas: a top whose hem comes out of the bottom by more than ordre_dehors_mm is worn over that bottom.",
+   "rangs_dans_la_tenue": {"ceinture": 36},
+   "bas_fermes": ["short", "pantalon"],
+   "hauts": ["haut"],
+   "bas": ["short", "pantalon", "jupe"]
+  },
+
+  "seuils": {
+   "_aide": {
+    "marge_accessoire_mm": "gap between a laid accessory (necklace, bag) and what it touches",
+    "marge_entre_couches_mm": "gap between two layers, along a line (more for wide meshes, see fleche_max_mm)",
+    "plancher_mm": "height above the skin below which a part is not crushed (except under a boot)",
+    "pan_libre_mm": "a free flap (skirt hem, frill) farther than this in front of the outer part flares over it and is left untouched; it is also the most a belt sticks out",
+    "sortie_max_mm": "an outer part never moves out by more than this (a jacket does not puff up); the rest is reported",
+    "rayon_membre_mm": "curvature of a limb: an edge of length e deviates from it by e² / (8 × radius), added to the gap between layers",
+    "fleche_max_mm": "the most that the edge length adds to the gap between layers",
+    "ordre_dehors_mm": "median protrusion of a top out of the bottom from which the top is worn over it",
+    "tolerance_masque_mm": "an inner face is hidden (removed) if it is under the outer part, or in front of it by less than this",
+    "portee_masque_mm": "beyond this, the outer part floats: you see underneath through the opening, nothing is removed",
+    "portee_rayon_mm": "beyond this, two parts are no longer on top of each other (length of the measuring rays; longer = slower)",
+    "signal_profondeur_mm": "an inner point that passes in front of the outer part by more than this counts as poking through",
+    "signal_part": "share of poking-through points (0.01 = 1 %) from which the page flags a pair",
+    "passes": "fitting passes per part (more = slower, recovers difficult parts better)"
+   },
+   "marge_accessoire_mm": 3,
+   "marge_entre_couches_mm": 1.5,
+   "plancher_mm": 1,
+   "pan_libre_mm": 25,
+   "sortie_max_mm": 8,
+   "rayon_membre_mm": 50,
+   "fleche_max_mm": 3,
+   "ordre_dehors_mm": 3,
+   "tolerance_masque_mm": 6,
+   "portee_masque_mm": 30,
+   "portee_rayon_mm": 60,
+   "signal_profondeur_mm": 0.5,
+   "signal_part": 0.01,
+   "passes": 4
+  }
+ }
+}

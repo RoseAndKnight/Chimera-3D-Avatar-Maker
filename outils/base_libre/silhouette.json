@@ -1,0 +1,17 @@
+{
+ "_note": "Silhouette of the free body: MakeHuman (CC0) shape targets added to base.obj, with their dose. Each key is the path of the file under makehuman/data/targets in the MakeHuman repository; fabriquer.py downloads them into the \"targets\" folder next to base.obj, at the same path. The first five give a slim young woman; the next seven give the proportions of game characters (long legs, short and narrow torso, rolled-in shoulders, long and thin neck), tuned on measurements: shoulder at 139 cm from the ground, hip at 100 cm, half-width of the skin at the top of the shoulders around 15.5 cm and at the waist around 8.3 cm. Changing a dose or adding a target changes the silhouette; run fabriquer.py again.",
+ "cibles": {
+  "macrodetails/asian-female-young.target": 0.3334,
+  "macrodetails/caucasian-female-young.target": 0.3333,
+  "macrodetails/african-female-young.target": 0.3333,
+  "macrodetails/universal-female-young-averagemuscle-minweight.target": 1.0,
+  "macrodetails/proportions/female-young-averagemuscle-minweight-idealproportions.target": 0.5,
+  "measure/measure-upperleg-height-incr.target": 1.0,
+  "measure/measure-lowerleg-height-incr.target": 1.0,
+  "torso/torso-scale-vert-decr.target": 1.0,
+  "torso/torso-scale-horiz-decr.target": 0.8,
+  "measure/measure-shoulder-dist-decr.target": 1.0,
+  "neck/neck-scale-vert-incr.target": 0.25,
+  "measure/measure-neck-circ-decr.target": 1.0
+ }
+}

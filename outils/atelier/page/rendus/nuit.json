@@ -1,0 +1,111 @@
+{
+ "format": "chimera-rendu",
+ "version": 1,
+ "nom": "Night",
+ "lumiere": {
+  "angle": 28.64788975654116,
+  "hauteur": 36.86989764584401,
+  "couleur": [
+   0.685714,
+   0.780952,
+   1
+  ],
+  "force": 1.05,
+  "contour": [
+   0.7,
+   0.85,
+   1
+  ],
+  "forceContour": 1,
+  "ciel": [
+   0.01,
+   0.03,
+   0.07
+  ],
+  "terre": [
+   0.01,
+   0.02,
+   0.04
+  ]
+ },
+ "ombre": {
+  "seuil": 0.46,
+  "douceur": 0.025,
+  "teinte": [
+   0.176,
+   0.2025,
+   0.529
+  ],
+  "teinteCheveux": [
+   0.198,
+   0.2025,
+   0.506
+  ],
+  "saturation": 1.15,
+  "lisere": 1,
+  "creux": 1,
+  "portees": true,
+  "forcePortees": 1,
+  "contact": 1
+ },
+ "peau": {
+  "seuil": 0.46,
+  "douceur": 0.09,
+  "teinte": [
+   0.33,
+   0.27,
+   0.5405
+  ],
+  "transmission": 1,
+  "rose": 1,
+  "ombreYeux": 1
+ },
+ "matiere": {
+  "vetements": true,
+  "cheveux": 1
+ },
+ "trait": {
+  "actif": false,
+  "epaisseur": 1,
+  "opacite": 1,
+  "couleur": [
+   0.16,
+   0.09,
+   0.13
+  ],
+  "partCouleur": 0
+ },
+ "fond": {
+  "centre": [
+   0.1,
+   0.13,
+   0.24
+  ],
+  "bord": [
+   0.02,
+   0.03,
+   0.07
+  ]
+ },
+ "sol": {
+  "actif": true,
+  "lumiere": [
+   0.16,
+   0.19,
+   0.3
+  ],
+  "ombre": [
+   0.04,
+   0.05,
+   0.11
+  ]
+ },
+ "image": {
+  "exposition": 0.77,
+  "saturation": 1.08,
+  "halo": 1,
+  "flou": 1,
+  "vignette": 0.2,
+  "grain": 0.045
+ }
+}
