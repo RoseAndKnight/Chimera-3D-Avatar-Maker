@@ -2,23 +2,23 @@
 
 Three layers, each one overriding the previous one, key by key:
   1. settings.default.json at the repository root (tracked by git, public values), then the other public-value
-     files of DEFAUTS (layers.default.json: garment types, ranks and thresholds of Chimera's layers);
+     files of DEFAULTS (layers.default.json: garment types, ranks and thresholds of Chimera's layers);
   2. settings.json at the repository root (specific to the machine, never tracked; CHIMERA_SETTINGS names another file);
-  3. the environment variables of ENVIRONNEMENT (CHIMERA_DATA, CHIMERA_CACHE…).
+  3. the environment variables of ENVIRONMENT (CHIMERA_DATA, CHIMERA_CACHE…).
 
-A key is named by its dotted path: "paths.data", "workshop.cache", "games.zzz.mmd_extrait".
+A key is named by its dotted path: "paths.data", "workshop.cache", "games.zzz.mmd_extracted".
 The games (tools/games) give the public default of their source folders themselves; games.<game>.<source> only
 changes it for your machine, games.active (CHIMERA_GAME) names the game the models come from.
-In a text value, {cle} is replaced by the value of that key ({data} = paths.data, {repo} =
+In a text value, {key} is replaced by the value of that key ({data} = paths.data, {repo} =
 the repository root); a relative path starts from the repository root, ~ is expanded.
 
 From a tool run from its own folder (tools/<sub>/x.py):
     sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
     import settings as R
-    R.chemin("workshop.cache"), R.programme("blender"), R.valeur("compute.slots"), R.section("games")
+    R.path("workshop.cache"), R.program("blender"), R.value("compute.slots"), R.section("games")
 
 Adding a section: write it in settings.default.json with its public values (and, if an environment variable
-must set it, a line in ENVIRONNEMENT, and in CHEMINS_ENV if it is a path); nothing
+must set it, a line in ENVIRONMENT, and in PATHS_ENV if it is a path); nothing
 else to change here.
 
 On the command line (for the bin/ scripts):
@@ -30,14 +30,14 @@ import re
 import shutil
 import sys
 
-DEPOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-DEFAUT = os.path.join(DEPOT, "settings.default.json")
+REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+DEFAULT = os.path.join(REPO, "settings.default.json")
 # public values, read in this order (each one overrides the previous one key by key)
-DEFAUTS = (DEFAUT, os.path.join(DEPOT, "layers.default.json"))
-LOCAL = os.path.join(DEPOT, "settings.json")
+DEFAULTS = (DEFAULT, os.path.join(REPO, "layers.default.json"))
+LOCAL = os.path.join(REPO, "settings.json")
 
 # environment variable -> key it forces
-ENVIRONNEMENT = {
+ENVIRONMENT = {
     "CHIMERA_DATA": "paths.data",
     "CHIMERA_CACHE": "workshop.cache",
     "CHIMERA_BODY": "workshop.body",
@@ -49,132 +49,132 @@ ENVIRONNEMENT = {
     "CHIMERA_GAME": "games.active",
 }
 # those whose relative path starts from the current folder (like any shell variable), not from the repository
-CHEMINS_ENV = {"CHIMERA_DATA", "CHIMERA_CACHE", "CHIMERA_BODY"}
+PATHS_ENV = {"CHIMERA_DATA", "CHIMERA_CACHE", "CHIMERA_BODY"}
 
-_RIEN = object()
-_fichiers = None
+_NOTHING = object()
+_files = None
 
 
-def _fusion(base, dessus):
-    for k, v in dessus.items():
+def _merge(base, over):
+    for k, v in over.items():
         if isinstance(v, dict) and isinstance(base.get(k), dict):
-            _fusion(base[k], v)
+            _merge(base[k], v)
         else:
             base[k] = v
     return base
 
 
-def _lire(chemin):
+def _read(path):
     try:
-        with open(chemin, encoding="utf-8") as f:
+        with open(path, encoding="utf-8") as f:
             return json.load(f)
     except FileNotFoundError:
         return {}
 
 
-def _poser(d, cle, v):
-    *haut, fin = cle.split(".")
-    for k in haut:
+def _place(d, the_key, v):
+    *top, end = the_key.split(".")
+    for k in top:
         d = d.setdefault(k, {})
-    d[fin] = v
+    d[end] = v
 
 
-def _brut(d, cle):
-    for k in cle.split("."):
+def _raw(d, the_key):
+    for k in the_key.split("."):
         if not isinstance(d, dict) or k not in d:
-            return _RIEN
+            return _NOTHING
         d = d[k]
     return d
 
 
-def tout():
+def all_():
     """The merged settings (defaults, local file, environment), without substitution."""
-    global _fichiers
-    if _fichiers is None:
+    global _files
+    if _files is None:
         local = os.environ.get("CHIMERA_SETTINGS") or LOCAL
         base = {}
-        for d in DEFAUTS:
-            _fusion(base, _lire(d))
-        _fichiers = _fusion(base, _lire(os.path.expanduser(local)))
-    r = json.loads(json.dumps(_fichiers))
-    for var, cle in ENVIRONNEMENT.items():
+        for d in DEFAULTS:
+            _merge(base, _read(d))
+        _files = _merge(base, _read(os.path.expanduser(local)))
+    r = json.loads(json.dumps(_files))
+    for var, the_key in ENVIRONMENT.items():
         v = os.environ.get(var)
         if v:
-            _poser(r, cle, os.path.abspath(os.path.expanduser(v)) if var in CHEMINS_ENV else v)
+            _place(r, the_key, os.path.abspath(os.path.expanduser(v)) if var in PATHS_ENV else v)
     return r
 
 
-def _substituer(v, r, profondeur=0):
+def _substitute(v, r, depth=0):
     if not isinstance(v, str) or "{" not in v:
         return v
-    if profondeur > 8:
+    if depth > 8:
         raise ValueError("settings: circular reference in %r" % v)
 
     def un(m):
-        nom = m.group(1)
-        if nom == "repo":
-            return DEPOT
-        x = _brut(r, nom)
-        if x is _RIEN and "." not in nom:
-            x = _brut(r, "paths." + nom)
-        if x is _RIEN or x is None:
-            raise KeyError("settings: unknown {%s}" % nom)
-        return _chemin(_substituer(x, r, profondeur + 1))
+        name = m.group(1)
+        if name == "repo":
+            return REPO
+        x = _raw(r, name)
+        if x is _NOTHING and "." not in name:
+            x = _raw(r, "paths." + name)
+        if x is _NOTHING or x is None:
+            raise KeyError("settings: unknown {%s}" % name)
+        return _path(_substitute(x, r, depth + 1))
     return re.sub(r"\{([A-Za-z0-9_.]+)\}", un, v)
 
 
-def _chemin(v):
+def _path(v):
     v = os.path.expanduser(v)
-    return v if os.path.isabs(v) else os.path.join(DEPOT, v)
+    return v if os.path.isabs(v) else os.path.join(REPO, v)
 
 
-def valeur(cle, defaut=_RIEN):
+def value(the_key, default=_NOTHING):
     """Value of a dotted key, {references} replaced (a text stays a text: no forced absolute path)."""
-    r = tout()
-    v = _brut(r, cle)
-    if v is _RIEN:
-        if defaut is _RIEN:
-            raise KeyError("unknown setting: %s" % cle)
-        return defaut
+    r = all_()
+    v = _raw(r, the_key)
+    if v is _NOTHING:
+        if default is _NOTHING:
+            raise KeyError("unknown setting: %s" % the_key)
+        return default
     if isinstance(v, dict):
-        return {k: valeur(cle + "." + k) for k in v}
-    return _substituer(v, r)
+        return {k: value(the_key + "." + k) for k in v}
+    return _substitute(v, r)
 
 
-def chemin(cle):
+def path(the_key):
     """Absolute path of a key (None if the value is null)."""
-    v = valeur(cle)
-    return None if v in (None, "") else _chemin(v)
+    v = value(the_key)
+    return None if v in (None, "") else _path(v)
 
 
-def developper(texte):
+def expand(text):
     """Absolute path of a text written outside the settings (a game description): {references} replaced as
     in a value, relative path from the repository root, ~ expanded (None if empty)."""
-    return None if texte in (None, "") else _chemin(_substituer(texte, tout()))
+    return None if text in (None, "") else _path(_substitute(text, all_()))
 
 
-def section(nom):
+def section(name):
     """A whole section, references replaced (dictionary)."""
-    return valeur(nom, {})
+    return value(name, {})
 
 
-def programme(nom):
-    """Executable of programs.<nom>: a path if it contains /, otherwise looked up in the PATH.
+def program(name):
+    """Executable of programs.<name>: a path if it contains /, otherwise looked up in the PATH.
     python empty or null = the running interpreter (sys.executable)."""
-    v = valeur("programs." + nom, None)
+    v = value("programs." + name, None)
     if not v:
-        if nom == "python":
+        if name == "python":
             return sys.executable
-        v = nom
+        v = name
     if "/" in v or v.startswith("~"):
-        return _chemin(v)
+        return _path(v)
     return shutil.which(v) or v
 
 
-def oublier():
+def forget():
     """Re-reads the files on the next call (after they have been changed)."""
-    global _fichiers
-    _fichiers = None
+    global _files
+    _files = None
 
 
 if __name__ == "__main__":
@@ -182,7 +182,7 @@ if __name__ == "__main__":
     if not a or a[0] not in ("path", "program", "value", "all") or (a[0] != "all" and len(a) != 2):
         sys.exit("usage: settings.py path <key> | program <name> | value <key> | all")
     if a[0] == "all":
-        print(json.dumps(tout(), ensure_ascii=False, indent=1))
+        print(json.dumps(all_(), ensure_ascii=False, indent=1))
     else:
-        v = {"path": chemin, "program": programme, "value": valeur}[a[0]](a[1])
+        v = {"path": path, "program": program, "value": value}[a[0]](a[1])
         print("" if v is None else (json.dumps(v, ensure_ascii=False) if isinstance(v, (dict, list)) else v))

@@ -6,18 +6,18 @@ provide (exported as .vrm, VRM 0.x). The repository contains no model.
     python3 -I tools/vroid_base/build.py <character.vrm>
     python3 -I tools/vroid_base/build.py <Name>       # <sources.vrm>/<Name>.vrm, otherwise the already imported PMX
 
-A few seconds, without Blender. Output (by default `{data}/base-vroid`, the base body of the public defaults):
+A few seconds, without Blender. Output (by default `{data}/vroid-base`, the base body of the public defaults):
 
 | File | Content |
 |---|---|
-| `corps.pmx` | bare skin only (material 肌), all bones, MMD names, arms-down pose; texture `peau.png` |
-| `tete.pmx` | the same skin, vertices in the same order, plus the face, the eyes and the expressions |
-| `coiffure.pmx` | the character's hair (髪, 髪2…) |
-| `base.json` | base head of the VRoid game (`tete_base`: name, distance between the eyes and their midpoint measured by `tete.Tete`), source model and its title (`modele`, `titre`) |
-| `controles.json` | checks: bones, pose, skin closed below the neck, opaque skin, share of original skin, height, eyes |
+| `body.pmx` | bare skin only (material 肌), all bones, MMD names, arms-down pose; texture `skin.png` |
+| `head.pmx` | the same skin, vertices in the same order, plus the face, the eyes and the expressions |
+| `hairstyle.pmx` | the character's hair (髪, 髪2…) |
+| `base.json` | base head of the VRoid game (`base_head`: name, distance between the eyes and their midpoint measured by `head.Head`), source model and its title (`model`, `title`) |
+| `checks.json` | checks: bones, pose, skin closed below the neck, opaque skin, share of original skin, height, eyes |
 | `provenance.json`, `PROVENANCE.md` | source file (sha256 fingerprint) and terms of use read from the VRM (meta) |
-| `corps.png`, `tete.png` | grey check contact sheets |
-| `modele/<Name>/` | the whole conversion, outfit included |
+| `body.png`, `head.png` | grey check contact sheets |
+| `model/<Name>/` | the whole conversion, outfit included |
 
 The character's outfit is not in the base. To wear it, import the same file like any character
 (`tools/vroid/importer.py`, see `COMPATIBILITY.md`, VRoid section). A failed blocking check returns exit code 1:
@@ -32,9 +32,9 @@ seams are welded, it has only one opening, at the neck, where it joins the face.
 - on export, when it removes what is hidden, it makes the skin under the outfit transparent (the whole trunk
   of one model). The ordinary import deletes these faces: the body would have a hole.
 
-`build.py` therefore keeps all the skin faces (`importer.convertir(..., garder={"肌"})`). `skin.py`
+`build.py` therefore keeps all the skin faces (`importer.convert(..., keep={"肌"})`). `skin.py`
 then repaints the texture: it keeps the texels close to the tint of the face, trims their edge and removes the
-islands. The rest is filled from the neighbouring skin (pyramid of averages). `controles.json` gives the share kept
+islands. The rest is filled from the neighbouring skin (pyramid of averages). `checks.json` gives the share kept
 as it is: about 43 % for a lightly covered model, 18 % for an almost fully clothed model.
 
 ## Limits

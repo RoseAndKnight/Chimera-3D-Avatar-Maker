@@ -1,7 +1,7 @@
 # Provenance of the free base
 
-The body (`corps.pmx`, `forme.pkl`, `maison/`), the face (`tete.pmx`, `yeux.png`) and the hairstyle
-(`coiffure.pmx`, `cheveux.png`) are built by `tools/free_base/build.py`. Nothing in them comes from a game.
+The body (`body.pmx`, `shape.pkl`, `own-rig/`), the face (`head.pmx`, `eyes.png`) and the hairstyle
+(`hairstyle.pmx`, `hair.png`) are built by `tools/free_base/build.py`. Nothing in them comes from a game.
 
 - **Shape.** MakeHuman's base mesh (`makehuman/data/3dobjs/base.obj`, group `body`) and its shape
   targets (`makehuman/data/targets/...`; the list and the doses are in `silhouette.json`), taken from the
@@ -18,6 +18,6 @@ The body (`corps.pmx`, `forme.pkl`, `maison/`), the face (`tete.pmx`, `yeux.png`
   from the `joint-*` markers of `base.obj`, the neck straightened and thinned, the arms and legs put in
   the A-pose of MMD models.
 - **Bone names.** Those of MMD models (首, 頭, 腕, 足…), so that the parts of these models can be worn on it.
-- **Skin.** A flat colour (`peau.png`).
+- **Skin.** A flat colour (`skin.png`).
 
 The built set can be reused and redistributed without conditions (CC0 for the MakeHuman part).

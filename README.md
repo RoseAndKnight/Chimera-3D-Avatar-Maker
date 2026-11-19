@@ -78,6 +78,10 @@ checked with sha256 and resumable:
 The page then opens on the whole catalogue. Models of your own can still be added, and existing ones are never
 overwritten. Details: [INSTALLATION.md](INSTALLATION.md).
 
+Installed it before format 2 (English data names)? Convert it once with
+`python3 -I tools/library/library.py migrate <data folder>`, or install it again into an empty folder:
+[INSTALLATION.md](INSTALLATION.md#installed-before-format-2).
+
 ## Your models, your responsibility
 
 Chimera is a tool: it does not change the rights on what goes through it. Every model keeps the terms of use

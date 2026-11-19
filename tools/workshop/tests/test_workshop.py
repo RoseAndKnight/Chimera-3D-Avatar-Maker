@@ -19,9 +19,9 @@ import coverage as CV  # noqa: E402
 import vrm as VR  # noqa: E402
 
 
-def feuille(z, n=20, largeur=0.3):
+def sheet(z, n=20, width=0.3):
     """Square of n x n vertices in the plane z, normals towards +z."""
-    xs = np.linspace(-largeur / 2, largeur / 2, n)
+    xs = np.linspace(-width / 2, width / 2, n)
     X, Y = np.meshgrid(xs, xs)
     pos = np.c_[X.ravel(), Y.ravel(), np.full(n * n, z)].astype(float)
     F = []
@@ -31,11 +31,11 @@ def feuille(z, n=20, largeur=0.3):
             F += [(a, a + 1, a + n), (a + 1, a + n + 1, a + n)]
     F = np.array(F)
     nor = np.tile([0.0, 0.0, 1.0], (n * n, 1))
-    rep, inv = G.souder(pos, 1e-5)
-    return SimpleNamespace(id="f", nom="feuille", pos=pos, nor=nor, F=F, rep=rep, inv=inv, meta={"rang": 1}, drapeaux=None)
+    rep, inv = G.weld(pos, 1e-5)
+    return SimpleNamespace(id="f", name="sheet", pos=pos, nor=nor, F=F, rep=rep, inv=inv, meta={"rank": 1}, flags=None)
 
 
-def cylindre(r, n=48, m=12, h=0.3):
+def cylinder(r, n=48, m=12, h=0.3):
     """Vertical tube of radius r, normals and faces pointing outwards (like a skirt)."""
     a = np.linspace(0, 2 * np.pi, n, endpoint=False)
     ys = np.linspace(0, h, m)
@@ -48,256 +48,256 @@ def cylindre(r, n=48, m=12, h=0.3):
             a1, b1 = a0 + n, b0 + n
             F += [(a0, a1, b0), (b0, a1, b1)]
     F = np.array(F)
-    rep, inv = G.souder(pos, 1e-5)
-    return SimpleNamespace(id="c", nom="tube", pos=pos, nor=nor, F=F, rep=rep, inv=inv, meta={"rang": 1}, drapeaux=None)
+    rep, inv = G.weld(pos, 1e-5)
+    return SimpleNamespace(id="c", name="tube", pos=pos, nor=nor, F=F, rep=rep, inv=inv, meta={"rank": 1}, flags=None)
 
 
-def couche(p, meta=None):
+def layer(p, meta=None):
     if meta:
         p.meta = meta
-    return CB.Couche(p)
+    return CB.Layer(p)
 
 
-class TestGLB(unittest.TestCase):
-    def test_aller_retour_et_orientation(self):
+class TestGlb(unittest.TestCase):
+    def test_go_back_and_orientation(self):
         pos = np.array([[0, 0, 0], [1, 0, 0], [0, 1, 0]], float)
         nor = np.array([[0, 0, -1.0]] * 3)   # in MMD: -Z, so +Z once in glTF
-        p, n, f = GLB.vers_gltf(pos, nor, np.array([[0, 2, 1]]))
+        p, n, f = GLB.to_gltf(pos, nor, np.array([[0, 2, 1]]))
         a, b, c = p[f[0]]
         self.assertGreater(float(np.dot(np.cross(b - a, c - a), n[0])), 0)
         self.assertAlmostEqual(float(p[1, 0]), 0.08, places=6)
         with tempfile.TemporaryDirectory() as d:
-            chemin = os.path.join(d, "x.glb")
-            GLB.ecrire(chemin, p, n, np.zeros((3, 2)), [{"faces": f, "materiau": 0}],
-                       [{"nom": "m", "image": "/data/tex/a.webp", "diffus": (1, 1, 1, 1)}])
-            doc, b_ = GLB.lire(chemin)
+            path = os.path.join(d, "x.glb")
+            GLB.write(path, p, n, np.zeros((3, 2)), [{"faces": f, "material": 0}],
+                       [{"name": "m", "image": "/data/tex/a.webp", "diffuse": (1, 1, 1, 1)}])
+            doc, b_ = GLB.read(path)
             self.assertEqual(doc["asset"]["version"], "2.0")
             self.assertEqual(doc["images"][0]["uri"], "/data/tex/a.webp")
             self.assertEqual(doc["accessors"][0]["count"], 3)
             self.assertEqual(len(b_) % 4, 0)
 
-    def test_face_a_l_envers_retournee(self):
+    def test_face_a_l_reverse_flipped(self):
         # strip of four faces; the third is wound backwards and its normals are wrong too
         pos = np.array([[0, 0, 0], [0, 1, 0], [1, 0, 0], [1, 1, 0], [2, 0, 0], [2, 1, 0]], float)
         nor = np.tile([0, 0, 1.0], (6, 1))
-        F = GLB.a_l_endroit(pos, nor, [[0, 2, 1], [1, 2, 3], [2, 3, 4], [3, 4, 5]])
+        F = GLB.a_l_upright(pos, nor, [[0, 2, 1], [1, 2, 3], [2, 3, 4], [3, 4, 5]])
         g = np.cross(pos[F[:, 1]] - pos[F[:, 0]], pos[F[:, 2]] - pos[F[:, 0]])
         self.assertTrue((g[:, 2] > 0).all())
         self.assertEqual(F[0].tolist(), [0, 2, 1])
 
-    def test_chaussure_posee_d_un_bloc(self):
+    def test_shoe_placed_d_one_block(self):
         # two feet rotated and enlarged by fitting, a tenth of the vertices gone elsewhere
         import repair as RP
         rng = np.random.default_rng(0)
         S = rng.uniform(-0.05, 0.05, (200, 3)) + np.where(np.arange(200)[:, None] < 100, [-0.1, 0, 0], [0.1, 0, 0])
         c, s_ = np.cos(0.2), np.sin(0.2)
-        juste = 1.2 * S @ np.array([[1, 0, 0], [0, c, s_], [0, -s_, c]]) + [0, 0.03, 0.01]
-        Z = juste.copy()
+        exact = 1.2 * S @ np.array([[1, 0, 0], [0, c, s_], [0, -s_, c]]) + [0, 0.03, 0.01]
+        Z = exact.copy()
         Z[::10] += rng.uniform(0.03, 0.08, (20, 3))
-        self.assertLess(np.abs(RP.poser(S, Z) - juste).max(), 1e-6)
+        self.assertLess(np.abs(RP.place(S, Z) - exact).max(), 1e-6)
 
-    def test_ilot_de_peau_sur_le_tissu_cache(self):
+    def test_island_of_skin_on_fabric_cache(self):
         # two skin faces facing +z, apart; a square of fabric under the first one only
         import skin as PE
         V = np.array([[0, 0, 0], [0.01, 0, 0], [0, 0.01, 0], [0.2, 0, 0], [0.21, 0, 0], [0.2, 0.01, 0]], float)
         Fp = np.array([[0, 1, 2], [3, 4, 5]])
         N = np.tile([0, 0, 1.0], (6, 1))
-        anciens = PE._peau, CB.peau
-        PE._peau = lambda: (V[Fp], np.tile([0, 0, 1.0], (2, 1)), np.array([0.5, 0.5]))
-        CB.peau = lambda: (V, Fp, N, None)
+        old = PE._skin, CB.skin
+        PE._skin = lambda: (V[Fp], np.tile([0, 0, 1.0], (2, 1)), np.array([0.5, 0.5]))
+        CB.skin = lambda: (V, Fp, N, None)
         try:
             F = np.array([[0, 1, 2], [1, 3, 2]])
-            carre = np.array([[-0.02, -0.02, 0], [0.03, -0.02, 0], [-0.02, 0.03, 0], [0.03, 0.03, 0]], float)
-            rien = np.zeros(0, np.int64)
-            self.assertEqual(PE.enfoncee(carre + [0, 0, -0.004], F, rien).tolist(), [True, False])
-            self.assertFalse(PE.enfoncee(carre + [0, 0, 0.004], F, rien).any())     # fabric in front: nothing more to hide
-            self.assertFalse(PE.enfoncee(carre + [0, 0, -0.004], F, np.array([0])).any())   # already hidden
+            square = np.array([[-0.02, -0.02, 0], [0.03, -0.02, 0], [-0.02, 0.03, 0], [0.03, 0.03, 0]], float)
+            nothing = np.zeros(0, np.int64)
+            self.assertEqual(PE.sunk(square + [0, 0, -0.004], F, nothing).tolist(), [True, False])
+            self.assertFalse(PE.sunk(square + [0, 0, 0.004], F, nothing).any())     # fabric in front: nothing more to hide
+            self.assertFalse(PE.sunk(square + [0, 0, -0.004], F, np.array([0])).any())   # already hidden
         finally:
-            PE._peau, CB.peau = anciens
+            PE._skin, CB.skin = old
 
-    def test_piece_relit_un_vrai_glb(self):
+    def test_part_rereads_one_real_glb(self):
         pos = np.array([[0, 0, 0], [1, 0, 0], [0, 1, 0], [1, 1, 0]], float)
         nor = np.array([[0, 0, 1.0]] * 4)
         F = np.array([[0, 1, 2], [1, 3, 2]])
         with tempfile.TemporaryDirectory() as d:
-            ancien, C.CACHE = C.CACHE, d
+            old, C.CACHE = C.CACHE, d
             try:
-                os.makedirs(os.path.join(d, "pieces", "p"))
-                C.ecrire_json(os.path.join(d, "pieces", "p", "meta.json"), {"type_fr": "essai"})
-                GLB.ecrire(os.path.join(d, "pieces", "p", "piece.glb"), pos, nor, np.zeros((4, 2)),
-                           [{"faces": F, "materiau": 0}], [{"nom": "m", "image": None, "diffus": (1, 1, 1, 1)}])
-                p = CB.Piece("p")
+                os.makedirs(os.path.join(d, "parts", "p"))
+                C.write_json(os.path.join(d, "parts", "p", "meta.json"), {"type_name": "attempt"})
+                GLB.write(os.path.join(d, "parts", "p", "part.glb"), pos, nor, np.zeros((4, 2)),
+                           [{"faces": F, "material": 0}], [{"name": "m", "image": None, "diffuse": (1, 1, 1, 1)}])
+                p = CB.Part("p")
             finally:
-                C.CACHE = ancien
+                C.CACHE = old
         self.assertEqual(p.F.tolist(), F.tolist())
         self.assertEqual(len(p.pos), 4)
 
 
-class TestCommun(unittest.TestCase):
-    def test_cle_sure(self):
-        self.assertNotIn("/", C.cle("a/b", "c d"))
-        self.assertEqual(C.cle("Anby", "jupe-1"), "Anby__jupe-1")
+class TestCommon(unittest.TestCase):
+    def test_key_sure(self):
+        self.assertNotIn("/", C.the_key("a/b", "c d"))
+        self.assertEqual(C.the_key("Anby", "skirt-1"), "Anby__skirt-1")
 
-    def test_ordre_des_couches(self):
-        r = lambda t: C.VETEMENTS[t][2]  # noqa: E731
-        self.assertLess(r("culotte"), r("haut"))
-        self.assertLess(r("haut"), r("jupe"))
-        self.assertLess(r("jupe"), r("veste"))
-        self.assertLess(r("veste"), C.ACCESSOIRES["ceinture"][0])
+    def test_order_of_layers(self):
+        r = lambda t: C.CLOTHES[t][2]  # noqa: E731
+        self.assertLess(r("underwear"), r("top"))
+        self.assertLess(r("top"), r("skirt"))
+        self.assertLess(r("skirt"), r("jacket"))
+        self.assertLess(r("jacket"), C.ACCESSORIES["belt"][0])
 
 
-class TestCouches(unittest.TestCase):
-    def test_poussee_sort_la_couche_du_dessus(self):
-        dessous, dessus = feuille(0.0), feuille(-0.002)   # the upper one is 2 mm inside
-        d = CB.pousser(dessus, dessus.pos, [(dessous.pos, dessous.F, dessous.nor)])
-        Z = dessus.pos + d
-        centre = np.abs(Z[:, :2]).max(1) < 0.1
-        self.assertTrue(np.all(Z[centre, 2] >= CB.MARGE - 1e-6))
+class TestLayers(unittest.TestCase):
+    def test_push_sort_layer_of_over(self):
+        under, over = sheet(0.0), sheet(-0.002)   # the upper one is 2 mm inside
+        d = CB.push(over, over.pos, [(under.pos, under.F, under.nor)])
+        Z = over.pos + d
+        center = np.abs(Z[:, :2]).max(1) < 0.1
+        self.assertTrue(np.all(Z[center, 2] >= CB.MARGIN - 1e-6))
 
-    def test_traversee_signalee(self):
-        haut = couche(cylindre(0.15))
-        bas = couche(cylindre(0.156))   # the lower one pokes out by 6 mm
-        r = CB.traverse(bas, haut)
+    def test_crossing_flagged(self):
+        top = layer(cylinder(0.15))
+        bottom = layer(cylinder(0.156))   # the lower one pokes out by 6 mm
+        r = CB.crosses(bottom, top)
         self.assertIsNotNone(r)
-        self.assertGreater(r["part"], 0.5)
-        propre = couche(cylindre(0.144))
-        r2 = CB.traverse(propre, haut)
-        self.assertTrue(r2 is None or r2["part"] == 0)
+        self.assertGreater(r["fraction"], 0.5)
+        own = layer(cylinder(0.144))
+        r2 = CB.crosses(own, top)
+        self.assertTrue(r2 is None or r2["fraction"] == 0)
 
-    def test_faces_masquees_ne_comptent_plus(self):
-        haut = couche(cylindre(0.15))
-        bas = couche(cylindre(0.156))
-        bas.masque[:] = True
-        self.assertIsNone(CB.traverse(bas, haut))
+    def test_faces_masked_not_count_plus(self):
+        top = layer(cylinder(0.15))
+        bottom = layer(cylinder(0.156))
+        bottom.mask[:] = True
+        self.assertIsNone(CB.crosses(bottom, top))
 
 
-class TestReglesDeCouches(unittest.TestCase):
-    def test_culotte_retiree_sous_un_bas_ferme(self):
-        for bas in ("short", "pantalon"):
-            r = CB.retirees({"c": {"type": "culotte", "type_fr": "culotte"}, "b": {"type": bas, "type_fr": bas}})
+class TestRulesOfLayers(unittest.TestCase):
+    def test_underwear_removed_under_one_bottom_closed(self):
+        for bottom in ("shorts", "trousers"):
+            r = CB.removed({"c": {"type": "underwear", "type_name": "underwear"}, "b": {"type": bottom, "type_name": bottom}})
             self.assertEqual(list(r), ["c"])
 
-    def test_culotte_gardee_sous_une_jupe(self):
-        self.assertEqual(CB.retirees({"c": {"type": "culotte"}, "j": {"type": "jupe"}}), {})
+    def test_underwear_kept_under_one_skirt(self):
+        self.assertEqual(CB.removed({"c": {"type": "underwear"}, "j": {"type": "skirt"}}), {})
 
-    def test_rentrer_passe_dessous_sans_gonfler_le_dessus(self):
-        dessus, dessous = couche(cylindre(0.15)), couche(cylindre(0.156))
-        avant = dessus.Z.copy()
-        self.assertGreater(CB.rentrer(dessous, dessus), 0)
-        self.assertTrue(np.array_equal(dessus.Z, avant))
-        self.assertLess(float(np.hypot(dessous.Z[:, 0], dessous.Z[:, 2]).max()), 0.15)
+    def test_tuck_passed_under_without_inflate_over(self):
+        over, under = layer(cylinder(0.15)), layer(cylinder(0.156))
+        before = over.Z.copy()
+        self.assertGreater(CB.tuck(under, over), 0)
+        self.assertTrue(np.array_equal(over.Z, before))
+        self.assertLess(float(np.hypot(under.Z[:, 0], under.Z[:, 2]).max()), 0.15)
 
-    def test_masque_ce_qui_est_cache_et_tenu(self):
-        dessus, dessous = couche(cylindre(0.15)), couche(cylindre(0.145))
-        CB.masquer(dessous, dessus)
-        self.assertTrue(dessous.masque.all())
+    def test_mask_this_which_is_cache_and_held(self):
+        over, under = layer(cylinder(0.15)), layer(cylinder(0.145))
+        CB.hide(under, over)
+        self.assertTrue(under.mask.all())
 
-    def test_ne_masque_pas_sous_une_piece_qui_flotte(self):
-        dessus, dessous = couche(cylindre(0.20)), couche(cylindre(0.145))
-        CB.masquer(dessous, dessus)
-        self.assertFalse(dessous.masque.any())
+    def test_not_mask_step_under_one_part_which_floats(self):
+        over, under = layer(cylinder(0.20)), layer(cylinder(0.145))
+        CB.hide(under, over)
+        self.assertFalse(under.mask.any())
 
-    def test_ne_masque_pas_sous_un_tissu_ajoure(self):
-        c = cylindre(0.15)
-        c.drapeaux = np.full(len(c.F), CB.TENUE | CB.EXTERIEUR, np.uint8)    # held, but not opaque
-        dessus, dessous = couche(c), couche(cylindre(0.145))
-        CB.masquer(dessous, dessus)
-        self.assertFalse(dessous.masque.any())
+    def test_not_mask_step_under_one_fabric_perforated(self):
+        c = cylinder(0.15)
+        c.flags = np.full(len(c.F), CB.OUTFIT | CB.OUTER, np.uint8)    # held, but not opaque
+        over, under = layer(c), layer(cylinder(0.145))
+        CB.hide(under, over)
+        self.assertFalse(under.mask.any())
 
-    def test_haut_dont_l_ourlet_sort_reste_dehors(self):
-        haut, bas = couche(cylindre(0.16), {"type": "haut", "rang": 20}), couche(cylindre(0.15), {"type": "pantalon", "rang": 30})
-        ordre, notes = CB.ordonner([haut, bas])
-        self.assertEqual([c.type for c in ordre], ["pantalon", "haut"])
+    def test_top_whose_l_hem_sort_rest_outside(self):
+        top, bottom = layer(cylinder(0.16), {"type": "top", "rank": 20}), layer(cylinder(0.15), {"type": "trousers", "rank": 30})
+        order, notes = CB.order([top, bottom])
+        self.assertEqual([c.type for c in order], ["trousers", "top"])
         self.assertTrue(notes)
 
-    def test_haut_rentre_reste_dessous(self):
-        haut, bas = couche(cylindre(0.145), {"type": "haut", "rang": 20}), couche(cylindre(0.15), {"type": "pantalon", "rang": 30})
-        ordre, notes = CB.ordonner([haut, bas])
-        self.assertEqual([c.type for c in ordre], ["haut", "pantalon"])
+    def test_top_tucked_rest_under(self):
+        top, bottom = layer(cylinder(0.145), {"type": "top", "rank": 20}), layer(cylinder(0.15), {"type": "trousers", "rank": 30})
+        order, notes = CB.order([top, bottom])
+        self.assertEqual([c.type for c in order], ["top", "trousers"])
         self.assertFalse(notes)
 
-    def test_pantalon_rentre_dans_la_botte(self):
-        ancien, CB.corps = CB.corps, lambda: None
+    def test_trousers_tucked_in_boot(self):
+        old, CB.body = CB.body, lambda: None
         try:
-            pantalon = cylindre(0.156)
-            pantalon.id, pantalon.meta = "p", {"type": "pantalon", "onglet": "bas", "rang": 30}
-            botte = cylindre(0.15)
-            botte.id, botte.meta = "b", {"type": "bottes", "onglet": "chaussures", "rang": 60}
-            couches, _ = CB.resoudre([botte, pantalon])
+            trousers = cylinder(0.156)
+            trousers.id, trousers.meta = "p", {"type": "trousers", "tab": "bottom", "rank": 30}
+            boot = cylinder(0.15)
+            boot.id, boot.meta = "b", {"type": "boots", "tab": "shoes", "rank": 60}
+            layers, _ = CB.resolve([boot, trousers])
         finally:
-            CB.corps = ancien
-        self.assertEqual([c.id for c in couches], ["p", "b"])
-        self.assertTrue(couches[0].masque.all() or float(np.hypot(couches[0].Z[:, 0], couches[0].Z[:, 2]).max()) < 0.15)
+            CB.body = old
+        self.assertEqual([c.id for c in layers], ["p", "b"])
+        self.assertTrue(layers[0].mask.all() or float(np.hypot(layers[0].Z[:, 0], layers[0].Z[:, 2]).max()) < 0.15)
 
-    def test_ceinture_posee_sur_un_haut_a_larges_mailles(self):
-        ancien, CB.corps = CB.corps, lambda: None
+    def test_belt_placed_on_one_top_a_wide_stitches(self):
+        old, CB.body = CB.body, lambda: None
         try:
-            haut = cylindre(0.16)
-            haut.id, haut.meta = "h", {"type": "haut", "onglet": "haut", "rang": 20}
-            ceinture = cylindre(0.15)
-            ceinture.id, ceinture.meta = "c", {"type": "ceinture", "onglet": "accessoires", "rang": 70}
-            couches, _ = CB.resoudre([ceinture, haut])
+            top = cylinder(0.16)
+            top.id, top.meta = "h", {"type": "top", "tab": "top", "rank": 20}
+            belt = cylinder(0.15)
+            belt.id, belt.meta = "c", {"type": "belt", "tab": "accessories", "rank": 70}
+            layers, _ = CB.resolve([belt, top])
         finally:
-            CB.corps = ancien
-        par_id = {c.id: c for c in couches}
-        self.assertTrue(np.array_equal(par_id["h"].Z, haut.pos))
-        self.assertGreater(float(np.hypot(par_id["c"].Z[:, 0], par_id["c"].Z[:, 2]).min()), 0.16)
+            CB.body = old
+        per_id = {c.id: c for c in layers}
+        self.assertTrue(np.array_equal(per_id["h"].Z, top.pos))
+        self.assertGreater(float(np.hypot(per_id["c"].Z[:, 0], per_id["c"].Z[:, 2]).min()), 0.16)
 
-    def test_haute_chaussette_sous_la_culotte_mais_pas_le_collant(self):
-        culotte = cylindre(0.15)
-        bas, collant = cylindre(0.15), cylindre(0.15)
-        bas.pos = bas.pos - [0.0, float(bas.pos[:, 1].max() - bas.pos[:, 1].min()) / 2, 0.0]
-        collant.pos = collant.pos + [0.0, 0.02, 0.0]
-        def ordre(ch):
-            cs, _ = CB.ordonner([couche(culotte, {"type": "culotte", "rang": 10}), couche(ch, {"type": "chaussettes", "rang": 15})])
+    def test_high_sock_under_underwear_but_step_tights(self):
+        underwear = cylinder(0.15)
+        bottom, tights = cylinder(0.15), cylinder(0.15)
+        bottom.pos = bottom.pos - [0.0, float(bottom.pos[:, 1].max() - bottom.pos[:, 1].min()) / 2, 0.0]
+        tights.pos = tights.pos + [0.0, 0.02, 0.0]
+        def order(ch):
+            cs, _ = CB.order([layer(underwear, {"type": "underwear", "rank": 10}), layer(ch, {"type": "socks", "rank": 15})])
             return [c.type for c in cs]
-        self.assertEqual(ordre(bas), ["chaussettes", "culotte"])
-        self.assertEqual(ordre(collant), ["culotte", "chaussettes"])
+        self.assertEqual(order(bottom), ["socks", "underwear"])
+        self.assertEqual(order(tights), ["underwear", "socks"])
 
-    def test_traversee_cachee_par_une_autre_piece(self):
-        self.assertFalse(CB.traversee_visible(0.08, 0.06))
-        self.assertTrue(CB.traversee_visible(0.08, 0.02))
-        self.assertFalse(CB.traversee_visible(0.03, 0.0))
+    def test_crossing_hidden_per_one_other_part(self):
+        self.assertFalse(CB.crossing_visible(0.08, 0.06))
+        self.assertTrue(CB.crossing_visible(0.08, 0.02))
+        self.assertFalse(CB.crossing_visible(0.03, 0.0))
 
-    def test_chaussure_sans_dessus(self):
-        pied = np.array([(x, 0.05, z) for x in np.linspace(-0.04, 0.04, 9) for z in np.linspace(-0.1, 0.1, 21)], float)
-        n = np.tile([0.0, 1.0, 0.0], (len(pied), 1))
-        semelle = feuille(-0.0, largeur=0.4)            # flat, 5 cm below the top of the foot: too far
-        semelle.pos = semelle.pos[:, [0, 2, 1]]
-        dessus = feuille(0.0, largeur=0.4)
-        dessus.pos = dessus.pos[:, [0, 2, 1]] + [0.0, 0.06, 0.0]
-        self.assertEqual(CV.dessus_du_pied(semelle.pos, np.tile([0.0, -1.0, 0.0], (len(semelle.pos), 1)), semelle.F, pied, n), 0.0)
-        self.assertGreater(CV.dessus_du_pied(dessus.pos, np.tile([0.0, 1.0, 0.0], (len(dessus.pos), 1)), dessus.F, pied, n), CV.PIED_MIN)
+    def test_shoe_without_over(self):
+        foot = np.array([(x, 0.05, z) for x in np.linspace(-0.04, 0.04, 9) for z in np.linspace(-0.1, 0.1, 21)], float)
+        n = np.tile([0.0, 1.0, 0.0], (len(foot), 1))
+        sole = sheet(-0.0, width=0.4)            # flat, 5 cm below the top of the foot: too far
+        sole.pos = sole.pos[:, [0, 2, 1]]
+        over = sheet(0.0, width=0.4)
+        over.pos = over.pos[:, [0, 2, 1]] + [0.0, 0.06, 0.0]
+        self.assertEqual(CV.instep(sole.pos, np.tile([0.0, -1.0, 0.0], (len(sole.pos), 1)), sole.F, foot, n), 0.0)
+        self.assertGreater(CV.instep(over.pos, np.tile([0.0, 1.0, 0.0], (len(over.pos), 1)), over.F, foot, n), CV.FOOT_MIN)
 
 
-class TestCouvercles(unittest.TestCase):
+class TestLids(unittest.TestCase):
     """The backing that closes a sleeve around the arm is recognised: closed fan, crossed by the axis."""
 
-    def eventail(self, centre, n=10, ouvert=False):
-        c = np.asarray(centre, float)
+    def fan(self, center, n=10, open_=False):
+        c = np.asarray(center, float)
         t = np.linspace(0, 2 * np.pi, n, endpoint=False)
         P = np.vstack([c, c + 0.5 * np.c_[np.zeros(n), np.cos(t), np.sin(t)]])
-        F = np.array([[0, 1 + i, 1 + (i + 1) % n] for i in range(n - (1 if ouvert else 0))])
+        F = np.array([[0, 1 + i, 1 + (i + 1) % n] for i in range(n - (1 if open_ else 0))])
         return P, F
 
-    def test_seul_le_fond_traverse_par_le_bras(self):
+    def test_alone_background_crosses_per_arm(self):
         sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "clothes"))
         import wear as PO
-        oss = [{"nom": "左腕", "pos": [1, 0, 0]}, {"nom": "左ひじ", "pos": [3, 0, 0]}]
-        for centre, ouvert, attendu in (([2, 0, 0], False, True),      # around the arm
+        bones = [{"name": "左腕", "pos": [1, 0, 0]}, {"name": "左ひじ", "pos": [3, 0, 0]}]
+        for center, open_, expected in (([2, 0, 0], False, True),      # around the arm
                                         ([2, 3, 0], False, False),     # beside the arm: ordinary fabric
                                         ([3.2, 0, 0], False, False),   # at the end of the bone: a visible end
                                         ([2, 0, 0], True, False)):     # open: not a backing
-            P, F = self.eventail(centre, ouvert=ouvert)
-            centres, faces, liens = PO.couvercles(P, F, oss)
-            self.assertEqual(len(liens), int(attendu))
-            self.assertEqual(bool(centres[0]), attendu, (centre, ouvert))
-            self.assertEqual(bool(faces.all()), attendu)
-            self.assertFalse(centres[1:].any())
+            P, F = self.fan(center, open_=open_)
+            centers, faces, links = PO.lids(P, F, bones)
+            self.assertEqual(len(links), int(expected))
+            self.assertEqual(bool(centers[0]), expected, (center, open_))
+            self.assertEqual(bool(faces.all()), expected)
+            self.assertFalse(centers[1:].any())
 
 
-class TestCou(unittest.TestCase):
-    def test_cou_du_jeu_retire_sphere_crane(self):
+class TestNeck(unittest.TestCase):
+    def test_neck_of_game_removes_sphere_skull(self):
         import game_neck as CJ
         # Body (mat 0): a torso triangle (y=15..18.3) + a separate skull triangle (y=19.0..19.5)
         # Face (mat 1): a triangle at y=18.8
@@ -308,20 +308,20 @@ class TestCou(unittest.TestCase):
         ])
         faces = np.array([[0, 1, 2], [3, 4, 5], [6, 7, 8]])
         mat_face = np.array([0, 0, 1])
-        cou_tete = np.array([[0.2 * np.cos(a), 18.25, 0.2 * np.sin(a)] for a in np.linspace(0, 2 * np.pi, 36)])
-        retirer, _, _, bilan = CJ.couper(pos, faces, mat_face, 0, [1], cou_tete, (0.0, 0.0))
-        self.assertEqual(bilan["faces_crane"], 1)
-        self.assertEqual(retirer.tolist(), [False, True, False])
+        neck_head = np.array([[0.2 * np.cos(a), 18.25, 0.2 * np.sin(a)] for a in np.linspace(0, 2 * np.pi, 36)])
+        remove, _, _, assessment = CJ.cut(pos, faces, mat_face, 0, [1], neck_head, (0.0, 0.0))
+        self.assertEqual(assessment["faces_skull"], 1)
+        self.assertEqual(remove.tolist(), [False, True, False])
 
 
-def petit_pmx():
+def small_pmx():
     """Minimal humanoid skeleton, arms in A-pose, two triangles per useful bone."""
-    noms = {"下半身": (-1, (0, 10, 0)), "上半身": (0, (0, 11, 0)), "上半身1": (1, (0, 12, 0)), "上半身2": (2, (0, 13, 0)), "首": (3, (0, 15, 0)), "頭": (4, (0, 16, 0)),
+    names = {"下半身": (-1, (0, 10, 0)), "上半身": (0, (0, 11, 0)), "上半身1": (1, (0, 12, 0)), "上半身2": (2, (0, 13, 0)), "首": (3, (0, 15, 0)), "頭": (4, (0, 16, 0)),
             "左肩": (3, (0.5, 14.5, 0)), "左腕": (6, (1, 14.5, 0)), "左ひじ": (7, (3, 12.5, 0)), "左手首": (8, (5, 10.5, 0)), "左中指１": (9, (5.5, 10, 0)),
             "右肩": (3, (-0.5, 14.5, 0)), "右腕": (11, (-1, 14.5, 0)), "右ひじ": (12, (-3, 12.5, 0)), "右手首": (13, (-5, 10.5, 0)), "右中指１": (14, (-5.5, 10, 0)),
             "左足": (0, (1, 9, 0)), "左ひざ": (16, (1, 5, 0)), "左足首": (17, (1, 1, 0)), "右足": (0, (-1, 9, 0)), "右ひざ": (19, (-1, 5, 0)), "右足首": (20, (-1, 1, 0))}
-    os_ = [{"nom": n, "parent": p, "pos": tuple(float(x) for x in c)} for n, (p, c) in noms.items()]
-    pos, nor, uv, fs, liens = [], [], [], [], []
+    os_ = [{"name": n, "parent": p, "pos": tuple(float(x) for x in c)} for n, (p, c) in names.items()]
+    pos, nor, uv, fs, links = [], [], [], [], []
     for k, o in enumerate(os_):
         i = len(pos)
         x, y, z = o["pos"]
@@ -329,135 +329,135 @@ def petit_pmx():
         nor += [(0.0, 0.0, -1.0)] * 3
         uv += [(0.0, 0.0)] * 3
         fs.append((i, i + 2, i + 1))
-        liens += [(k, -1, -1, -1)] * 3
-    poids = [(1.0, 0.0, 0.0, 0.0)] * len(pos)
-    return {"os": os_, "sommets": {"pos": pos, "nor": nor, "uv": uv, "os": liens, "poids": poids}, "faces": fs, "textures": [],
-            "materiaux": [{"nom": "peau", "n_indices": len(fs) * 3, "texture": -1, "diffus": (1, 1, 1, 1), "drapeaux": 1, "contour_taille": 0.0, "contour_couleur": (0, 0, 0, 1)}],
-            "morphes": [{"nom": "まばたき", "type": 1, "decalages": [(0, (0.0, 0.1, 0.0))]}]}
+        links += [(k, -1, -1, -1)] * 3
+    weight = [(1.0, 0.0, 0.0, 0.0)] * len(pos)
+    return {"bones": os_, "vertices": {"pos": pos, "nor": nor, "uv": uv, "bones": links, "weights": weight}, "faces": fs, "textures": [],
+            "materials": [{"name": "skin", "n_indices": len(fs) * 3, "texture": -1, "diffuse": (1, 1, 1, 1), "flags": 1, "outline_size": 0.0, "outline_color": (0, 0, 0, 1)}],
+            "morphs": [{"name": "まばたき", "type": 1, "offsets": [(0, (0.0, 0.1, 0.0))]}]}
 
 
-class TestVRM(unittest.TestCase):
-    def test_decoupe_seulement_si_la_texture_a_des_trous(self):
-        m = {"diffus": [1, 1, 1, 1], "drapeaux": 0, "contour_taille": 0, "contour_couleur": [0, 0, 0, 1]}
-        self.assertNotIn("alphaMode", VR._mtoon(m, 0, False, "cheveux", decoupe=False))
-        self.assertEqual(VR._mtoon(m, 0, False, "cheveux", decoupe=True)["alphaMode"], "MASK")
-        self.assertEqual(VR._mtoon(m, 0, False, "cheveux+", decoupe=False)["alphaMode"], "BLEND")
+class TestVrm(unittest.TestCase):
+    def test_cutout_only_if__texture_a_of_holes(self):
+        m = {"diffuse": [1, 1, 1, 1], "flags": 0, "outline_size": 0, "outline_color": [0, 0, 0, 1]}
+        self.assertNotIn("alphaMode", VR._mtoon(m, 0, False, "hair", cutout=False))
+        self.assertEqual(VR._mtoon(m, 0, False, "hair", cutout=True)["alphaMode"], "MASK")
+        self.assertEqual(VR._mtoon(m, 0, False, "hair+", cutout=False)["alphaMode"], "BLEND")
 
-    def test_ecrit_un_vrm_valide(self):
+    def test_written_one_vrm_valid(self):
         with tempfile.TemporaryDirectory() as d:
             ch = os.path.join(d, "x.vrm")
-            r = VR.ecrire_vrm(petit_pmx(), ch, {})
-            self.assertEqual(VR.valider(ch), [])
-            doc, _ = VR.lire(ch)
+            r = VR.write_vrm(small_pmx(), ch, {})
+            self.assertEqual(VR.validate(ch), [])
+            doc, _ = VR.read(ch)
         self.assertEqual(r["expressions"], 1)
         self.assertIn("VRMC_vrm", doc["extensions"])
         self.assertTrue(all("VRMC_materials_mtoon" in m["extensions"] for m in doc["materials"]))
 
-    def test_bras_a_l_horizontale(self):
-        S = VR.Squelette(petit_pmx())
+    def test_arm_a_l_horizontal(self):
+        S = VR.Skeleton(small_pmx())
         Pw, _ = S.tpose()
-        ep, co = Pw[S.humain["leftUpperArm"]], Pw[S.humain["leftHand"]]
+        ep, co = Pw[S.human["leftUpperArm"]], Pw[S.human["leftHand"]]
         self.assertAlmostEqual(float(ep[1]), float(co[1]), places=5)
         self.assertGreater(float(co[0]), float(ep[0]))
 
-    def test_colonne_sous_les_hanches(self):
-        S = VR.Squelette(petit_pmx())
-        self.assertEqual(S.parent[S.humain["spine"]], S.humain["hips"])
+    def test_spine_under_hips(self):
+        S = VR.Skeleton(small_pmx())
+        self.assertEqual(S.parent[S.human["spine"]], S.human["hips"])
 
 
-class TestEmpilement(unittest.TestCase):
-    def test_sans_os_nuls(self):
-        P = {"sommets": {"os": [(138, 5, 0, 0), (7, -1, -1, -1), (3, 4, 9, 1)],
-                         "poids": [(1.0, 0.0, 0.0, 0.0), (1.0, 0.0, 0.0, 0.0), (0.5, 0.5, 0.0, 0.0)]}}
-        self.assertEqual(C.sans_os_nuls(P), 2)
-        self.assertEqual(P["sommets"]["os"], [(138, 138, 138, 138), (7, -1, -1, -1), (3, 4, 3, 3)])
+class TestStacking(unittest.TestCase):
+    def test_without_os_zero(self):
+        P = {"vertices": {"bones": [(138, 5, 0, 0), (7, -1, -1, -1), (3, 4, 9, 1)],
+                         "weights": [(1.0, 0.0, 0.0, 0.0), (1.0, 0.0, 0.0, 0.0), (0.5, 0.5, 0.0, 0.0)]}}
+        self.assertEqual(C.without_os_zero(P), 2)
+        self.assertEqual(P["vertices"]["bones"], [(138, 138, 138, 138), (7, -1, -1, -1), (3, 4, 3, 3)])
 
-    def test_enveloppant(self):
-        self.assertTrue(C.enveloppant({"onglet": "bas", "type": "jupe"}))
-        self.assertTrue(C.enveloppant({"onglet": "accessoires", "type": "ceinture"}))
-        self.assertFalse(C.enveloppant({"onglet": "accessoires", "type": "collier"}))
+    def test_enveloping(self):
+        self.assertTrue(C.enveloping({"tab": "bottom", "type": "skirt"}))
+        self.assertTrue(C.enveloping({"tab": "accessories", "type": "belt"}))
+        self.assertFalse(C.enveloping({"tab": "accessories", "type": "necklace"}))
 
 
-class TestReglagesCouches(unittest.TestCase):
+class TestSettingsLayers(unittest.TestCase):
     """The layers come from the settings (layers.default.json, then settings.json)."""
 
     # The tables and thresholds as they were written in the code before moving to the settings (15/11).
-    VETEMENTS = {
-        "culotte": ("bas", "dessous", 10), "chaussettes": ("chaussures", "chaussettes", 15), "haut": ("haut", "haut", 20),
-        "manches": ("haut", "manches", 26), "short": ("bas", "bas", 30), "pantalon": ("bas", "bas", 30),
-        "jupe": ("bas", "jupe", 32), "robe": ("bas", "robe", 34), "combinaison": ("bas", "robe", 34),
-        "chaussures": ("chaussures", "chaussures", 40), "bottes": ("chaussures", "chaussures", 42),
-        "gants": ("accessoires", "mains", 44), "col": ("haut", "col", 48), "gilet": ("haut", "gilet", 52),
-        "veste": ("haut", "dessus", 55), "manteau": ("haut", "dessus", 60), "capuche": ("haut", "capuche", 62)}
-    OCCUPE = {"robe": ["jupe"], "combinaison": ["bas", "jupe"]}
-    ACCESSOIRES = {
-        "ceinture": (70, True), "harnais": (72, True), "jarretiere": (66, False), "chevillere": (67, False),
-        "brassard": (68, False), "bracelet": (69, False), "bague": (69, False), "cravate": (75, True),
-        "echarpe": (76, True), "collier": (78, True), "bijou": (78, False), "sac": (80, True),
-        "lunettes": (84, True), "masque": (84, True), "couvre_chef": (86, True), "casque_audio": (86, True),
-        "queue": (88, True), "ailes": (88, True), "oreilles": (88, True)}
+    CLOTHES = {
+        "underwear": ("bottom", "under", 10), "socks": ("shoes", "socks", 15), "top": ("top", "top", 20),
+        "sleeves": ("top", "sleeves", 26), "shorts": ("bottom", "bottom", 30), "trousers": ("bottom", "bottom", 30),
+        "skirt": ("bottom", "skirt", 32), "dress": ("bottom", "dress", 34), "jumpsuit": ("bottom", "dress", 34),
+        "shoes": ("shoes", "shoes", 40), "boots": ("shoes", "shoes", 42),
+        "gloves": ("accessories", "hands", 44), "collar": ("top", "collar", 48), "waistcoat": ("top", "waistcoat", 52),
+        "jacket": ("top", "outer", 55), "coat": ("top", "outer", 60), "hood": ("top", "hood", 62)}
+    OCCUPIES = {"dress": ["skirt"], "jumpsuit": ["bottom", "skirt"]}
+    ACCESSORIES = {
+        "belt": (70, True), "harness": (72, True), "garter": (66, False), "anklet": (67, False),
+        "armband": (68, False), "bracelet": (69, False), "ring": (69, False), "tie": (75, True),
+        "scarf": (76, True), "necklace": (78, True), "jewel": (78, False), "bag": (80, True),
+        "glasses": (84, True), "mask": (84, True), "headwear": (86, True), "headphones": (86, True),
+        "tail": (88, True), "wings": (88, True), "ears": (88, True)}
     FR_TYPE = {
-        "culotte": "underwear", "chaussettes": "socks", "haut": "top", "manches": "sleeves", "short": "shorts",
-        "pantalon": "trousers", "jupe": "skirt", "robe": "dress", "combinaison": "jumpsuit", "chaussures": "shoes",
-        "bottes": "boots", "gants": "gloves", "col": "collar", "gilet": "waistcoat", "veste": "jacket", "manteau": "coat",
-        "capuche": "hood", "jarretiere": "garter", "chevillere": "anklet", "brassard": "armband",
-        "bracelet": "bracelet", "bague": "ring", "cravate": "tie", "echarpe": "scarf", "collier": "necklace",
-        "bijou": "jewel", "sac": "bag", "lunettes": "glasses", "masque": "mask", "couvre_chef": "headwear",
-        "casque_audio": "headphones", "queue": "tail", "ailes": "wings", "oreilles": "ears",
-        "ceinture": "belt", "harnais": "harness"}
-    SEUILS = {
-        "MARGE": 0.003, "MARGE_RENTREE": 0.0015, "PORTEE_RENTREE": 0.05, "PLANCHER": 0.001, "PORTEE_RAYON": 0.06,
-        "PORTEE_PEAU": 0.06, "LIBRE_MAX": 0.025, "ACCORD": 0.3, "FIN": 0.0002, "SORTIE_MAX": 0.008, "RAYON_MEMBRE": 0.05,
-        "FLECHE_MAX": 0.003, "PORTEE_MASQUE": 0.03, "TOLERANCE_MASQUE": 0.006, "PASSES": 4, "EMPREINTE": 0.8,
-        "CONTACT": 0.005, "PORTEE": 0.025, "SEUIL": 0.0005, "PART_TRAVERSE": 0.01, "ORDRE_DEHORS": 0.003,
-        "CELLULE": 0.08, "VOXEL": 0.04, "VOXEL_CORPS": 0.012}
+        "underwear": "underwear", "socks": "socks", "top": "top", "sleeves": "sleeves", "shorts": "shorts",
+        "trousers": "trousers", "skirt": "skirt", "dress": "dress", "jumpsuit": "jumpsuit", "shoes": "shoes",
+        "boots": "boots", "gloves": "gloves", "collar": "collar", "waistcoat": "waistcoat", "jacket": "jacket", "coat": "coat",
+        "hood": "hood", "garter": "garter", "anklet": "anklet", "armband": "armband",
+        "bracelet": "bracelet", "ring": "ring", "tie": "tie", "scarf": "scarf", "necklace": "necklace",
+        "jewel": "jewel", "bag": "bag", "glasses": "glasses", "mask": "mask", "headwear": "headwear",
+        "headphones": "headphones", "tail": "tail", "wings": "wings", "ears": "ears",
+        "belt": "belt", "harness": "harness"}
+    THRESHOLDS = {
+        "MARGIN": 0.003, "MARGIN_TUCKED": 0.0015, "REACH_TUCKED": 0.05, "FLOOR": 0.001, "REACH_RADIUS": 0.06,
+        "REACH_SKIN": 0.06, "FREE_MAX": 0.025, "MATCH": 0.3, "END": 0.0002, "OUTPUT_MAX": 0.008, "RADIUS_LIMB": 0.05,
+        "ARROW_MAX": 0.003, "REACH_MASK": 0.03, "TOLERANCE_MASK": 0.006, "PASSES": 4, "FINGERPRINT": 0.8,
+        "CONTACT": 0.005, "REACH": 0.025, "THRESHOLD": 0.0005, "PART_CROSSES": 0.01, "ORDER_OUTSIDE": 0.003,
+        "CELL": 0.08, "VOXEL": 0.04, "VOXEL_BODY": 0.012}
 
-    def defauts(self):
+    def defaults(self):
         """The couches section of the public files only (without the machine's settings.json)."""
         import json
-        with open(os.path.join(C.DEPOT, "layers.default.json"), encoding="utf-8") as f:
+        with open(os.path.join(C.REPO, "layers.default.json"), encoding="utf-8") as f:
             return json.load(f)["layers"]
 
-    def test_defauts_egaux_a_avant(self):
-        V, O, A, Ce, F = C.tables(self.defauts())
-        self.assertEqual(V, self.VETEMENTS)
-        self.assertEqual(O, self.OCCUPE)
-        self.assertEqual(A, self.ACCESSOIRES)
-        self.assertEqual(Ce, {"ceinture"})
+    def test_defaults_equal_a_front(self):
+        V, O, A, Ce, F = C.tables(self.defaults())
+        self.assertEqual(V, self.CLOTHES)
+        self.assertEqual(O, self.OCCUPIES)
+        self.assertEqual(A, self.ACCESSORIES)
+        self.assertEqual(Ce, {"belt"})
         self.assertEqual(F, self.FR_TYPE)
-        T = self.defauts()["outfit"]
+        T = self.defaults()["outfit"]
         self.assertEqual((T["ranks_in_outfit"], T["closed_bottoms"], T["tops"], T["bottoms"]),
-                         ({"ceinture": 36}, ["short", "pantalon"], ["haut"], ["short", "pantalon", "jupe"]))
+                         ({"belt": 36}, ["shorts", "trousers"], ["top"], ["shorts", "trousers", "skirt"]))     # settings: format 2
 
-    def test_charges_egaux_a_avant(self):
+    def test_loads_equal_a_front(self):
         # what the code loaded (with no layer override in the machine's settings.json): exact equality
-        if (C.R.tout().get("layers") or {}) != self.defauts():
+        if (C.R.all_().get("layers") or {}) != self.defaults():
             self.skipTest("the machine's settings.json overrides the layers")
-        self.assertEqual((C.VETEMENTS, C.OCCUPE, C.ACCESSOIRES, C.FR_TYPE), (self.VETEMENTS, self.OCCUPE, self.ACCESSOIRES, self.FR_TYPE))
-        for nom, v in self.SEUILS.items():
-            self.assertEqual(getattr(CB, nom), v, nom)
-            self.assertIs(type(getattr(CB, nom)), type(v), nom)
-        self.assertEqual((CB.RANGS, CB.BAS_FERMES, CB.HAUTS, CB.BAS),
-                         ({"ceinture": 36}, ("short", "pantalon"), ("haut", ), ("short", "pantalon", "jupe")))
+        self.assertEqual((C.CLOTHES, C.OCCUPIES, C.ACCESSORIES, C.FR_TYPE), (self.CLOTHES, self.OCCUPIES, self.ACCESSORIES, self.FR_TYPE))
+        for name, v in self.THRESHOLDS.items():
+            self.assertEqual(getattr(CB, name), v, name)
+            self.assertIs(type(getattr(CB, name)), type(v), name)
+        self.assertEqual((CB.RANKS, CB.BOTTOM_CLOSED, CB.TOPS, CB.BOTTOM),
+                         ({"belt": 36}, ("shorts", "trousers"), ("top", ), ("shorts", "trousers", "skirt")))
 
-    def test_surcharge_locale(self):
+    def test_override_locale(self):
         """A settings.json that changes a rank, adds a type and a kind, removes a type and changes a threshold,
         without copying the tables: read by a fresh Python, like the server at start-up."""
         import json
         import subprocess
         local = {"layers": {
-            "garments": {"jupe": {"rank": 33}, "capuche": None,
-                         "kimono": {"tab": "haut", "slot": "dessus", "rank": 57, "name": "kimono"}},
+            "garments": {"skirt": {"rank": 33}, "hood": None,
+                         "kimono": {"tab": "top", "slot": "outer", "rank": 57, "name": "kimono"}},
             "accessories": {"broche": {"rank": 79}, "corset": {"rank": 37, "exclusive": True, "belt_like": True}},
-            "outfit": {"closed_bottoms": ["pantalon"]},
+            "outfit": {"closed_bottoms": ["trousers"]},
             "thresholds": {"max_outward_mm": 10}}}
         code = ("import json, sys; sys.path.insert(0, %r); import common as C, outfit as CB; "
-                "print(json.dumps({'jupe': C.VETEMENTS['jupe'], 'veste': C.VETEMENTS['veste'], 'kimono': C.VETEMENTS.get('kimono'), "
-                "'capuche': 'capuche' in C.VETEMENTS, 'broche': C.ACCESSOIRES.get('broche'), 'nom_broche': C.FR_TYPE.get('broche'), "
-                "'ceintures': sorted(C.CEINTURES), 'corset_env': C.enveloppant({'onglet': 'accessoires', 'type': 'corset'}), "
-                "'range': C.ranger({'classe': 'vetement', 'type': 'jupe', 'onglet': 'bas', 'emplacement': 'bas', 'rang': 32}), "
-                "'sortie': CB.SORTIE_MAX, 'marge': CB.MARGE_RENTREE, 'bas_fermes': CB.BAS_FERMES}))"
-                % C.ICI)
+                "print(json.dumps({'skirt': C.CLOTHES['skirt'], 'jacket': C.CLOTHES['jacket'], 'kimono': C.CLOTHES.get('kimono'), "
+                "'hood': 'hood' in C.CLOTHES, 'broche': C.ACCESSORIES.get('broche'), 'name_broche': C.FR_TYPE.get('broche'), "
+                "'belts': sorted(C.BELTS), 'corset_env': C.enveloping({'tab': 'accessories', 'type': 'corset'}), "
+                "'range': C.arrange({'class': 'garment', 'type': 'skirt', 'tab': 'bottom', 'slot': 'bottom', 'rank': 32}), "
+                "'output': CB.OUTPUT_MAX, 'margin': CB.MARGIN_TUCKED, 'bottom_closed': CB.BOTTOM_CLOSED}))"
+                % C.HERE)
         with tempfile.TemporaryDirectory() as d:
             ch = os.path.join(d, "settings.json")
             with open(ch, "w", encoding="utf-8") as f:
@@ -466,131 +466,131 @@ class TestReglagesCouches(unittest.TestCase):
             r = subprocess.run([sys.executable, "-I", "-c", code], env=env, capture_output=True, text=True)
         self.assertEqual(r.returncode, 0, r.stderr)
         v = json.loads(r.stdout)
-        self.assertEqual(v["jupe"], ["bas", "jupe", 33])          # rank changed, tab and slot kept
-        self.assertEqual(v["veste"], ["haut", "dessus", 55])     # the rest of the table is there
-        self.assertEqual(v["kimono"], ["haut", "dessus", 57])    # type added
-        self.assertFalse(v["capuche"])                           # null removes a type
+        self.assertEqual(v["skirt"], ["bottom", "skirt", 33])          # rank changed, tab and slot kept
+        self.assertEqual(v["jacket"], ["top", "outer", 55])     # the rest of the table is there
+        self.assertEqual(v["kimono"], ["top", "outer", 57])    # type added
+        self.assertFalse(v["hood"])                           # null removes a type
         self.assertEqual(v["broche"], [79, False])               # kind added, not exclusive by default
-        self.assertEqual(v["nom_broche"], "broche")              # no name: its own
-        self.assertEqual(v["ceintures"], ["ceinture", "corset"])
+        self.assertEqual(v["name_broche"], "broche")              # no name: its own
+        self.assertEqual(v["belts"], ["belt", "corset"])
         self.assertTrue(v["corset_env"])
-        self.assertEqual(v["range"]["rang"], 33)                 # a record prepared earlier takes today's rank
-        self.assertEqual(v["sortie"], 0.01)
-        self.assertEqual(v["marge"], 0.0015)
-        self.assertEqual(v["bas_fermes"], ["pantalon"])
+        self.assertEqual(v["range"]["rank"], 33)                 # a record prepared earlier takes today's rank
+        self.assertEqual(v["output"], 0.01)
+        self.assertEqual(v["margin"], 0.0015)
+        self.assertEqual(v["bottom_closed"], ["trousers"])
 
 
-class TestTraductionMateriaux(unittest.TestCase):
-    """A game's material names translated into the common language by its description ("materiaux" table), at the single
+class TestTranslationMaterials(unittest.TestCase):
+    """A game's material names translated into the common language by its description ("materials" table), at the single
     point where PMX files are read (atlas/pmx.lire)."""
 
     @staticmethod
-    def pmx_minimal(noms):
+    def pmx_minimal(names):
         """A PMX with one triangle per material, with the given names."""
-        n = len(noms)
+        n = len(names)
         pos = [(float(i), float(j), 0.0) for i in range(n) for j in range(3)]
-        return {"version": 2.0, "encodage": "UTF-16", "n_uv_add": 0, "nom": "essai", "nom_en": "essai",
-                "sommets": {"pos": pos, "nor": [(0.0, 0.0, 1.0)] * len(pos), "uv": [(0.0, 0.0)] * len(pos),
-                            "uv_add": [[]] * len(pos), "type": [0] * len(pos), "os": [(0,)] * len(pos),
-                            "poids": [(1.0,)] * len(pos), "contour": [1.0] * len(pos)},
+        return {"version": 2.0, "encoding": "UTF-16", "n_uv_add": 0, "name": "attempt", "name_en": "attempt",
+                "vertices": {"pos": pos, "nor": [(0.0, 0.0, 1.0)] * len(pos), "uv": [(0.0, 0.0)] * len(pos),
+                            "uv_add": [[]] * len(pos), "type": [0] * len(pos), "bones": [(0,)] * len(pos),
+                            "weights": [(1.0,)] * len(pos), "contour": [1.0] * len(pos)},
                 "faces": [(3 * i, 3 * i + 1, 3 * i + 2) for i in range(n)], "textures": [],
-                "materiaux": [{"nom": x, "nom_en": x, "diffus": (1.0, 1.0, 1.0, 1.0), "speculaire": (0.0, 0.0, 0.0),
-                               "brillance": 5.0, "ambiant": (0.5, 0.5, 0.5), "drapeaux": 0, "contour_couleur": (0.0, 0.0, 0.0, 1.0),
-                               "contour_taille": 0.0, "texture": -1, "sphere": -1, "sphere_mode": 0, "toon_partage": 1,
-                               "toon": 0, "memo": "", "n_indices": 3} for x in noms],
-                "os": [{"nom": "センター", "nom_en": "center", "pos": (0.0, 0.0, 0.0), "parent": -1, "couche": 0,
-                        "drapeaux": 0x1E, "queue_os": None, "queue_dec": (0.0, 1.0, 0.0)}],
-                "morphes": [], "cadres": [], "rigides": [], "joints": []}
+                "materials": [{"name": x, "name_en": x, "diffuse": (1.0, 1.0, 1.0, 1.0), "specular": (0.0, 0.0, 0.0),
+                               "brightness": 5.0, "ambient": (0.5, 0.5, 0.5), "flags": 0, "outline_color": (0.0, 0.0, 0.0, 1.0),
+                               "outline_size": 0.0, "texture": -1, "sphere": -1, "sphere_mode": 0, "toon_sharing": 1,
+                               "toon": 0, "memo": "", "n_indices": 3} for x in names],
+                "bones": [{"name": "センター", "name_en": "center", "pos": (0.0, 0.0, 0.0), "parent": -1, "layer": 0,
+                        "flags": 0x1E, "tail_bone": None, "tail_offset": (0.0, 1.0, 0.0)}],
+                "morphs": [], "frames": [], "rigid_bodies": [], "joints": []}
 
-    def test_zzz_identite(self):
-        import games as jeux
-        Z = jeux.charger("zzz")
-        self.assertEqual(Z.materiaux, [])
+    def test_zzz_identity(self):
+        import games as games
+        Z = games.load("zzz")
+        self.assertEqual(Z.materials, [])
         for n in ("颜", "肌", "目", "髮2", "体", "外套+", "M_2000001_FACE", "Hair_2"):
-            self.assertEqual(Z.traduire(n), n)
+            self.assertEqual(Z.translate(n), n)
         # a PMX from the ZZZ sources is tied to no table: pmx.lire returns it as is
-        self.assertIsNone(jeux.jeu_du_fichier(os.path.join(Z.chemin("mmd_extrait"), "Hugo", "雨果.pmx")))
+        self.assertIsNone(games.game_of_file(os.path.join(Z.path("mmd_extracted"), "Hugo", "雨果.pmx")))
 
-    def test_outerplane_roles_comme_avant(self):
-        import games as jeux
-        OP = jeux.charger("outerplane")
+    def test_outerplane_roles_like_front(self):
+        import games as games
+        OP = games.load("outerplane")
         # what outerplane._role used to return hard-coded (prefix M_<id>_ removed, case ignored)
-        attendu = {"M_2000001_FACE": "颜", "M_2000001_FACE_EYE": "眉睫", "M_2000001_HAIR": "髮", "M_2000014_HAIR_CLEAR": "髮",
+        expected = {"M_2000001_FACE": "颜", "M_2000001_FACE_EYE": "眉睫", "M_2000001_HAIR": "髮", "M_2000014_HAIR_CLEAR": "髮",
                    "M_2000001_BODY_02": "体", "face": "颜", "M_1_face": "颜", "M_2000001_WEAPON": None,
                    "M_2000001_FACE\n": None, "M__FACE": None, "M_2000001_FACEX": None, "Default-Material": None}
-        for n, t in attendu.items():
-            self.assertEqual(OP.traduire(n, sinon=None), t, n)
+        for n, t in expected.items():
+            self.assertEqual(OP.translate(n, otherwise=None), t, n)
 
-    def test_jeu_factice_traduit_a_la_lecture(self):
-        import games as jeux
+    def test_game_fake_translated_a_reading(self):
+        import games as games
         import pmx as PMX
-        import pmx_write as pmx_ecrire
-        noms = ["Skin", "Face", "Eye_L", "Hair_2", "Hair", "Coat", "肌"]
+        import pmx_write as pmx_write
+        names = ["Skin", "Face", "Eye_L", "Hair_2", "Hair", "Coat", "肌"]
         with tempfile.TemporaryDirectory() as d:
             desc = os.path.join(d, "description")
             os.makedirs(desc)
             with open(os.path.join(desc, "game.json"), "w", encoding="utf-8") as f:
-                f.write(r'''{"titre": "Dummy game", "format": "pmx",
-                    "sources": {"modeles": "%s"},
-                    "_materiaux": "the first matching pattern wins",
-                    "materiaux": [["(?i)^skin$", "肌"], ["(?i)^face$", "颜"], ["(?i)^eye_[lr]$", "目"],
-                                  ["(?i)^hair_?(\\d*)$", "髮\\1"]]}''' % os.path.join(d, "modeles"))
+                f.write(r'''{"title": "Dummy game", "format": "pmx",
+                    "sources": {"models": "%s"},
+                    "_materials": "the first matching pattern wins",
+                    "materials": [["(?i)^skin$", "肌"], ["(?i)^face$", "颜"], ["(?i)^eye_[lr]$", "目"],
+                                  ["(?i)^hair_?(\\d*)$", "髮\\1"]]}''' % os.path.join(d, "models"))
             try:
-                J = jeux.charger("factice-essai", dossier=desc)
-                self.assertEqual([J.traduire(n) for n in noms], ["肌", "颜", "目", "髮2", "髮", "Coat", "肌"])
-                dans = os.path.join(d, "modeles", "perso", "perso.pmx")
-                hors = os.path.join(d, "ailleurs", "perso.pmx")
-                for c in (dans, hors):
-                    pmx_ecrire.ecrire(self.pmx_minimal(noms), c)
-                self.assertIs(jeux.jeu_du_fichier(dans), J)
-                self.assertIsNone(jeux.jeu_du_fichier(hors))
-                lu = PMX.lire(dans)["materiaux"]
-                self.assertEqual([m["nom"] for m in lu], ["肌", "颜", "目", "髮2", "髮", "Coat", "肌"])
-                self.assertEqual([m.get("nom_jeu") for m in lu], ["Skin", "Face", "Eye_L", "Hair_2", "Hair", None, None])
-                self.assertEqual([m["nom_en"] for m in lu], noms)       # the rest of the material is not touched
-                self.assertEqual([m["nom"] for m in PMX.lire(hors)["materiaux"]], noms)   # outside its sources: as is
+                J = games.load("dummy-trial", folder=desc)
+                self.assertEqual([J.translate(n) for n in names], ["肌", "颜", "目", "髮2", "髮", "Coat", "肌"])
+                in_ = os.path.join(d, "models", "character", "character.pmx")
+                out_of = os.path.join(d, "elsewhere", "character.pmx")
+                for c in (in_, out_of):
+                    pmx_write.write(self.pmx_minimal(names), c)
+                self.assertIs(games.game_of_file(in_), J)
+                self.assertIsNone(games.game_of_file(out_of))
+                lu = PMX.read(in_)["materials"]
+                self.assertEqual([m["name"] for m in lu], ["肌", "颜", "目", "髮2", "髮", "Coat", "肌"])
+                self.assertEqual([m.get("name_game") for m in lu], ["Skin", "Face", "Eye_L", "Hair_2", "Hair", None, None])
+                self.assertEqual([m["name_en"] for m in lu], names)       # the rest of the material is not touched
+                self.assertEqual([m["name"] for m in PMX.read(out_of)["materials"]], names)   # outside its sources: as is
             finally:
-                jeux._charges.pop("factice-essai", None)
+                games._loads.pop("dummy-trial", None)
 
 
-class TestDepartAVide(unittest.TestCase):
+class TestStartAEmpty(unittest.TestCase):
     """New machine: no body, no catalogue. The server says what to do instead of opening a page that would fail."""
-    VIDE = {"tetes": [], "coiffures": [], "pieces": [], "refus": []}
-    PLEIN = {"tetes": [{"id": "t"}], "coiffures": [{"id": "c"}], "pieces": [], "refus": []}
+    EMPTY = {"heads": [], "hairstyles": [], "parts": [], "refusals": []}
+    FULL = {"heads": [{"id": "t"}], "hairstyles": [{"id": "c"}], "parts": [], "refusals": []}
 
-    def test_sans_corps(self):
+    def test_without_body(self):
         import catalog as K
         with tempfile.TemporaryDirectory() as d:
-            m = K.a_faire(self.VIDE, corps=os.path.join(d, "corps.pmx"), cache=os.path.join(d, "cache"))
+            m = K.a_make(self.EMPTY, body=os.path.join(d, "body.pmx"), cache=os.path.join(d, "cache"))
             self.assertEqual(len(m), 2)
             self.assertIn("workshop.body", m[0])
             self.assertIn("Empty catalogue", m[1])
 
-    def test_corps_pas_prepare(self):
+    def test_body_step_prepare(self):
         import catalog as K
         with tempfile.TemporaryDirectory() as d:
-            corps = os.path.join(d, "corps.pmx")
-            open(corps, "wb").close()
-            m = K.a_faire(self.PLEIN, corps=corps, cache=d)
+            body = os.path.join(d, "body.pmx")
+            open(body, "wb").close()
+            m = K.a_make(self.FULL, body=body, cache=d)
             self.assertEqual(len(m), 1)
             self.assertIn("catalog.py prepare", m[0])
 
-    def test_tout_est_la(self):
+    def test_all_is(self):
         import catalog as K
         with tempfile.TemporaryDirectory() as d:
-            os.makedirs(os.path.join(d, "corps"))
-            open(os.path.join(d, "corps", "corps.glb"), "wb").close()
-            self.assertEqual(K.a_faire(self.PLEIN, corps=os.path.join(d, "absent.pmx"), cache=d), [])
-            self.assertEqual(len(K.a_faire(dict(self.PLEIN, coiffures=[]), cache=d)), 1)
+            os.makedirs(os.path.join(d, "body"))
+            open(os.path.join(d, "body", "body.glb"), "wb").close()
+            self.assertEqual(K.a_make(self.FULL, body=os.path.join(d, "absent.pmx"), cache=d), [])
+            self.assertEqual(len(K.a_make(dict(self.FULL, hairstyles=[]), cache=d)), 1)
 
-    def test_accueil_echappe(self):
+    def test_home_escapes(self):
         import server as S
-        h = S.accueil(["<b>x</b> & y"]).decode("utf-8")
+        h = S.home(["<b>x</b> & y"]).decode("utf-8")
         self.assertIn("&lt;b&gt;x&lt;/b&gt; &amp; y", h)
         self.assertIn("INSTALLATION.md", h)
 
 
-class TestGardeDuServeur(unittest.TestCase):
+class TestKeepOfServer(unittest.TestCase):
     """The server launches Blender and writes into the cache: it answers only its own page."""
 
     @classmethod
@@ -598,208 +598,209 @@ class TestGardeDuServeur(unittest.TestCase):
         import threading
         from http.server import ThreadingHTTPServer
         import server as S
-        cls.S, cls.avant = S, S.CATALOGUE
-        S.CATALOGUE = {"pieces": [{"id": "A__haut"}], "coiffures": [{"id": "c"}], "tetes": [{"id": "t"}]}
-        cls.srv = ThreadingHTTPServer(("127.0.0.1", 0), S.Gestion)
+        cls.S, cls.before = S, S.CATALOGUE
+        S.CATALOGUE = {"parts": [{"id": "A__top"}], "hairstyles": [{"id": "c"}], "heads": [{"id": "t"}]}
+        cls.addClassCleanup(setattr, S, "CATALOGUE", cls.before)
+        cls.srv = ThreadingHTTPServer(("127.0.0.1", 0), S.Management)
+        cls.addClassCleanup(cls.srv.server_close)     # cleanups run even if the class set-up fails later on
         cls.port = cls.srv.server_address[1]
-        threading.Thread(target=cls.srv.serve_forever, daemon=True).start()
+        cls.thread = threading.Thread(target=cls.srv.serve_forever, daemon=True)
+        cls.thread.start()
+        cls.addClassCleanup(cls.thread.join, 10)
+        cls.addClassCleanup(cls.srv.shutdown)
 
-    @classmethod
-    def tearDownClass(cls):
-        cls.srv.shutdown()
-        cls.srv.server_close()
-        cls.S.CATALOGUE = cls.avant
-
-    def demande(self, methode, chemin, corps=None, **entetes):
+    def request(self, method, path, body=None, **headers):
         import http.client
         c = http.client.HTTPConnection("127.0.0.1", self.port, timeout=10)
-        c.request(methode, chemin, body=corps, headers=entetes)
+        c.request(method, path, body=body, headers=headers)
         r = c.getresponse()
         r.read()
         c.close()
         return r.status
 
-    def test_autre_site_refuse(self):
-        ici = "http://127.0.0.1:%d" % self.port
-        self.assertEqual(self.demande("GET", "/api/formats", Host="evil.example:%d" % self.port), 403)     # domain name pointing at 127.0.0.1
-        self.assertEqual(self.demande("GET", "/api/formats", Origin="https://evil.example"), 403)
-        self.assertEqual(self.demande("POST", "/api/ouvrir", b"{}", Origin="https://evil.example", **{"Content-Type": "application/json"}), 403)
-        self.assertEqual(self.demande("PUT", "/api/vignette/pieces/A__haut", b"x", Origin="https://evil.example"), 403)
-        self.assertNotEqual(self.demande("GET", "/api/catalogue", Origin=ici), 403)
+    def test_other_site_refused(self):
+        here = "http://127.0.0.1:%d" % self.port
+        self.assertEqual(self.request("GET", "/api/formats", Host="evil.example:%d" % self.port), 403)     # domain name pointing at 127.0.0.1
+        self.assertEqual(self.request("GET", "/api/formats", Origin="https://evil.example"), 403)
+        self.assertEqual(self.request("POST", "/api/open", b"{}", Origin="https://evil.example", **{"Content-Type": "application/json"}), 403)
+        self.assertEqual(self.request("PUT", "/api/thumbnail/parts/A__top", b"x", Origin="https://evil.example"), 403)
+        self.assertNotEqual(self.request("GET", "/api/catalog", Origin=here), 403)
 
-    def test_post_sans_json_declare_refuse(self):
+    def test_post_without_json_declared_refused(self):
         # a form from another site is sent without a permission request: it is not read
-        self.assertEqual(self.demande("POST", "/api/assembler", b'{"pieces": []}', **{"Content-Type": "text/plain"}), 415)
+        self.assertEqual(self.request("POST", "/api/assemble", b'{"parts": []}', **{"Content-Type": "text/plain"}), 415)
 
-    def test_identifiants_hors_catalogue_refuses(self):
+    def test_ids_outside_catalogue_refused(self):
         j = {"Content-Type": "application/json"}
-        for corps in (b'{"pieces": ["../../etc"]}', b'{"pieces": ["A__haut"], "coiffure": "../x"}',
-                      b'{"pieces": ["A__haut"], "tete": "../x"}', b'{"pieces": "A__haut"}', b'[]', b'{'):
-            self.assertEqual(self.demande("POST", "/api/combinaison", corps, **j), 400, corps)
-        self.assertEqual(self.demande("POST", "/api/assembler", b'{"pieces": [], "teinte": 3}', **j), 400)
-        self.assertEqual(self.demande("POST", "/api/ouvrir", b'{"id": "19990101-000000"}', **j), 400)
+        for body in (b'{"parts": ["../../etc"]}', b'{"parts": ["A__top"], "hairstyle": "../x"}',
+                      b'{"parts": ["A__top"], "head": "../x"}', b'{"parts": "A__top"}', b'[]', b'{'):
+            self.assertEqual(self.request("POST", "/api/combination", body, **j), 400, body)
+        self.assertEqual(self.request("POST", "/api/assemble", b'{"parts": [], "tint": 3}', **j), 400)
+        self.assertEqual(self.request("POST", "/api/open", b'{"id": "19990101-000000"}', **j), 400)
 
-    def test_dossiers_d_assemblage_distincts(self):
+    def test_folders_d_assembly_distinct(self):
         S = self.S
         with tempfile.TemporaryDirectory() as d:
-            avant, lancer = S.ASSEMBLAGES, S.threading.Thread
-            S.ASSEMBLAGES = d
+            import types
+            before, module = S.ASSEMBLIES, S.threading
+            S.ASSEMBLIES = d
 
-            class Rien:
+            class Nothing:
                 def __init__(self, *a, **k):
                     pass
 
                 def start(self):
                     pass
-            S.threading.Thread = Rien
+            # only the server module sees the fake Thread: the test server keeps its own threads
+            S.threading = types.SimpleNamespace(Thread=Nothing, Lock=module.Lock)
             try:
-                ids = {S.assembler({"pieces": []}) for _ in range(3)}
+                ids = {S.assemble({"parts": []}) for _ in range(3)}
             finally:
-                S.ASSEMBLAGES, S.threading.Thread = avant, lancer
+                S.ASSEMBLIES, S.threading = before, module
             self.assertEqual(len(ids), 3)
 
-    def test_lancement_impossible_finit_en_erreur(self):
+    def test_launch_impossible_finishes_in_error(self):
         """Any failure of the job (here the launcher itself) ends in an error state the page reads."""
         import time
         S = self.S
         with tempfile.TemporaryDirectory() as d:
-            avant, lanceur = S.ASSEMBLAGES, S.C.lanceur
-            S.ASSEMBLAGES = d
+            before, launcher = S.ASSEMBLIES, S.C.launcher
+            S.ASSEMBLIES = d
 
-            def panne():
+            def failure():
                 raise OSError("no launcher")
-            S.C.lanceur = panne
+            S.C.launcher = failure
             try:
-                ident = S.assembler({"pieces": []})
+                ident = S.assemble({"parts": []})
                 for _ in range(100):
-                    e = C.lire_json(os.path.join(d, ident, "etat.json"), {})
-                    if e.get("fini"):
+                    e = C.read_json(os.path.join(d, ident, "state.json"), {})
+                    if e.get("done"):
                         break
                     time.sleep(0.05)
             finally:
-                S.ASSEMBLAGES, S.C.lanceur = avant, lanceur
-            self.assertEqual((e.get("fini"), e.get("ok"), e.get("etape")), (True, False, "erreur"))
-            self.assertIn("no launcher", e.get("erreur", ""))
-            self.assertNotIn(ident, S._actifs)
+                S.ASSEMBLIES, S.C.launcher = before, launcher
+            self.assertEqual((e.get("done"), e.get("ok"), e.get("step")), (True, False, "error"))
+            self.assertIn("no launcher", e.get("error", ""))
+            self.assertNotIn(ident, S._actives)
 
-    def test_travail_orphelin_lu_en_erreur(self):
+    def test_work_orphan_read_in_error(self):
         """A job left unfinished by an earlier server is read as interrupted, not as running forever."""
         import http.client
         import json
         S = self.S
         with tempfile.TemporaryDirectory() as d:
-            avant = S.ASSEMBLAGES
-            S.ASSEMBLAGES = d
+            before = S.ASSEMBLIES
+            S.ASSEMBLIES = d
             os.makedirs(os.path.join(d, "20200101-000000"))
-            C.ecrire_json(os.path.join(d, "20200101-000000", "etat.json"), {"etape": "greffe", "fini": False})
+            C.write_json(os.path.join(d, "20200101-000000", "state.json"), {"step": "graft", "done": False})
             try:
                 c = http.client.HTTPConnection("127.0.0.1", self.port, timeout=10)
-                c.request("GET", "/api/travaux/20200101-000000")
+                c.request("GET", "/api/jobs/20200101-000000")
                 e = json.loads(c.getresponse().read())
                 c.close()
             finally:
-                S.ASSEMBLAGES = avant
-        self.assertEqual((e["fini"], e["ok"], e["etape"]), (True, False, "erreur"))
-        self.assertIn("interrupted", e["erreur"])
+                S.ASSEMBLIES = before
+        self.assertEqual((e["done"], e["ok"], e["step"]), (True, False, "error"))
+        self.assertIn("interrupted", e["error"])
 
 
-class TestEchecAssemblage(unittest.TestCase):
-    """assemble_blender.py ends every failure in etat.json (etape erreur, fini, reason), SystemExit included:
-    greffe_tete refuses that way, and the page would otherwise wait on its last step."""
+class TestFailureAssembly(unittest.TestCase):
+    """assemble_blender.py ends every failure in state.json (step error, finished, reason), SystemExit included:
+    head_graft refuses that way, and the page would otherwise wait on its last step."""
 
-    def lancer(self, d):
+    def launch(self, d):
         import runpy
         argv = sys.argv
         sys.argv = ["blender", "--", "--dossier", d]
         try:
             with self.assertRaises(SystemExit):
-                runpy.run_path(os.path.join(C.ICI, "assemble_blender.py"), run_name="__main__")
+                runpy.run_path(os.path.join(C.HERE, "assemble_blender.py"), run_name="__main__")
         finally:
             sys.argv = argv
-        return C.lire_json(os.path.join(d, "etat.json"))
+        return C.read_json(os.path.join(d, "state.json"))
 
-    def test_piece_inconnue_refusee_avant_tout_travail(self):
+    def test_part_unknown_refused_front_all_work(self):
         with tempfile.TemporaryDirectory() as d:
-            C.ecrire_json(os.path.join(d, "selection.json"), {"tete": "t", "coiffure": "c", "pieces": [""], "teinte": None})
-            e = self.lancer(d)
-        self.assertEqual((e["fini"], e["ok"], e["etape"]), (True, False, "erreur"))
-        self.assertIn("unknown pieces", e["erreur"])
+            C.write_json(os.path.join(d, "selection.json"), {"head": "t", "hairstyle": "c", "parts": [""], "tint": None})
+            e = self.launch(d)
+        self.assertEqual((e["done"], e["ok"], e["step"]), (True, False, "error"))
+        self.assertIn("unknown pieces", e["error"])
 
-    def test_refus_par_systemexit_lisible(self):
-        lire = C.lire_json
+    def test_refusals_per_systemexit_readable(self):
+        read = C.read_json
 
-        def refus(chemin, *a, **k):
-            if chemin.endswith("selection.json"):
+        def refusals(path, *a, **k):
+            if path.endswith("selection.json"):
                 raise SystemExit("neck too different: test")
-            return lire(chemin, *a, **k)
-        C.lire_json = refus
+            return read(path, *a, **k)
+        C.read_json = refusals
         try:
             with tempfile.TemporaryDirectory() as d:
-                e = self.lancer(d)
+                e = self.launch(d)
         finally:
-            C.lire_json = lire
-        self.assertEqual((e["fini"], e["ok"], e["etape"], e["erreur"]), (True, False, "erreur", "neck too different: test"))
+            C.read_json = read
+        self.assertEqual((e["done"], e["ok"], e["step"], e["error"]), (True, False, "error", "neck too different: test"))
 
 
-class TestEcartSquelette(unittest.TestCase):
-    """greffe_tete measures the skeleton under the grafted vertices: hair on 頭 ignores a longer body neck,
+class TestGapSkeleton(unittest.TestCase):
+    """head_graft measures the skeleton under the grafted vertices: hair on 頭 ignores a longer body neck,
     neck skin does not."""
 
-    def test_cheveux_sur_la_tete_et_peau_du_cou(self):
+    def test_hair_on_head_and_skin_of_neck(self):
         import head_graft as GT
-        os_ = lambda nom, pos, parent: {"nom": nom, "pos": pos, "parent": parent}  # noqa: E731
+        os_ = lambda name, pos, parent: {"name": name, "pos": pos, "parent": parent}  # noqa: E731
         H = [os_("首", (0.0, 9.2, 0.0), -1), os_("頭", (0.0, 10.0, 0.0), 0), os_("髪1", (0.0, 10.5, -0.3), 1)]
         B = [os_("首", (0.0, 11.0, 0.0), -1), os_("頭", (0.0, 12.0, 0.0), 0)]   # neck 1.0 long instead of 0.8
         t = np.array(B[1]["pos"]) - np.array(H[1]["pos"])
-        idx = {o["nom"]: i for i, o in enumerate(B)}
+        idx = {o["name"]: i for i, o in enumerate(B)}
         os_v = np.array([[2, -1, -1, -1], [1, 2, -1, -1], [0, -1, -1, -1], [0, 1, -1, -1]])
         w = np.array([[1, 0, 0, 0], [0.5, 0.5, 0, 0], [1, 0, 0, 0], [0.5, 0.5, 0, 0]], float)
-        dec = GT.decalages_os(B, H, idx, t)
-        np.testing.assert_allclose(dec[2], 0.0, atol=1e-9)       # hair bone: offset of 頭, its nearest shared ancestor
-        e = GT.ecart_squelette(dec, os_v, w)
+        offset = GT.offsets_os(B, H, idx, t)
+        np.testing.assert_allclose(offset[2], 0.0, atol=1e-9)       # hair bone: offset of 頭, its nearest shared ancestor
+        e = GT.gap_skeleton(offset, os_v, w)
         np.testing.assert_allclose(np.linalg.norm(e, axis=1), [0.0, 0.0, 0.2, 0.1], atol=1e-9)
         np.testing.assert_allclose(e[2], [0.0, -0.2, 0.0], atol=1e-9)   # neck skin follows the body's lower 首
 
 
-class TestSuiviParModele(unittest.TestCase):
-    """catalogue.Suivi: during an extraction the suite goes model by model, and each model is announced usable
-    (« fini ») as soon as its last item is done, the shared work first."""
+class TestTrackPerModel(unittest.TestCase):
+    """catalog.Track: during an extraction the suite goes model by model, and each model is announced usable
+    (« finished ») as soon as its last item is done, the shared work first."""
 
-    def test_ordre_et_fin_par_modele(self):
+    def test_order_and_end_per_model(self):
         import contextlib
         import io
         import json
         import catalog as K
-        s = K.Suivi(["Belle", "Anby"])
-        suite = [{"genre": "piece", "id": C.cle("Anby", "bottes")}, {"genre": "coiffure", "id": "Belle"},
-                 {"genre": "piece", "id": C.cle("Belle", "gants")}, {"genre": "coiffure", "id": "Anby"},
-                 {"genre": "coiffure_libre", "id": "Libre"}, {"genre": "coiffure", "id": "Jane"}]
-        s.trier(suite)
-        self.assertEqual([it["id"] for it in suite][:2], ["Libre", "Jane"])        # shared work first
-        self.assertEqual([it["id"] for it in suite][2:], ["Belle", C.cle("Belle", "gants"), "Anby", C.cle("Anby", "bottes")])
-        sortie = io.StringIO()
-        with contextlib.redirect_stdout(sortie):
-            s.debut()
-            s.lot_fini(suite[:3])
-            s.lot_fini(suite[3:5])
-        lignes = [json.loads(l[3:]) for l in sortie.getvalue().splitlines()]
-        finis = [l["fini"] for l in lignes if "fini" in l]
-        self.assertEqual(finis, ["Belle"])
-        self.assertEqual([l for l in lignes if "modele" in l][-1], {"modele": "Anby", "pas": "pieces"})
-        with contextlib.redirect_stdout(sortie):
-            s.lot_fini(suite[5:])
-        self.assertIn('"fini": "Anby"', sortie.getvalue())
+        s = K.Track(["Belle", "Anby"])
+        suite = [{"kind": "part", "id": C.the_key("Anby", "boots")}, {"kind": "hairstyle", "id": "Belle"},
+                 {"kind": "part", "id": C.the_key("Belle", "gloves")}, {"kind": "hairstyle", "id": "Anby"},
+                 {"kind": "hairstyle_free", "id": "Libre"}, {"kind": "hairstyle", "id": "Jane"}]   # fr-ok: "Libre" is the id of the free head and hairstyle, a folder name in installed caches
+        s.sort(suite)
+        self.assertEqual([it["id"] for it in suite][:2], ["Libre", "Jane"])   # fr-ok: "Libre" is the id of the free head and hairstyle, a folder name in installed caches; shared work first
+        self.assertEqual([it["id"] for it in suite][2:], ["Belle", C.the_key("Belle", "gloves"), "Anby", C.the_key("Anby", "boots")])
+        output = io.StringIO()
+        with contextlib.redirect_stdout(output):
+            s.start()
+            s.lot_done(suite[:3])
+            s.lot_done(suite[3:5])
+        lines = [json.loads(l[3:]) for l in output.getvalue().splitlines()]
+        finished = [l["model_done"] for l in lines if "model_done" in l]
+        self.assertEqual(finished, ["Belle"])
+        self.assertEqual([l for l in lines if "model" in l][-1], {"model": "Anby", "stage": "parts"})
+        with contextlib.redirect_stdout(output):
+            s.lot_done(suite[5:])
+        self.assertIn('"model_done": "Anby"', output.getvalue())
 
 
-class TestPousseeDesCheveux(unittest.TestCase):
-    def test_couches_gardent_leur_ordre(self):
+class TestPushOfHair(unittest.TestCase):
+    def test_layers_keep_their_order(self):
         """Two hair layers 3 mm apart, the inner one pushed by 10 mm: both move, the gap stays."""
         import hairstyles as CF
-        a, b = feuille(0.0, n=10), feuille(0.003, n=10)
+        a, b = sheet(0.0, n=10), sheet(0.003, n=10)
         P = np.r_[a.pos, b.pos]
         u = np.zeros_like(P)
         u[45] = [0, 0, 0.01]
-        d = CF.champ_de_poussee(P, u, 0.02)
+        d = CF.field_of_push(P, u, 0.02)
         self.assertAlmostEqual(d[45, 2], 0.01)
         self.assertAlmostEqual(d[100 + 45, 2], 0.01 * (1 - (0.003 / 0.02) ** 2) ** 2)
         self.assertTrue((d[100:, 2] >= d[:100, 2] - 1e-3).all())

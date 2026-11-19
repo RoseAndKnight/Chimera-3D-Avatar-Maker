@@ -3,21 +3,21 @@
     python3 -I tools/vroid_base/build.py <file.vrm | name of an imported model> [--output <folder>] [--no-sheets]
 
  1. converts the .vrm (VRM 0.x or 1.0) into a PMX in the common language (tools/vroid/importer.py), in
-    <sortie>/modele/<Name>/, keeping all of the body skin (the ordinary import removes the faces that the
+    <output>/model/<Name>/, keeping all of the body skin (the ordinary import removes the faces that the
     texture erases: VRoid erases the skin under the outfit); a bare name: <the game's sources.vrm>/<name>.vrm if it
-    exists, otherwise the already imported PMX (<mmd_extrait>/<name>/<name>.pmx);
+    exists, otherwise the already imported PMX (<mmd_extracted>/<name>/<name>.pmx);
  2. repaints the body skin (skin.py): VRoid paints tights, socks, a tight top and underwear on it, or
     makes it transparent under the outfit; whatever is not skin is filled from the neighbouring skin;
- 3. gives a shared normal to the split vertices of the skin seams, then writes <sortie>/corps.pmx (the skin alone, 肌: the base body, setting workshop.body), tete.pmx (the same skin,
-    vertices in the same order, plus the face, its eyes and its expressions) and coiffure.pmx (the model's
+ 3. gives a shared normal to the split vertices of the skin seams, then writes <output>/body.pmx (the skin alone, 肌: the base body, setting workshop.body), head.pmx (the same skin,
+    vertices in the same order, plus the face, its eyes and its expressions) and hairstyle.pmx (the model's
     hair), with their textures. The model's outfit is not included: it enters the catalogue like that of any
     imported character;
- 4. measures the head (tete.Tete: distance between the eyes and their midpoint) and stores in <sortie>/base.json what the "vroid" game
-    reads of its base head (tete_base: nom, premier_passage, ecart_yeux, centre_yeux) and the display names;
- 5. checks (controles.json): humanoid bones with MMD names, arms-down pose, skin closed below the head, opaque skin
+ 4. measures the head (head.Head: distance between the eyes and their midpoint) and stores in <output>/base.json what the "vroid" game
+    reads of its base head (base_head: name, first_pass, eye_gap, eyes_center) and the display names;
+ 5. checks (checks.json): humanoid bones with MMD names, arms-down pose, skin closed below the head, opaque skin
     texture, eyes found; a failed blocking check stops everything (exit code 1);
  6. writes the provenance and the terms of use read from the file (VRM meta): provenance.json, PROVENANCE.md;
- 7. renders grey contact sheets (without Blender): corps.png, tete.png.
+ 7. renders grey contact sheets (without Blender): corps.png, head.png.
 By default, output in {data}/base-vroid. Without Blender; a few seconds.
 """
 import argparse
@@ -27,30 +27,31 @@ import os
 import re
 import shutil
 import sys
+sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 
 import numpy as np
 
-ICI = os.path.dirname(os.path.abspath(__file__))
-OUTILS = os.path.dirname(ICI)
-sys.path[:0] = [ICI, OUTILS] + [os.path.join(OUTILS, d) for d in ("vroid", "atlas", "head", "rebuilt_head", "rebuilt_body")]
+HERE = os.path.dirname(os.path.abspath(__file__))
+TOOLS = os.path.dirname(HERE)
+sys.path[:0] = [HERE, TOOLS] + [os.path.join(TOOLS, d) for d in ("vroid", "atlas", "head", "rebuilt_head", "rebuilt_body")]
 import settings as R          # noqa: E402
 import importer as IM         # noqa: E402
 import pmx as PMX             # noqa: E402
-import pmx_write as pmx_ecrire             # noqa: E402
+import pmx_write as pmx_write             # noqa: E402
 import geom as G              # noqa: E402
 import images                 # noqa: E402
 import png                    # noqa: E402
 import skin as PE             # noqa: E402
 
-PEAU, VISAGE_PEAU = "肌", "颜"
-VISAGE = ("颜", "口舌", "齿", "眉", "睫", "二重", "白目", "目", "目光", "目光2")
-CHEVEUX = re.compile(r"^髪\d*$")
-OS_REQUIS = ("全ての親", "センター", "下半身", "上半身", "首", "頭", "左肩", "左腕", "左ひじ", "左手首", "右肩", "右腕",
+SKIN, FACE_SKIN = "肌", "颜"
+FACE = ("颜", "口舌", "齿", "眉", "睫", "二重", "白目", "目", "目光", "目光2")
+HAIR = re.compile(r"^髪\d*$")
+OS_REQUIRED = ("全ての親", "センター", "下半身", "上半身", "首", "頭", "左肩", "左腕", "左ひじ", "左手首", "右肩", "右腕",
              "右ひじ", "右手首", "左足", "左ひざ", "左足首", "右足", "右ひざ", "右足首")
-BRAS = (40.0, 56.0)          # degrees below the horizontal of the bone 腕 -> ひじ: Chimera's A-pose (47-50°)
-TROU_MAX = 6                 # vertices: a smaller opening in the skin is not a hole (seam of the model)
-SOUDURE = 0.01               # MMD units: two vertices closer than this are the same point (seams, neck cut)
-PEAU_GARDEE_MIN = 0.10       # share of the body texture still skin: below it, almost everything is repainted
+ARM = (40.0, 56.0)          # degrees below the horizontal of the bone 腕 -> ひじ: Chimera's A-pose (47-50°)
+HOLE_MAX = 6                 # vertices: a smaller opening in the skin is not a hole (seam of the model)
+WELD = 0.01               # MMD units: two vertices closer than this are the same point (seams, neck cut)
+SKIN_KEPT_MIN = 0.10       # share of the body texture still skin: below it, almost everything is repainted
 CM = 8.0
 META = ("title", "version", "author", "contactInformation", "reference", "allowedUserName", "violentUssageName",
         "sexualUssageName", "commercialUssageName", "otherPermissionUrl", "licenseName", "otherLicenseUrl")
@@ -61,28 +62,28 @@ META_1 = ("name", "version", "authors", "copyrightInformation", "contactInformat
 
 
 # ------------------------------------------------------------------ source
-def source(arg, jeu=None):
+def source(arg, game=None):
     """(vrm or None, already imported pmx or None, name) from the argument: a .vrm, or the name of an imported model."""
     if arg.lower().endswith(".vrm"):
         if not os.path.isfile(arg):
             raise SystemExit("VRoid base: %s does not exist" % arg)
         return os.path.abspath(arg), None, os.path.splitext(os.path.basename(arg))[0]
-    if jeu is None:
-        import games as jeux
-        jeu = jeux.charger("vroid")
-    vrm = os.path.join(jeu.chemin("vrm"), arg + ".vrm")
+    if game is None:
+        import games as games
+        game = games.load("vroid")
+    vrm = os.path.join(game.path("vrm"), arg + ".vrm")
     if os.path.isfile(vrm):
         return vrm, None, arg
-    pmx = os.path.join(jeu.chemin("mmd_extrait"), arg, arg + ".pmx")
+    pmx = os.path.join(game.path("mmd_extracted"), arg, arg + ".pmx")
     if os.path.isfile(pmx):
         return None, pmx, arg
     raise SystemExit("VRoid base: neither %s nor %s. Give the path of a .vrm file exported from VRoid Studio or taken from VRoid Hub (VRM 0.x or 1.0)." % (vrm, pmx))
 
 
-def meta_vrm(vrm):
+def vrm_meta(vrm):
     """Terms of use declared in the file, under their own keys: VRM 0.x (extensions.VRM.meta) or 1.0
     (extensions.VRMC_vrm.meta, other names and values). "title" is the character's name in both."""
-    j, _ = IM.lire_glb(vrm)
+    j, _ = IM.read_glb(vrm)
     ext = j.get("extensions", {})
     if "VRMC_vrm" in ext:
         m = ext["VRMC_vrm"].get("meta") or {}
@@ -96,34 +97,34 @@ def meta_vrm(vrm):
     return r
 
 
-def empreinte(chemin):
+def fingerprint(path):
     h = hashlib.sha256()
-    with open(chemin, "rb") as f:
+    with open(path, "rb") as f:
         for b in iter(lambda: f.read(1 << 20), b""):
             h.update(b)
     return h.hexdigest()
 
 
 # ------------------------------------------------------------------ PMX
-def sous_pmx(P, T, mats, premiers=()):
+def under_pmx(P, T, mats, first=()):
     """PMX reduced to the materials `mats` (names), all bones kept. The vertices `premiers` come first, in
     that order, then the other vertices used, in the original order. Returns (pmx, old index -> new)."""
-    noms = [m["nom"] for m in P["materiaux"]]
-    garde = [i for i, n in enumerate(noms) if n in mats]
-    sel = np.isin(T["mat_face"], garde)
-    utiles = np.unique(T["faces"][sel])
-    premiers = np.asarray(premiers, np.int64)
-    ordre = np.concatenate([premiers, np.setdiff1d(utiles, premiers)])
+    names = [m["name"] for m in P["materials"]]
+    guard = [i for i, n in enumerate(names) if n in mats]
+    sel = np.isin(T["mat_face"], guard)
+    useful = np.unique(T["faces"][sel])
+    first = np.asarray(first, np.int64)
+    order = np.concatenate([first, np.setdiff1d(useful, first)])
     nv = -np.ones(len(T["pos"]), np.int64)
-    nv[ordre] = np.arange(len(ordre))
-    s = P["sommets"]
-    som = {k: [s[k][i] for i in ordre] for k in ("pos", "nor", "uv", "uv_add", "type", "os", "poids", "sdef", "contour")}
-    faces, materiaux, textures, tex_nv = [], [], [], {}
-    for i in garde:
+    nv[order] = np.arange(len(order))
+    s = P["vertices"]
+    vert = {k: [s[k][i] for i in order] for k in ("pos", "nor", "uv", "uv_add", "type", "bones", "weights", "sdef", "contour")}
+    faces, materials, textures, tex_nv = [], [], [], {}
+    for i in guard:
         F = T["faces"][T["mat_face"] == i]
         if not len(F):
             continue
-        m = dict(P["materiaux"][i])
+        m = dict(P["materials"][i])
         t = m["texture"]
         if 0 <= t < len(P["textures"]):
             if t not in tex_nv:
@@ -131,61 +132,61 @@ def sous_pmx(P, T, mats, premiers=()):
                 textures.append(P["textures"][t])
             m["texture"] = tex_nv[t]
         m["n_indices"] = 3 * len(F)
-        materiaux.append(m)
+        materials.append(m)
         faces += [tuple(int(x) for x in f) for f in nv[F]]
-    morphes = []
-    for mo in P["morphes"]:
+    morphs = []
+    for mo in P["morphs"]:
         if mo["type"] != 1:
             continue
-        d = [(int(nv[a]), v) for a, v in mo["decalages"] if nv[a] >= 0]
+        d = [(int(nv[a]), v) for a, v in mo["offsets"] if nv[a] >= 0]
         if d:
-            morphes.append(dict(mo, decalages=d))
-    Q = dict(P, sommets=som, faces=faces, materiaux=materiaux, textures=textures, morphes=morphes, rigides=[], joints=[],
-             cadres=[{"nom": "Root", "nom_en": "Root", "special": 1, "elements": [(0, 0)]},
-                     {"nom": "表情", "nom_en": "Exp", "special": 1, "elements": [(1, k) for k in range(len(morphes))]}])
+            morphs.append(dict(mo, offsets=d))
+    Q = dict(P, vertices=vert, faces=faces, materials=materials, textures=textures, morphs=morphs, rigid_bodies=[], joints=[],
+             frames=[{"name": "Root", "name_en": "Root", "special": 1, "elements": [(0, 0)]},
+                     {"name": "表情", "name_en": "Exp", "special": 1, "elements": [(1, k) for k in range(len(morphs))]}])
     return Q, nv
 
 
-def ecrire(Q, dossier_src, sortie, nom, remplace=None):
-    """Writes `nom` (pmx) into `sortie` with its textures, copied from `dossier_src`; `remplace`: {old: new}."""
-    remplace = remplace or {}
-    Q = dict(Q, textures=[remplace.get(t, t) for t in Q["textures"]])
+def write(Q, folder_src, output, name, replaces=None):
+    """Writes `name` (pmx) into `sortie` with its textures, copied from `dossier_src`; `replaces`: {old: new}."""
+    replaces = replaces or {}
+    Q = dict(Q, textures=[replaces.get(t, t) for t in Q["textures"]])
     for t in Q["textures"]:
-        dest = os.path.join(sortie, t)
-        if t not in remplace.values() and not os.path.isfile(dest):
+        dest = os.path.join(output, t)
+        if t not in replaces.values() and not os.path.isfile(dest):
             os.makedirs(os.path.dirname(dest), exist_ok=True)
-            shutil.copyfile(os.path.join(dossier_src, t), dest)
-    pmx_ecrire.ecrire(Q, os.path.join(sortie, nom + ".tmp.pmx"))
-    os.replace(os.path.join(sortie, nom + ".tmp.pmx"), os.path.join(sortie, nom))
+            shutil.copyfile(os.path.join(folder_src, t), dest)
+    pmx_write.write(Q, os.path.join(output, name + ".tmp.pmx"))
+    os.replace(os.path.join(output, name + ".tmp.pmx"), os.path.join(output, name))
 
 
-def bords_de_coutures(T, i_mat, soudure=SOUDURE, pas=6):
+def borders_of_seams(T, i_mat, weld=WELD, stage=6):
     """Points of the skin seams: (uv_a, uv_b), two places in the texture for the same point of the model.
     The vertices split at the same spot, and `pas` points along each seam edge."""
     F = T["faces"][T["mat_face"] == i_mat]
     idx = np.unique(F)
     pos, uv = np.asarray(T["pos"]), np.asarray(T["uv"], float)
-    _, inv = np.unique(np.round(pos[idx] / soudure).astype(np.int64), axis=0, return_inverse=True)
+    _, inv = np.unique(np.round(pos[idx] / weld).astype(np.int64), axis=0, return_inverse=True)
     point = -np.ones(len(pos), np.int64)
     point[idx] = inv.ravel()
     # edge by its two welded points -> its real edges (vertices)
     E = np.concatenate([F[:, [0, 1]], F[:, [1, 2]], F[:, [2, 0]]])
-    cle = np.sort(point[E], 1)
-    ordre = np.lexsort((cle[:, 1], cle[:, 0]))
-    cle, E = cle[ordre], E[ordre]
+    the_key = np.sort(point[E], 1)
+    order = np.lexsort((the_key[:, 1], the_key[:, 0]))
+    the_key, E = the_key[order], E[order]
     ua, ub = [], []
-    debut = np.concatenate([[True], (cle[1:] != cle[:-1]).any(1)])
-    groupes = np.split(np.arange(len(E)), np.where(debut)[0][1:])
-    t = (np.arange(pas) + 0.5) / pas
-    for g in groupes:
+    start = np.concatenate([[True], (the_key[1:] != the_key[:-1]).any(1)])
+    groups = np.split(np.arange(len(E)), np.where(start)[0][1:])
+    t = (np.arange(stage) + 0.5) / stage
+    for g in groups:
         if len(g) < 2:
             continue
         a = E[g[0]]
-        if point[a[0]] != cle[g[0], 0]:
+        if point[a[0]] != the_key[g[0], 0]:
             a = a[::-1]
         for j in g[1:]:
             b = E[j]
-            if point[b[0]] != cle[j, 0]:
+            if point[b[0]] != the_key[j, 0]:
                 b = b[::-1]
             if np.abs(uv[a] - uv[b]).max() < 1e-4:
                 continue                              # the same edge seen from both triangles: not a seam
@@ -196,31 +197,31 @@ def bords_de_coutures(T, i_mat, soudure=SOUDURE, pas=6):
     return np.concatenate(ua), np.concatenate(ub)
 
 
-def souder_normales(P, T, i_mat, soudure=SOUDURE):
+def weld_normals(P, T, i_mat, weld=WELD):
     """The skin vertices split at the same point (UV seams: ankles, wrists…) take the average of
     their normals. VRoid leaves them separate: under a sock or a glove the break could not be seen; on
     bare skin, toon shading draws a line there. Returns the number of vertices changed."""
     idx = np.unique(T["faces"][T["mat_face"] == i_mat])
     pos = np.asarray(T["pos"])[idx]
-    nor = np.asarray(P["sommets"]["nor"], float)[idx]
-    _, inv, cpt = np.unique(np.round(pos / soudure).astype(np.int64), axis=0, return_inverse=True, return_counts=True)
+    nor = np.asarray(P["vertices"]["nor"], float)[idx]
+    _, inv, cpt = np.unique(np.round(pos / weld).astype(np.int64), axis=0, return_inverse=True, return_counts=True)
     inv = inv.ravel()
-    somme = np.zeros((len(cpt), 3))
-    np.add.at(somme, inv, nor)
-    moy = somme / np.maximum(np.linalg.norm(somme, axis=1, keepdims=True), 1e-9)
-    change = (cpt[inv] > 1) & (np.abs(moy[inv] - nor).max(1) > 1e-4)
+    total = np.zeros((len(cpt), 3))
+    np.add.at(total, inv, nor)
+    avg = total / np.maximum(np.linalg.norm(total, axis=1, keepdims=True), 1e-9)
+    change = (cpt[inv] > 1) & (np.abs(avg[inv] - nor).max(1) > 1e-4)
     for i in np.where(change)[0]:
-        P["sommets"]["nor"][idx[i]] = tuple(float(x) for x in moy[inv[i]])
+        P["vertices"]["nor"][idx[i]] = tuple(float(x) for x in avg[inv[i]])
     return int(change.sum())
 
 
-def basculer_diagonales(P, T, i_mat):
-    """The skin's shared edges swapped where they cross a fold instead of following it (geom.basculer_diagonales):
+def flip_diagonals(P, T, i_mat):
+    """The skin's shared edges swapped where they cross a fold instead of following it (geom.flip_diagonals):
     under the breasts, in the armpits and at the elbows the VRoid mesh has diagonals across the crease, which grazing
     light and toon shadows draw as small steps. Vertices and normals do not move; P and T are changed in place, before
-    sous_pmx, so that corps.pmx and tete.pmx keep the same body faces. Returns the number of swaps."""
+    under_pmx, so that body.pmx and head.pmx keep the same body faces. Returns the number of swaps."""
     sel = np.flatnonzero(T["mat_face"] == i_mat)
-    F, n = G.basculer_diagonales(np.asarray(T["pos"], float), T["faces"][sel])
+    F, n = G.flip_diagonals(np.asarray(T["pos"], float), T["faces"][sel])
     T["faces"][sel] = F
     for k, f in zip(sel, F):
         P["faces"][k] = [int(x) for x in f]
@@ -228,35 +229,35 @@ def basculer_diagonales(P, T, i_mat):
 
 
 # ------------------------------------------------------------------ checks
-def ouvertures(pos, F, soudure=SOUDURE):
-    """Free edges of the surface (vertices welded within `soudure`): [(number of vertices, centre)] from largest to smallest."""
-    _, inv = np.unique(np.round(np.asarray(pos) / soudure).astype(np.int64), axis=0, return_inverse=True)
+def openings(pos, F, weld=WELD):
+    """Free edges of the surface (vertices welded within `weld`): [(number of vertices, centre)] from largest to smallest."""
+    _, inv = np.unique(np.round(np.asarray(pos) / weld).astype(np.int64), axis=0, return_inverse=True)
     inv = inv.ravel()
     W = inv[np.asarray(F)]
     W = W[(W[:, 0] != W[:, 1]) & (W[:, 1] != W[:, 2]) & (W[:, 0] != W[:, 2])]
     E = np.sort(np.concatenate([W[:, [0, 1]], W[:, [1, 2]], W[:, [2, 0]]]), 1)
     u, c = np.unique(E, axis=0, return_counts=True)
-    bord = u[c == 1]
-    par = {}
+    border = u[c == 1]
+    per = {}
 
-    def racine(x):
-        while par.setdefault(x, x) != x:
-            par[x] = par[par[x]]
-            x = par[x]
+    def root(x):
+        while per.setdefault(x, x) != x:
+            per[x] = per[per[x]]
+            x = per[x]
         return x
-    for a, b in bord:
-        par[racine(a)] = racine(b)
-    groupes = {}
-    for a, b in bord:
-        groupes.setdefault(racine(a), set()).update((int(a), int(b)))
+    for a, b in border:
+        per[root(a)] = root(b)
+    groups = {}
+    for a, b in border:
+        groups.setdefault(root(a), set()).update((int(a), int(b)))
     rep = np.zeros(inv.max() + 1, np.int64)
     rep[inv] = np.arange(len(inv))
-    res = [(len(g), np.asarray(pos)[rep[list(g)]].mean(0)) for g in groupes.values()]
+    res = [(len(g), np.asarray(pos)[rep[list(g)]].mean(0)) for g in groups.values()]
     return sorted(res, key=lambda x: -x[0])
 
 
-def angle_bras(oss):
-    p = {o["nom"]: np.asarray(o["pos"], float) for o in oss}
+def angle_arm(bones):
+    p = {o["name"]: np.asarray(o["pos"], float) for o in bones}
     res = []
     for c in "左右":
         d = p[c + "ひじ"] - p[c + "腕"]
@@ -264,198 +265,198 @@ def angle_bras(oss):
     return res
 
 
-def controler(P_corps, T_corps, part_peau, tete, alpha_min):
-    """{name: {passe, valeur, bloquant}} of the base's checks."""
-    noms_os = {o["nom"] for o in P_corps["os"]}
-    manque = [n for n in OS_REQUIS if n not in noms_os]
-    c = {"os_humanoides": {"passe": not manque, "bloquant": True, "valeur": manque or "tous"}}
-    if not manque:
-        a = angle_bras(P_corps["os"])
-        c["pose_bras_deg"] = {"passe": all(BRAS[0] <= x <= BRAS[1] for x in a), "bloquant": True, "valeur": [round(x, 1) for x in a]}
-        y_cou = next(o["pos"][1] for o in P_corps["os"] if o["nom"] == "首")
-        trous = [(n, ctr) for n, ctr in ouvertures(T_corps["pos"], T_corps["faces"]) if ctr[1] < y_cou and n > TROU_MAX]
-        c["peau_fermee"] = {"passe": not trous, "bloquant": True,
-                            "valeur": [{"sommets": n, "centre_cm": [round(float(x) * CM, 1) for x in ctr]} for n, ctr in trous] or "no hole below the neck"}
-    c["peau_opaque"] = {"passe": alpha_min >= 0.999, "bloquant": True, "valeur": round(float(alpha_min), 3)}
-    c["peau_d_origine"] = {"passe": part_peau >= PEAU_GARDEE_MIN, "bloquant": False, "valeur": round(part_peau, 3),
+def check(P_corps, T_corps, fraction_skin, head, alpha_min):
+    """{name: {passed, value, blocking}} of the base's checks."""
+    names_os = {o["name"] for o in P_corps["bones"]}
+    missing = [n for n in OS_REQUIRED if n not in names_os]
+    c = {"humanoid_bones": {"passed": not missing, "blocking": True, "value": missing or "all"}}
+    if not missing:
+        a = angle_arm(P_corps["bones"])
+        c["arm_pose_deg"] = {"passed": all(ARM[0] <= x <= ARM[1] for x in a), "blocking": True, "value": [round(x, 1) for x in a]}
+        y_neck = next(o["pos"][1] for o in P_corps["bones"] if o["name"] == "首")
+        holes = [(n, ctr) for n, ctr in openings(T_corps["pos"], T_corps["faces"]) if ctr[1] < y_neck and n > HOLE_MAX]
+        c["closed_skin"] = {"passed": not holes, "blocking": True,
+                            "value": [{"vertices": n, "center_cm": [round(float(x) * CM, 1) for x in ctr]} for n, ctr in holes] or "no hole below the neck"}
+    c["opaque_skin"] = {"passed": alpha_min >= 0.999, "blocking": True, "value": round(float(alpha_min), 3)}
+    c["original_skin"] = {"passed": fraction_skin >= SKIN_KEPT_MIN, "blocking": False, "value": round(fraction_skin, 3),
                            "note": "share of the body texture kept as it is; the rest is repainted from the neighbouring skin"}
-    c["taille_cm"] = {"passe": True, "bloquant": False, "valeur": round(float(np.ptp(T_corps["pos"][:, 1])) * CM, 1)}
-    c["yeux"] = {"passe": tete is not None and not isinstance(tete, str), "bloquant": True,
-                 "valeur": tete if isinstance(tete, str) else ("distance %.4f" % tete.iod if tete else "not measured")}
+    c["height_cm"] = {"passed": True, "blocking": False, "value": round(float(np.ptp(T_corps["pos"][:, 1])) * CM, 1)}
+    c["eyes"] = {"passed": head is not None and not isinstance(head, str), "blocking": True,
+                 "value": head if isinstance(head, str) else ("distance %.4f" % head.iod if head else "not measured")}
     for v in c.values():
-        v["passe"] = bool(v["passe"])
+        v["passed"] = bool(v["passed"])
     return c
 
 
 # ------------------------------------------------------------------ provenance
-def provenance(meta, src, nom, sha):
-    pj = {"modele": nom, "fichier": os.path.basename(src), "sha256": sha, "meta_vrm": meta,
-          "outil": "tools/vroid_base/build.py"}
-    alertes = []
+def origin(meta, src, name, sha):
+    pj = {"model": name, "file": os.path.basename(src), "sha256": sha, "vrm_meta": meta,
+          "tool": "tools/vroid_base/build.py"}
+    warnings = []
     if meta and meta.get("vrm") == "1.0":   # an absent key takes the VRM 1.0 default, the strictest one
         if meta.get("avatarPermission") != "everyone":
-            alertes.append("the file restricts the use of the avatar (avatarPermission = %s)" % meta.get("avatarPermission"))
+            warnings.append("the file restricts the use of the avatar (avatarPermission = %s)" % meta.get("avatarPermission"))
         if meta.get("allowRedistribution") is not True:
-            alertes.append("the file prohibits redistribution (allowRedistribution = false)")
+            warnings.append("the file prohibits redistribution (allowRedistribution = false)")
         if meta.get("commercialUsage") in (None, "personalNonProfit"):
-            alertes.append("the file prohibits commercial use (commercialUsage = personalNonProfit)")
+            warnings.append("the file prohibits commercial use (commercialUsage = personalNonProfit)")
         if meta.get("modification") in (None, "prohibited"):
-            alertes.append("the file prohibits modification (modification = prohibited), and the base is one")
+            warnings.append("the file prohibits modification (modification = prohibited), and the base is one")
     elif meta:
         if meta.get("allowedUserName") not in (None, "Everyone"):
-            alertes.append("the file restricts the use of the avatar (allowedUserName = %s)" % meta.get("allowedUserName"))
+            warnings.append("the file restricts the use of the avatar (allowedUserName = %s)" % meta.get("allowedUserName"))
         if meta.get("licenseName") in ("Redistribution_Prohibited",):
-            alertes.append("the file prohibits redistribution (licenseName = Redistribution_Prohibited)")
+            warnings.append("the file prohibits redistribution (licenseName = Redistribution_Prohibited)")
         if meta.get("commercialUssageName") == "Disallow":
-            alertes.append("the file prohibits commercial use")
-    pj["alertes"] = alertes
-    lignes = ["# Provenance of the VRoid base", "",
+            warnings.append("the file prohibits commercial use")
+    pj["warnings"] = warnings
+    lines = ["# Provenance of the VRoid base", "",
               "Built by `tools/vroid_base/build.py` from `%s` (sha256 %s), character \"%s\"."
-              % (os.path.basename(src), sha[:16], nom), ""]
+              % (os.path.basename(src), sha[:16], name), ""]
     if meta:
-        cles = META_1 if meta.get("vrm") == "1.0" else META
-        lignes += ["Terms of use declared in the file (VRM %s meta):" % meta.get("vrm", "0.x"), ""]
-        lignes += ["- `%s` : %s" % (k, meta[k]) for k in cles if meta.get(k) not in (None, "", [])]
+        keys = META_1 if meta.get("vrm") == "1.0" else META
+        lines += ["Terms of use declared in the file (VRM %s meta):" % meta.get("vrm", "0.x"), ""]
+        lines += ["- `%s` : %s" % (k, meta[k]) for k in keys if meta.get(k) not in (None, "", [])]
     else:
-        lignes += ["No .vrm file: terms of use not read. See the comment of the imported PMX."]
-    lignes += ["", "These terms are those of the model's author; they apply to the base and to every model "
+        lines += ["No .vrm file: terms of use not read. See the comment of the imported PMX."]
+    lines += ["", "These terms are those of the model's author; they apply to the base and to every model "
                "assembled on it (body, face and hairstyle come from it)."]
-    if alertes:
-        lignes += ["", "**Warning**: " + "; ".join(alertes) + "."]
-    return pj, "\n".join(lignes) + "\n"
+    if warnings:
+        lines += ["", "**Warning**: " + "; ".join(warnings) + "."]
+    return pj, "\n".join(lines) + "\n"
 
 
 # ------------------------------------------------------------------ fabrication
-def fabriquer(arg, sortie, planches=True, journal=print):
-    vrm, pmx_importe, nom = source(arg)
-    os.makedirs(sortie, exist_ok=True)
-    prec = _lire(os.path.join(sortie, "provenance.json"))
+def build(arg, output, sheets=True, log=print):
+    vrm, pmx_ingested, name = source(arg)
+    os.makedirs(output, exist_ok=True)
+    prev = _read(os.path.join(output, "provenance.json"))
     if vrm:
-        dossier = os.path.join(sortie, "modele", nom)
-        shutil.rmtree(dossier, ignore_errors=True)
-        journal("— converting %s (body skin kept whole)" % vrm)
-        IM.convertir(vrm, dossier, journal=journal, garder={PEAU})
-        chemin = os.path.join(dossier, nom + ".pmx")
+        folder = os.path.join(output, "model", name)
+        shutil.rmtree(folder, ignore_errors=True)
+        log("— converting %s (body skin kept whole)" % vrm)
+        IM.convert(vrm, folder, log=log, keep={SKIN})
+        path = os.path.join(folder, name + ".pmx")
     else:
-        journal("— %s: no .vrm, the imported PMX is taken as it is (the skin that its texture erases may be missing)" % pmx_importe)
-        chemin = pmx_importe
-    src = vrm or pmx_importe
-    sha = empreinte(src)
-    if prec and prec.get("sha256") != sha:
-        journal("Note: %s held the base of another model (%s). Chimera's cache is only valid for one body: "
-                "give it a new one (setting workshop.cache)." % (sortie, prec.get("modele")))
-    dossier_src = os.path.dirname(chemin)
-    P = PMX.lire(chemin)
-    T = PMX.vers_tableaux(P)
-    noms = [m["nom"] for m in P["materiaux"]]
-    for requis in (PEAU, VISAGE_PEAU):
-        if requis not in noms:
-            raise SystemExit("VRoid base: %s has no material %s (body or face skin): is it a VRoid Studio export?" % (chemin, requis))
-    i_peau = noms.index(PEAU)
+        log("— %s: no .vrm, the imported PMX is taken as it is (the skin that its texture erases may be missing)" % pmx_ingested)
+        path = pmx_ingested
+    src = vrm or pmx_ingested
+    sha = fingerprint(src)
+    if prev and prev.get("sha256") != sha:
+        log("Note: %s held the base of another model (%s). Chimera's cache is only valid for one body: "
+                "give it a new one (setting workshop.cache)." % (output, prev.get("model")))
+    folder_src = os.path.dirname(path)
+    P = PMX.read(path)
+    T = PMX.to_arrays(P)
+    names = [m["name"] for m in P["materials"]]
+    for required in (SKIN, FACE_SKIN):
+        if required not in names:
+            raise SystemExit("VRoid base: %s has no material %s (body or face skin): is it a VRoid Studio export?" % (path, required))
+    i_skin = names.index(SKIN)
     # --- repainted skin
-    journal("— body skin")
-    tex = lambda nom_mat: os.path.join(dossier_src, P["textures"][P["materiaux"][noms.index(nom_mat)]["texture"]])   # noqa: E731
-    propre, connu = PE.nettoyer(images.lire(tex(PEAU)), images.lire(tex(VISAGE_PEAU)))
-    part = float(connu.mean())
-    uv_a, uv_b = bords_de_coutures(T, i_peau)
-    propre = PE.accorder_coutures(propre, connu, uv_a, uv_b)
-    journal("texture seams: %d points matched" % len(uv_a))
-    png.ecrire(os.path.join(sortie, "peau.png"), (propre * 255).round().clip(0, 255).astype(np.uint8))
-    journal("skin kept as it is: %.0f %% of the texture, the rest repainted" % (100 * part))
-    ancienne = P["textures"][P["materiaux"][i_peau]["texture"]]
-    n_coutures = souder_normales(P, T, i_peau)
-    journal("skin seams: %d split vertices get a shared normal" % n_coutures)
-    n_diag = basculer_diagonales(P, T, i_peau)
-    journal("skin diagonals: %d swapped to follow the folds" % n_diag)
+    log("— body skin")
+    tex = lambda name_mat: os.path.join(folder_src, P["textures"][P["materials"][names.index(name_mat)]["texture"]])   # noqa: E731
+    own, known = PE.clean(images.read(tex(SKIN)), images.read(tex(FACE_SKIN)))
+    part = float(known.mean())
+    uv_a, uv_b = borders_of_seams(T, i_skin)
+    own = PE.match_seams(own, known, uv_a, uv_b)
+    log("texture seams: %d points matched" % len(uv_a))
+    png.write(os.path.join(output, "skin.png"), (own * 255).round().clip(0, 255).astype(np.uint8))
+    log("skin kept as it is: %.0f %% of the texture, the rest repainted" % (100 * part))
+    old = P["textures"][P["materials"][i_skin]["texture"]]
+    n_seams = weld_normals(P, T, i_skin)
+    log("skin seams: %d split vertices get a shared normal" % n_seams)
+    n_diag = flip_diagonals(P, T, i_skin)
+    log("skin diagonals: %d swapped to follow the folds" % n_diag)
     # --- body, head, hairstyle
-    corps, nv = sous_pmx(P, T, {PEAU})
-    corps["nom"], corps["nom_en"] = "corps " + nom, "body"
-    ecrire(corps, dossier_src, sortie, "corps.pmx", {ancienne: "peau.png"})
-    premiers = np.where(nv >= 0)[0][np.argsort(nv[nv >= 0])]     # the body vertices, in the order of corps.pmx
-    tete, _ = sous_pmx(P, T, {PEAU} | set(VISAGE), premiers)
-    tete["nom"], tete["nom_en"] = "tête " + nom, "head"
-    ecrire(tete, dossier_src, sortie, "tete.pmx", {ancienne: "peau.png"})
-    mats_cheveux = {n for n in noms if CHEVEUX.match(n)}
-    if not mats_cheveux:
-        journal("Note: no hair (material 髪): no base hairstyle")
+    body, nv = under_pmx(P, T, {SKIN})
+    body["name"], body["name_en"] = "corps " + name, "body"
+    write(body, folder_src, output, "body.pmx", {old: "skin.png"})
+    first = np.where(nv >= 0)[0][np.argsort(nv[nv >= 0])]     # the body vertices, in the order of corps.pmx
+    head, _ = under_pmx(P, T, {SKIN} | set(FACE), first)
+    head["name"], head["name_en"] = "head " + name, "head"
+    write(head, folder_src, output, "head.pmx", {old: "skin.png"})
+    mats_hair = {n for n in names if HAIR.match(n)}
+    if not mats_hair:
+        log("Note: no hair (material 髪): no base hairstyle")
     else:
-        coiffure, _ = sous_pmx(P, T, mats_cheveux)
-        coiffure["nom"], coiffure["nom_en"] = "coiffure " + nom, "hair"
-        ecrire(coiffure, dossier_src, sortie, "coiffure.pmx")
+        hairstyle, _ = under_pmx(P, T, mats_hair)
+        hairstyle["name"], hairstyle["name_en"] = "coiffure " + name, "hair"
+        write(hairstyle, folder_src, output, "hairstyle.pmx")
     # --- head measurements
-    Pc = PMX.lire(os.path.join(sortie, "corps.pmx"))
-    Tc = PMX.vers_tableaux(Pc)
+    Pc = PMX.read(os.path.join(output, "body.pmx"))
+    Tc = PMX.to_arrays(Pc)
     try:
         import head as TE
-        t = TE.Tete(os.path.join(sortie, "tete.pmx"))
-        centre = (np.asarray(t.centre_oeil["g"]) + np.asarray(t.centre_oeil["d"])) / 2
-        mesure = t
+        t = TE.Head(os.path.join(output, "head.pmx"))
+        center = (np.asarray(t.center_eye["g"]) + np.asarray(t.center_eye["d"])) / 2
+        measure = t
     except Exception as e:                     # noqa: BLE001  (an unreadable head is a failed check, not a crash)
-        mesure, centre = "%s: %s" % (type(e).__name__, e), None
-    alpha = images.lire(os.path.join(sortie, "peau.png"))[..., 3].min()
-    ctl = controler(Pc, Tc, part, mesure, alpha)
-    meta = meta_vrm(vrm) if vrm else None
-    titre = (meta or {}).get("title") or nom
-    base = {"modele": nom, "titre": titre,
-            "tete_base": {"nom": nom, "premier_passage": nom}}
-    if centre is not None:
-        base["tete_base"].update({"ecart_yeux": round(float(mesure.iod), 4), "centre_yeux": [round(float(x), 4) for x in centre]})
-    _ecrire_json(os.path.join(sortie, "base.json"), base)
-    _ecrire_json(os.path.join(sortie, "controles.json"), ctl)
-    pj, md = provenance(meta, src, nom, sha)
-    _ecrire_json(os.path.join(sortie, "provenance.json"), pj)
-    with open(os.path.join(sortie, "PROVENANCE.md"), "w", encoding="utf-8") as f:
+        measure, center = "%s: %s" % (type(e).__name__, e), None
+    alpha = images.read(os.path.join(output, "skin.png"))[..., 3].min()
+    ctl = check(Pc, Tc, part, measure, alpha)
+    meta = vrm_meta(vrm) if vrm else None
+    title = (meta or {}).get("title") or name
+    base = {"model": name, "title": title,
+            "base_head": {"name": name, "first_pass": name}}
+    if center is not None:
+        base["base_head"].update({"eye_gap": round(float(measure.iod), 4), "eyes_center": [round(float(x), 4) for x in center]})
+    _write_json(os.path.join(output, "base.json"), base)
+    _write_json(os.path.join(output, "checks.json"), ctl)
+    pj, md = origin(meta, src, name, sha)
+    _write_json(os.path.join(output, "provenance.json"), pj)
+    with open(os.path.join(output, "PROVENANCE.md"), "w", encoding="utf-8") as f:
         f.write(md)
-    for a in pj["alertes"]:
-        journal("WARNING: " + a)
-    if planches:
-        regarder(sortie, Tc, PMX.lire(os.path.join(sortie, "tete.pmx")))
-    rates = [k for k, v in ctl.items() if not v["passe"]]
+    for a in pj["warnings"]:
+        log("WARNING: " + a)
+    if sheets:
+        look(output, Tc, PMX.read(os.path.join(output, "head.pmx")))
+    rates = [k for k, v in ctl.items() if not v["passed"]]
     for k in rates:
-        journal("check %s %s: %s" % ("FAILED" if ctl[k]["bloquant"] else "to look at", k, ctl[k]["valeur"]))
+        log("check %s %s: %s" % ("FAILED" if ctl[k]["blocking"] else "to look at", k, ctl[k]["value"]))
     return ctl, base
 
 
-def regarder(sortie, Tc, Pt):
-    """Grey contact sheets: corps.png (front, three-quarter, profile, back), tete.png (close-up)."""
+def look(output, Tc, Pt):
+    """Grey contact sheets: corps.png (front, three-quarter, profile, back), head.png (close-up)."""
     import view as VU
-    vues = [VU.VUES[k] for k in ("face", "trois", "profil", "dos")]
-    VU.planche(Tc["pos"] * CM, Tc["faces"], vues, os.path.join(sortie, "corps.png"), T=700)
-    Tt = PMX.vers_tableaux(Pt)
-    h = next(np.asarray(o["pos"]) * CM for o in Pt["os"] if o["nom"] == "頭")
-    VU.planche(Tt["pos"] * CM, Tt["faces"], vues, os.path.join(sortie, "tete.png"), T=700,
-               boite=[-14, h[1] - 12, -14, 14, h[1] + 20, 14], fil=True)
+    views = [VU.VIEWS[k] for k in ("face", "three_quarter", "profile", "back")]
+    VU.sheet(Tc["pos"] * CM, Tc["faces"], views, os.path.join(output, "body.png"), T=700)
+    Tt = PMX.to_arrays(Pt)
+    h = next(np.asarray(o["pos"]) * CM for o in Pt["bones"] if o["name"] == "頭")
+    VU.sheet(Tt["pos"] * CM, Tt["faces"], views, os.path.join(output, "head.png"), T=700,
+               box=[-14, h[1] - 12, -14, 14, h[1] + 20, 14], thread=True)
 
 
-def _lire(chemin):
+def _read(path):
     try:
-        with open(chemin, encoding="utf-8") as f:
+        with open(path, encoding="utf-8") as f:
             return json.load(f)
     except (OSError, ValueError):
         return None
 
 
-def _ecrire_json(chemin, d):
-    with open(chemin + ".tmp", "w", encoding="utf-8") as f:
+def _write_json(path, d):
+    with open(path + ".tmp", "w", encoding="utf-8") as f:
         json.dump(d, f, ensure_ascii=False, indent=1, default=lambda o: o.item() if hasattr(o, "item") else str(o))
-    os.replace(chemin + ".tmp", chemin)
+    os.replace(path + ".tmp", path)
 
 
 def main(argv=None):
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    p.add_argument("modele", help=".vrm file (VRM 0.x or 1.0, VRoid Studio or VRoid Hub), or name of an already imported VRoid model")
-    p.add_argument("--output", dest="sortie", default=os.path.join(R.chemin("paths.data"), "base-vroid"))
-    p.add_argument("--no-sheets", dest="sans_planches", action="store_true")
+    p.add_argument("model", help=".vrm file (VRM 0.x or 1.0, VRoid Studio or VRoid Hub), or name of an already imported VRoid model")
+    p.add_argument("--output", dest="output", default=os.path.join(R.path("paths.data"), "vroid-base"))
+    p.add_argument("--no-sheets", dest="without_sheets", action="store_true")
     a = p.parse_args(argv)
-    ctl, base = fabriquer(a.modele, a.sortie, planches=not a.sans_planches)
-    if any(not v["passe"] and v["bloquant"] for v in ctl.values()):
-        print("VRoid base: a blocking check failed (see %s); this base must not be used." % os.path.join(a.sortie, "controles.json"))
+    ctl, base = build(a.model, a.output, sheets=not a.without_sheets)
+    if any(not v["passed"] and v["blocking"] for v in ctl.values()):
+        print("VRoid base: a blocking check failed (see %s); this base must not be used." % os.path.join(a.output, "checks.json"))
         return 1
-    corps = os.path.join(a.sortie, "corps.pmx")
-    print("base body: %s (with tete.pmx and coiffure.pmx: face and hairstyle of \"%s\")" % (corps, base["titre"]))
-    if os.path.realpath(corps) != os.path.realpath(R.chemin("workshop.body")):
+    body = os.path.join(a.output, "body.pmx")
+    print("base body: %s (with head.pmx and hairstyle.pmx: face and hairstyle of \"%s\")" % (body, base["title"]))
+    if os.path.realpath(body) != os.path.realpath(R.path("workshop.body")):
         print("Chimera reads another body (%s). For this one: \"atelier\": {\"corps\": \"%s\", \"cache\": <a cache of its own>} "
-              "in settings.json" % (R.chemin("workshop.body"), corps))
+              "in settings.json" % (R.path("workshop.body"), body))
     else:
         print("Next: python3 -I tools/workshop/catalog.py prepare, then bin/chimera")
     print("Its outfit in the catalogue: python3 -I tools/vroid/importer.py <file.vrm>, then the libraries (COMPATIBILITY.md, VRoid).")

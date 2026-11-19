@@ -14,46 +14,46 @@ import os
 
 import numpy as np
 
-COUCHE = "+"
+LAYER = "+"
 PART_MIN = 0.99   # share of a layer's faces that must duplicate a hair face
 
 
-def _cle(pos, f):
+def _key(pos, f):
     return tuple(sorted(tuple(np.round(pos[v], 5)) for v in f))
 
 
-def couches(D, masque):
+def layers(D, mask):
     """Duplicate highlight faces under `masque`: {"+" material: {duplicated material: [(+ face, duplicated face)]}}."""
-    noms, mf, F, pos = D.noms_mat, D.mat_face, D.faces, D.pos
-    plus = [i for i in np.unique(mf[masque]) if COUCHE in noms[i]]
+    names, mf, F, pos = D.names_mat, D.mat_face, D.faces, D.pos
+    plus = [i for i in np.unique(mf[mask]) if LAYER in names[i]]
     if not plus:
         return {}
     base = {}
-    for f in np.where(masque & ~np.isin(mf, plus))[0]:
-        base.setdefault(_cle(pos, F[f]), f)
+    for f in np.where(mask & ~np.isin(mf, plus))[0]:
+        base.setdefault(_key(pos, F[f]), f)
     out = {}
     for p in plus:
-        fp = np.where(masque & (mf == p))[0]
-        paires = [(f, base.get(_cle(pos, F[f]))) for f in fp]
-        paires = [(f, b) for f, b in paires if b is not None]
-        if len(paires) < PART_MIN * len(fp):
+        fp = np.where(mask & (mf == p))[0]
+        pairs = [(f, base.get(_key(pos, F[f]))) for f in fp]
+        pairs = [(f, b) for f, b in pairs if b is not None]
+        if len(pairs) < PART_MIN * len(fp):
             continue
-        par = {}
-        for f, b in paires:
-            par.setdefault(int(mf[b]), []).append((int(f), int(b)))
-        out[int(p)] = par
+        per = {}
+        for f, b in pairs:
+            per.setdefault(int(mf[b]), []).append((int(f), int(b)))
+        out[int(p)] = per
     return out
 
 
 def _texture(D, i):
-    t = D.pmx["materiaux"][i]["texture"]
+    t = D.pmx["materials"][i]["texture"]
     if not 0 <= t < len(D.pmx["textures"]):
         return None
-    c = os.path.normpath(os.path.join(os.path.dirname(D.chemin), D.pmx["textures"][t].replace("\\", "/")))
+    c = os.path.normpath(os.path.join(os.path.dirname(D.path), D.pmx["textures"][t].replace("\\", "/")))
     return c if os.path.isfile(c) else None
 
 
-def _remplir(masque, uv, w, h):
+def _fill(mask, uv, w, h):
     """Pixels (row 0 at the bottom, as in Blender) covered by the UV triangles."""
     for t in uv:
         x = t[:, 0] * w
@@ -70,62 +70,62 @@ def _remplir(masque, uv, w, h):
         l1 = ((by - cy) * (gx - cx) + (cx - bx) * (gy - cy)) / d
         l2 = ((cy - ay) * (gx - cx) + (ax - cx) * (gy - cy)) / d
         e = 1.0 / max(1.0, np.abs(d)) ** 0.5   # half-pixel margin at the edge
-        dans = (l1 >= -e) & (l2 >= -e) & (1 - l1 - l2 >= -e)
-        yy, xx = gy[dans].astype(int) % h, gx[dans].astype(int) % w
-        masque[yy, xx] = True
+        in_ = (l1 >= -e) & (l2 >= -e) & (1 - l1 - l2 >= -e)
+        yy, xx = gy[in_].astype(int) % h, gx[in_].astype(int) % w
+        mask[yy, xx] = True
 
 
-def cuire(D, masque, dossier):
+def bake(D, mask, folder):
     """Bakes the highlight layers of the hairstyle (faces `masque` of D); writes the textures into `dossier`.
 
     Returns (highlight faces to remove, {duplicated material: path of its baked texture}).
     """
-    retire = np.zeros(len(D.faces), bool)
+    removes = np.zeros(len(D.faces), bool)
     try:
         import tint as TE
     except ImportError:
-        return retire, {}
-    C = couches(D, masque)
+        return removes, {}
+    C = layers(D, mask)
     if not C:
-        return retire, {}
+        return removes, {}
     uv = np.asarray(D.t["uv"], float)
     # one baked texture per hair texture: all the overlays that cover it, under their faces
-    par_tex = {}
-    for p, par in C.items():
+    per_tex = {}
+    for p, per in C.items():
         tp = _texture(D, p)
         if tp is None:
             continue
-        a_p = float(D.pmx["materiaux"][p]["diffus"][3])
-        for b, paires in par.items():
+        a_p = float(D.pmx["materials"][p]["diffuse"][3])
+        for b, pairs in per.items():
             tb = _texture(D, b)
             if tb is None:
                 continue
-            e = par_tex.setdefault(tb, {"mats": set(), "calques": []})
+            e = per_tex.setdefault(tb, {"mats": set(), "texture_layers": []})
             e["mats"].add(b)
-            e["calques"].append((tp, a_p, [f for f, _ in paires]))
-            retire[[f for f, _ in paires]] = True
-    os.makedirs(dossier, exist_ok=True)
+            e["texture_layers"].append((tp, a_p, [f for f, _ in pairs]))
+            removes[[f for f, _ in pairs]] = True
+    os.makedirs(folder, exist_ok=True)
     textures = {}
-    for tb, e in par_tex.items():
+    for tb, e in per_tex.items():
         h_ = hashlib.sha1(tb.encode())
-        for tp, a_p, fs in e["calques"]:
+        for tp, a_p, fs in e["texture_layers"]:
             h_.update(("%s|%.4f|%d|%d" % (tp, a_p, len(fs), sum(fs))).encode())
-        chemin = os.path.join(dossier, "reflet-%s.png" % h_.hexdigest()[:16])
-        if not os.path.isfile(chemin):
-            img = TE.lire_image(tb).copy()
+        path = os.path.join(folder, "highlight-%s.png" % h_.hexdigest()[:16])
+        if not os.path.isfile(path):
+            img = TE.read_image(tb).copy()
             h, w = img.shape[:2]
-            for tp, a_p, fs in e["calques"]:
-                cal = TE.lire_image(tp)
+            for tp, a_p, fs in e["texture_layers"]:
+                cal = TE.read_image(tp)
                 ch, cw = cal.shape[:2]
                 if (ch, cw) != (h, w):   # nearest neighbour, at the size of the hair texture
                     cal = cal[(np.arange(h) * ch // h)[:, None], (np.arange(w) * cw // w)[None, :]]
                 m = np.zeros((h, w), bool)
-                _remplir(m, uv[D.faces[fs]], w, h)
+                _fill(m, uv[D.faces[fs]], w, h)
                 a = (cal[..., 3] * a_p * m)[..., None]
                 img[..., :3] = img[..., :3] * (1 - a) + cal[..., :3] * a
-            tmp = chemin + ".tmp.png"
-            TE.ecrire_image(tmp, img)
-            os.replace(tmp, chemin)
+            tmp = path + ".tmp.png"
+            TE.write_image(tmp, img)
+            os.replace(tmp, path)
         for b in e["mats"]:
-            textures[b] = chemin
-    return retire, textures
+            textures[b] = path
+    return removes, textures

@@ -1,46 +1,46 @@
 """Body skin cut as on a game model: a neck under the face, no scalp.
 
 Why: on a ZZZ model, the body skin stops at the top of the neck, hidden under the face and the hair
-cap. The outfit's body comes from `peau_complete.py`, whose skin is closed by a scalp sphere; it
+cap. The outfit's body comes from the skin-completion research tool (not published), whose skin is closed by a scalp sphere; it
 poked out around the grafted face and through the hair. That sphere goes entirely (skin piece lying
 wholly above the neck), and so does the body skin above the top of the donor head's neck, never lower
-than `SOUS_VISAGE_MM` under the face.
+than `UNDER_FACE_MM` under the face.
 
 A single join, at the face edge, with no seam on the neck: the neck stays the body's, in one piece,
-with its weights. The head brings only its ears (`ile_du_cou`), which follow the head alone, and its
-scalp skin (`crane_du_jeu`), which closes the head under the hair; the bottom of that scalp slides
-under the body's neck (`_poser_nuque`), with the neck's weights where it touches it. A seam between
+with its weights. The head brings only its ears (`island_of_neck`), which follow the head alone, and its
+scalp skin (`skull_of_game`), which closes the head under the hair; the bottom of that scalp slides
+under the body's neck (`_place_nape`), with the neck's weights where it touches it. A seam between
 the head's neck and the body's would open when the head turns.
 
 The body's neck is never touched. It is the skin vertices that the head (bone 頭 and its children)
-carries at less than `COU_POIDS`: neither they nor any face touching one of them move, go away or
-lose their outline. The cut only takes from the body's head. `cou_intact.py` (atelier) proves it on
+carries at less than `NECK_WEIGHT`: neither they nor any face touching one of them move, go away or
+lose their outline. The cut only takes from the body's head. a workshop check proves it on
 what the page draws, vertex by vertex, face by face and pixel by pixel.
 """
 import numpy as np
 
 MM = 1.0 / 80.0
-SECTEURS = 36
+SECTORS = 36
 ZONE_MM = 80.0      # only skin above the bottom of the face minus this margin is considered
-RAYON_MM = 140.0    # and within this distance of the neck axis (not the shoulders)
-SANS_COU_MM = 30.0  # donor head without a neck: cut at this height above the bottom of the face
-SANS_TRAIT_MM = 10.0  # the body's head within this distance of the face draws no outline
-SOUS_VISAGE_MM = 12.0  # the body rises at least to this height below the bottom of the face, direction by direction
-TETE_SEULE = 0.98   # minimum weight share on the head bone (and its children) for a taken ear vertex
-COU_POIDS = 0.5     # a vertex the head carries at less than this belongs to the neck: left untouched
-SEMIS_MM = 2.0      # the original neck is measured over its surface, at least one point every this much
-AFFLEURE_MM = 3.0   # body head sticking out of the face by less than this is duplicate skin
-RENTRE_MM = 0.5     # it goes back under the face by this much
-NUQUE_MM = 15.0     # height of the head's lower scalp strip laid on the body's neck
-LISSE_MM = 6.0      # the strip follows the edge vertices within this much
-PROCHE_MM = 20.0    # a lower scalp edge is laid only if the body skin passes within this much
-RECOUVRE_MM = 8.0   # above the laid edge, the body keeps this much skin under the scalp
-DANS_VISAGE_MM = 20.0  # scalp skin up to this much under the face is a hidden duplicate
+RADIUS_MM = 140.0    # and within this distance of the neck axis (not the shoulders)
+WITHOUT_NECK_MM = 30.0  # donor head without a neck: cut at this height above the bottom of the face
+WITHOUT_TRAIT_MM = 10.0  # the body's head within this distance of the face draws no outline
+UNDER_FACE_MM = 12.0  # the body rises at least to this height below the bottom of the face, direction by direction
+HEAD_ALONE = 0.98   # minimum weight share on the head bone (and its children) for a taken ear vertex
+NECK_WEIGHT = 0.5     # a vertex the head carries at less than this belongs to the neck: left untouched
+SEEDS_MM = 2.0      # the original neck is measured over its surface, at least one point every this much
+FLUSH_MM = 3.0   # body head sticking out of the face by less than this is duplicate skin
+TUCKED_MM = 0.5     # it goes back under the face by this much
+NAPE_MM = 15.0     # height of the head's lower scalp strip laid on the body's neck
+SMOOTH_MM = 6.0      # the strip follows the edge vertices within this much
+NEAR_MM = 20.0    # a lower scalp edge is laid only if the body skin passes within this much
+COVERS_MM = 8.0   # above the laid edge, the body keeps this much skin under the scalp
+IN_FACE_MM = 20.0  # scalp skin up to this much under the face is a hidden duplicate
 
 
-def _secteur(p, c):
+def _sector(p, c):
     a = np.arctan2(p[:, 2] - c[1], p[:, 0] - c[0])
-    return np.floor((a + np.pi) / (2 * np.pi) * SECTEURS).astype(int) % SECTEURS
+    return np.floor((a + np.pi) / (2 * np.pi) * SECTORS).astype(int) % SECTORS
 
 
 def surface(pos, faces):
@@ -52,8 +52,8 @@ def surface(pos, faces):
     pos = np.asarray(pos, float)
     faces = np.asarray(faces, int).reshape(-1, 3)
     a, b, c = pos[faces[:, 0]], pos[faces[:, 1]], pos[faces[:, 2]]
-    cote = np.max([np.linalg.norm(b - a, axis=1), np.linalg.norm(c - b, axis=1), np.linalg.norm(a - c, axis=1)], axis=0)
-    n = np.maximum(1, np.ceil(cote / (SEMIS_MM * MM)).astype(int))
+    side = np.max([np.linalg.norm(b - a, axis=1), np.linalg.norm(c - b, axis=1), np.linalg.norm(a - c, axis=1)], axis=0)
+    n = np.maximum(1, np.ceil(side / (SEEDS_MM * MM)).astype(int))
     points = [pos[np.unique(faces)]]
     for k in np.unique(n):
         i, j = np.meshgrid(np.arange(k + 1), np.arange(k + 1))
@@ -63,127 +63,127 @@ def surface(pos, faces):
     return np.concatenate(points)
 
 
-def _composantes(pos, F):
+def _components(pos, F):
     """Connected-component label of each face (vertices welded by position)."""
     if not len(F):
         return np.zeros(0, int)
     _, rep = np.unique(np.round(pos, 5), axis=0, return_inverse=True)
     rep = rep.ravel()
-    par = np.arange(rep.max() + 1)
+    per = np.arange(rep.max() + 1)
 
-    def racine(a):
-        while par[a] != a:
-            par[a] = par[par[a]]
-            a = par[a]
+    def root(a):
+        while per[a] != a:
+            per[a] = per[per[a]]
+            a = per[a]
         return a
     for a, b, c in rep[F].tolist():
-        ra = racine(a)
+        ra = root(a)
         for x in (b, c):
-            rx = racine(x)
+            rx = root(x)
             if rx != ra:
-                par[rx] = ra
-    return np.array([racine(a) for a in rep[F[:, 0]].tolist()])
+                per[rx] = ra
+    return np.array([root(a) for a in rep[F[:, 0]].tolist()])
 
 
-def _ilots(F):
+def _islands(F):
     """Label of each face: piece connected through vertex indices (a UV island)."""
     if not len(F):
         return np.zeros(0, int)
-    par = np.arange(F.max() + 1)
+    per = np.arange(F.max() + 1)
 
-    def racine(a):
-        while par[a] != a:
-            par[a] = par[par[a]]
-            a = par[a]
+    def root(a):
+        while per[a] != a:
+            per[a] = per[per[a]]
+            a = per[a]
         return a
     for a, b, c in F.tolist():
-        ra = racine(a)
+        ra = root(a)
         for x in (b, c):
-            rx = racine(x)
+            rx = root(x)
             if rx != ra:
-                par[rx] = ra
-    return np.array([racine(a) for a in F[:, 0].tolist()])
+                per[rx] = ra
+    return np.array([root(a) for a in F[:, 0].tolist()])
 
 
-def os_de_tete(os_pmx, i_tete):
+def os_of_head(os_pmx, i_head):
     """Indices of the head bone and all its descendants."""
-    pris = {i_tete}
+    taken = {i_head}
     for _ in range(len(os_pmx)):
-        n = len(pris)
-        pris |= {i for i, o in enumerate(os_pmx) if o["parent"] in pris}
-        if len(pris) == n:
+        n = len(taken)
+        taken |= {i for i, o in enumerate(os_pmx) if o["parent"] in taken}
+        if len(taken) == n:
             break
-    return np.array(sorted(pris))
+    return np.array(sorted(taken))
 
 
 
 
-def ile_du_cou(pos, faces, mat_face, i_peau, i_visage, axe, os_s=None, poids=None, tete=None, uv=None, img=None):
+def island_of_neck(pos, faces, mat_face, i_skin, i_face, axis, os_s=None, weight=None, head=None, uv=None, img=None):
     """Donor head skin faces to graft along with the face (the ears): in the first candidate
     material surrounding the head, the pieces welded to the face and the isolated ears, without the
     black cap faces, and only above the bottom of the face, where all their vertices follow the head
-    alone (`TETE_SEULE`): nothing there is stitched to the body's neck.
+    alone (`HEAD_ALONE`): nothing there is stitched to the body's neck.
 
     Only UV islands taken whole remain. Survey of 09/11 on the 16 cached heads: the ears are always
     whole islands; the rest taken was, on each side, a corner of scalp skin behind the jaw, cut into
-    a sawtooth by the weight and height filters (22 faces of 15 to 25 mm on Maëlys). Its points hung
+    a sawtooth by the weight and height filters (22 faces of 15 to 25 mm on Maelys). Its points hung
     below the ear, through the hair."""
     pos = np.asarray(pos, float)
-    pris = np.zeros(len(faces), bool)
-    fv = faces[np.isin(mat_face, i_visage)]
+    taken = np.zeros(len(faces), bool)
+    fv = faces[np.isin(mat_face, i_face)]
     if not len(fv):
-        return pris
+        return taken
     vv = np.unique(fv)
-    y_bas = pos[vv, 1].min()
-    y0 = y_bas - ZONE_MM * MM
-    c = np.asarray(axe, float)
-    dans = (pos[:, 1] > y0) & (np.hypot(pos[:, 0] - c[0], pos[:, 2] - c[1]) < RAYON_MM * MM)
-    cle_v = {tuple(x) for x in np.round(pos[vv] / 1e-4).astype(np.int64)}
-    touche_v = np.array([tuple(x) in cle_v for x in np.round(pos / 1e-4).astype(np.int64)])
-    part = (np.asarray(poids, float) * np.isin(os_s, tete)).sum(1) if os_s is not None else np.ones(len(pos))
-    cands = [int(i_peau)] if isinstance(i_peau, (int, np.integer)) else [int(x) for x in i_peau]
-    for im in cands:
+    y_bottom = pos[vv, 1].min()
+    y0 = y_bottom - ZONE_MM * MM
+    c = np.asarray(axis, float)
+    in_ = (pos[:, 1] > y0) & (np.hypot(pos[:, 0] - c[0], pos[:, 2] - c[1]) < RADIUS_MM * MM)
+    key_v = {tuple(x) for x in np.round(pos[vv] / 1e-4).astype(np.int64)}
+    touched_v = np.array([tuple(x) in key_v for x in np.round(pos / 1e-4).astype(np.int64)])
+    part = (np.asarray(weight, float) * np.isin(os_s, head)).sum(1) if os_s is not None else np.ones(len(pos))
+    candidates = [int(i_skin)] if isinstance(i_skin, (int, np.integer)) else [int(x) for x in i_skin]
+    for im in candidates:
         fp = np.where(mat_face == im)[0]
         if not len(fp):
             continue
         F = faces[fp]
-        comp = _composantes(pos, F)
-        hors = np.unique(comp[~dans[F].all(1)])
-        garde = ~np.isin(comp, hors)
-        if not garde.any():
+        comp = _components(pos, F)
+        out_of = np.unique(comp[~in_[F].all(1)])
+        guard = ~np.isin(comp, out_of)
+        if not guard.any():
             # one-piece body (e.g. Pulchra): cut above the choker
-            haut = dans[F].all(1) & (pos[F, 1] > y_bas - 30.0 * MM).all(1)
-            if not haut.any():
+            top = in_[F].all(1) & (pos[F, 1] > y_bottom - 30.0 * MM).all(1)
+            if not top.any():
                 continue
-            comp_h = _composantes(pos, F[haut])
-            tc = np.unique(comp_h[touche_v[F[haut]].any(1)])
-            garde = np.zeros(len(fp), bool)
-            garde[haut] = np.isin(comp_h, tc)
+            comp_h = _components(pos, F[top])
+            tc = np.unique(comp_h[touched_v[F[top]].any(1)])
+            guard = np.zeros(len(fp), bool)
+            guard[top] = np.isin(comp_h, tc)
         else:
-            oreille = ((np.abs(pos[F, 0] - c[0]) > 35.0 * MM).any(1)
-                       & (pos[F, 1] > y_bas).all(1) & (part[F] >= TETE_SEULE).all(1))
-            bons = np.unique(comp[garde & (touche_v[F].any(1) | oreille)])
-            garde &= np.isin(comp, bons)
+            ear = ((np.abs(pos[F, 0] - c[0]) > 35.0 * MM).any(1)
+                       & (pos[F, 1] > y_bottom).all(1) & (part[F] >= HEAD_ALONE).all(1))
+            good = np.unique(comp[guard & (touched_v[F].any(1) | ear)])
+            guard &= np.isin(comp, good)
             # black inner cap under the hair at the back of the skull (e.g. Miyabi)
-            calotte = ((part[F] >= TETE_SEULE).all(1) & (pos[F, 2] > c[1] + 22.0 * MM).all(1)
-                       & (np.abs(pos[F, 0] - c[0]) < 42.0 * MM).all(1) & ~touche_v[F].any(1))
-            garde &= ~calotte
-        garde &= (part[F] >= TETE_SEULE).all(1) & (pos[F, 1] > y_bas).all(1)
-        if img is not None and uv is not None and garde.any():
+            cap = ((part[F] >= HEAD_ALONE).all(1) & (pos[F, 2] > c[1] + 22.0 * MM).all(1)
+                       & (np.abs(pos[F, 0] - c[0]) < 42.0 * MM).all(1) & ~touched_v[F].any(1))
+            guard &= ~cap
+        guard &= (part[F] >= HEAD_ALONE).all(1) & (pos[F, 1] > y_bottom).all(1)
+        if img is not None and uv is not None and guard.any():
             h, w = img.shape[:2]
             u = np.mod(np.asarray(uv, float)[F].mean(1), 1.0)
             px = img[(u[:, 1] * h).astype(int).clip(0, h - 1), (u[:, 0] * w).astype(int).clip(0, w - 1), :3]
-            noir = (px.max(1) < 0.28) & ((px.max(1) - px.min(1)) < 0.08)
-            garde &= ~noir
-        if garde.any():
-            ilot = _ilots(F)
-            coupes = np.unique(ilot[~garde])
-            pris[fp[garde & ~np.isin(ilot, coupes)]] = True
+            black = (px.max(1) < 0.28) & ((px.max(1) - px.min(1)) < 0.08)
+            guard &= ~black
+        if guard.any():
+            island = _islands(F)
+            cuts = np.unique(island[~guard])
+            taken[fp[guard & ~np.isin(island, cuts)]] = True
             break
-    return pris
+    return taken
 
 
-def _sous_le_menton(pos, Fv, q):
+def _under_chin(pos, Fv, q):
     """Points of `q` that a triangle of `Fv` covers vertically, lying entirely above them."""
     a, b, c = (pos[Fv[:, k]][:, [0, 2]] for k in range(3))
     y_min = pos[Fv, 1].min(1)
@@ -200,110 +200,110 @@ def _sous_le_menton(pos, Fv, q):
     return out
 
 
-def crane_du_jeu(pos, nor, faces, mat_face, i_peau, i_visage, axe, os_s, poids, tete):
+def skull_of_game(pos, nor, faces, mat_face, i_skin, i_face, axis, os_s, weight, head):
     """Scalp skin faces of the donor head (back, top, sides behind the jaw): in the first candidate
-    material that has any, those whose vertices all follow the head at `COU_POIDS` or more, except
-    under the chin and under the face (up to `DANS_VISAGE_MM` inside: a hidden duplicate).
+    material that has any, those whose vertices all follow the head at `NECK_WEIGHT` or more, except
+    under the chin and under the face (up to `IN_FACE_MM` inside: a hidden duplicate).
 
-    The body has lost its scalp sphere (`couper`) and `ile_du_cou` only takes the ears: the head
+    The body has lost its scalp sphere (`cut`) and `island_of_neck` only takes the ears: the head
     stayed open at the nape, and under the hair the back side of the face showed (survey of 10/11 on
     Pulchra and Grace, wearing their own hair). A game model closes its head with this very skin, to
-    which its hair is fitted; its bottom is then laid on the body's neck (`_poser_nuque`)."""
+    which its hair is fitted; its bottom is then laid on the body's neck (`_place_nape`)."""
     pos, nor = np.asarray(pos, float), np.asarray(nor, float)
-    pris = np.zeros(len(faces), bool)
-    Fv = faces[np.isin(mat_face, i_visage)]
+    taken = np.zeros(len(faces), bool)
+    Fv = faces[np.isin(mat_face, i_face)]
     if not len(Fv):
-        return pris
+        return taken
     y0 = pos[np.unique(Fv), 1].min() - ZONE_MM * MM
-    c = np.asarray(axe, float)
-    dans = (pos[:, 1] > y0) & (np.hypot(pos[:, 0] - c[0], pos[:, 2] - c[1]) < RAYON_MM * MM)
-    part = (np.asarray(poids, float) * np.isin(os_s, tete)).sum(1)
-    cands = [int(i_peau)] if isinstance(i_peau, (int, np.integer)) else [int(x) for x in i_peau]
-    for im in cands:
+    c = np.asarray(axis, float)
+    in_ = (pos[:, 1] > y0) & (np.hypot(pos[:, 0] - c[0], pos[:, 2] - c[1]) < RADIUS_MM * MM)
+    part = (np.asarray(weight, float) * np.isin(os_s, head)).sum(1)
+    candidates = [int(i_skin)] if isinstance(i_skin, (int, np.integer)) else [int(x) for x in i_skin]
+    for im in candidates:
         fp = np.where(mat_face == im)[0]
         F = faces[fp]
-        sel = (part[F] >= COU_POIDS).all(1) & dans[F].all(1)
+        sel = (part[F] >= NECK_WEIGHT).all(1) & in_[F].all(1)
         if not sel.any():
             continue
         k = np.where(sel)[0]
-        sel[k[_sous_le_menton(pos, Fv, pos[F[k]].mean(1))]] = False
+        sel[k[_under_chin(pos, Fv, pos[F[k]].mean(1))]] = False
         k = np.where(sel)[0]
-        d, _ = _sous_le_visage(pos, nor, Fv, pos[F[k]].mean(1))
-        sel[k[(d < 0) & (d > -DANS_VISAGE_MM * MM)]] = False
-        pris[fp[sel]] = True
+        d, _ = _under_face(pos, nor, Fv, pos[F[k]].mean(1))
+        sel[k[(d < 0) & (d > -IN_FACE_MM * MM)]] = False
+        taken[fp[sel]] = True
         break
-    return pris
+    return taken
 
 
-def _lisser_secteurs(val, vus):
-    k = np.arange(SECTEURS)
-    out = np.interp(k, np.concatenate([k[vus] - SECTEURS, k[vus], k[vus] + SECTEURS]), np.tile(val[vus], 3))
-    noyau = np.hanning(7)[1:-1]
-    return np.convolve(np.concatenate([out[-2:], out, out[:2]]), noyau / noyau.sum(), mode="valid")
+def _smooth_sectors(val, seen):
+    k = np.arange(SECTORS)
+    out = np.interp(k, np.concatenate([k[seen] - SECTORS, k[seen], k[seen] + SECTORS]), np.tile(val[seen], 3))
+    kernel = np.hanning(7)[1:-1]
+    return np.convolve(np.concatenate([out[-2:], out, out[:2]]), kernel / kernel.sum(), mode="valid")
 
 
 
-def _crane_du_corps(pos, faces, mat_face, i_peau, y0):
-    """The scalp sphere of peau_complete.py: any body skin piece lying entirely above y0."""
-    fp_idx = np.where(mat_face == i_peau)[0]
-    est_crane = np.zeros(len(faces), bool)
+def _skull_of_body(pos, faces, mat_face, i_skin, y0):
+    """The scalp sphere of a skin-completed body: any body skin piece lying entirely above y0."""
+    fp_idx = np.where(mat_face == i_skin)[0]
+    is_skull = np.zeros(len(faces), bool)
     if len(fp_idx):
-        comp_p = _composantes(pos, faces[fp_idx])
-        garder_c = np.unique(comp_p[~(pos[faces[fp_idx], 1] > y0).all(1)])
-        est_crane[fp_idx[~np.isin(comp_p, garder_c)]] = True
-    return est_crane
+        comp_p = _components(pos, faces[fp_idx])
+        keep_c = np.unique(comp_p[~(pos[faces[fp_idx], 1] > y0).all(1)])
+        is_skull[fp_idx[~np.isin(comp_p, keep_c)]] = True
+    return is_skull
 
 
-def couper(pos, faces, mat_face, i_peau, i_visage, cou_tete, axe, fige=None):
+def cut(pos, faces, mat_face, i_skin, i_face, neck_head, axis, frozen=None):
     """Body skin faces to remove (mask over `faces`) and summary.
 
-    pos: vertices (n, 3); cou_tete: neck vertices of the donor head, placed (m, 3);
-    axe: (x, z) of the neck axis (bone 頭); fige: vertices never cut or moved (the neck and its faces).
+    pos: vertices (n, 3); neck_head: neck vertices of the donor head, placed (m, 3);
+    axe: (x, z) of the neck axis (bone 頭); frozen: vertices never cut or moved (the neck and its faces).
     """
     pos = np.asarray(pos, float)
-    fv = faces[np.isin(mat_face, i_visage)]
-    y_bas = pos[np.unique(fv), 1].min()
-    y0 = y_bas - ZONE_MM * MM
-    c = np.asarray(axe, float)
-    est_crane = _crane_du_corps(pos, faces, mat_face, i_peau, y0)
-    cou = np.asarray(cou_tete, float).reshape(-1, 3)
-    cou = cou[(cou[:, 1] > y0) & (np.hypot(cou[:, 0] - c[0], cou[:, 2] - c[1]) < RAYON_MM * MM)]
-    haut = np.full(SECTEURS, -np.inf)
-    if len(cou):
-        np.maximum.at(haut, _secteur(cou, c), cou[:, 1])
-    vus = np.isfinite(haut)
-    if vus.sum() < SECTEURS // 3:
-        haut[:] = y_bas + SANS_COU_MM * MM
+    fv = faces[np.isin(mat_face, i_face)]
+    y_bottom = pos[np.unique(fv), 1].min()
+    y0 = y_bottom - ZONE_MM * MM
+    c = np.asarray(axis, float)
+    is_skull = _skull_of_body(pos, faces, mat_face, i_skin, y0)
+    neck = np.asarray(neck_head, float).reshape(-1, 3)
+    neck = neck[(neck[:, 1] > y0) & (np.hypot(neck[:, 0] - c[0], neck[:, 2] - c[1]) < RADIUS_MM * MM)]
+    top = np.full(SECTORS, -np.inf)
+    if len(neck):
+        np.maximum.at(top, _sector(neck, c), neck[:, 1])
+    seen = np.isfinite(top)
+    if seen.sum() < SECTORS // 3:
+        top[:] = y_bottom + WITHOUT_NECK_MM * MM
         source = "default"
     else:
-        haut = _lisser_secteurs(haut, vus)
+        top = _smooth_sectors(top, seen)
         source = "head neck"
     # where the donor head's neck stopped under its chin, the cut edge showed as a V under the jaw:
     # the body always rises under the face
     qv = pos[np.unique(fv)]
-    bas_v = np.full(SECTEURS, np.inf)
-    np.minimum.at(bas_v, _secteur(qv, c), qv[:, 1] + SOUS_VISAGE_MM * MM)
-    haut = np.where(np.isfinite(bas_v), np.maximum(haut, bas_v), haut)
-    fp = (mat_face == i_peau) & ~est_crane
+    bottom_v = np.full(SECTORS, np.inf)
+    np.minimum.at(bottom_v, _sector(qv, c), qv[:, 1] + UNDER_FACE_MM * MM)
+    top = np.where(np.isfinite(bottom_v), np.maximum(top, bottom_v), top)
+    fp = (mat_face == i_skin) & ~is_skull
     vp = np.unique(faces[fp])
     q = pos[vp]
-    pres = (q[:, 1] > y0) & (np.hypot(q[:, 0] - c[0], q[:, 2] - c[1]) < RAYON_MM * MM)
+    near = (q[:, 1] > y0) & (np.hypot(q[:, 0] - c[0], q[:, 2] - c[1]) < RADIUS_MM * MM)
     lim = np.full(len(pos), np.inf)
-    lim[vp[pres]] = _hauteur(haut, q[pres], c)
-    if fige is not None:
-        lim[fige] = np.inf
-    trop = pos[:, 1] > lim
+    lim[vp[near]] = _height(top, q[near], c)
+    if frozen is not None:
+        lim[frozen] = np.inf
+    too = pos[:, 1] > lim
     # a straddling face stays, its upper vertices are brought down to the cut height: clean edge
-    retirer = est_crane | (fp & trop[faces].all(1))
-    bord = np.unique(faces[fp & ~retirer][trop[faces[fp & ~retirer]]])
-    bilan = {"faces_retirees": int(retirer.sum()), "faces_crane": int(est_crane.sum()),
-             "sommets_bord": int(len(bord)), "coupe": source,
-             "haut_du_cou_mm": [round(float((h - y_bas) / MM), 1) for h in (haut.min(), np.median(haut), haut.max())]}
-    return retirer, bord, lim, bilan
+    remove = is_skull | (fp & too[faces].all(1))
+    border = np.unique(faces[fp & ~remove][too[faces[fp & ~remove]]])
+    assessment = {"faces_removed": int(remove.sum()), "faces_skull": int(is_skull.sum()),
+             "vertices_border": int(len(border)), "cutting": source,
+             "top_of_neck_mm": [round(float((h - y_bottom) / MM), 1) for h in (top.min(), np.median(top), top.max())]}
+    return remove, border, lim, assessment
 
 
-def _sur_la_coupe(pos, Fp, bord, lim):
-    """Where each vertex of `bord` goes down to: the surface point at the cut height, on the most vertical
+def _on_cut(pos, Fp, border, lim):
+    """Where each vertex of `border` goes down to: the surface point at the cut height, on the most vertical
     edge linking it to a neighbour below the cut.
 
     Moved straight down, a nape vertex (which slants) ended up to 3 mm under the surface, next to the
@@ -312,34 +312,34 @@ def _sur_la_coupe(pos, Fp, bord, lim):
 
     Without a hairstyle, the side outline stays dashed at the nape: the shell has nothing behind an open
     edge. That edge is under the hair, as on a game model (survey of 10/11 on four short cuts,
-    Maëlys, Anby, Corin, Seth: hidden)."""
+    Maelys, Anby, Corin, Seth: hidden)."""
     pos = np.asarray(pos, float)
     _, rep = np.unique(np.round(pos, 5), axis=0, return_inverse=True)
     rep = rep.ravel()
-    trop = pos[:, 1] > lim
+    too = pos[:, 1] > lim
     E = np.concatenate([Fp[:, [0, 1]], Fp[:, [1, 2]], Fp[:, [2, 0]]])
     E = np.concatenate([E, E[:, ::-1]])
-    E = E[trop[E[:, 0]] & (pos[E[:, 1], 1] <= lim[E[:, 0]])]
+    E = E[too[E[:, 0]] & (pos[E[:, 1], 1] <= lim[E[:, 0]])]
     a, b, h = pos[E[:, 0]], pos[E[:, 1]], lim[E[:, 0]]
-    chute = np.maximum(a[:, 1] - b[:, 1], 1e-12)
-    pt = a + ((a[:, 1] - h) / chute)[:, None] * (b - a)
-    pente = np.hypot(b[:, 0] - a[:, 0], b[:, 2] - a[:, 2]) / chute
-    ordre = np.lexsort((pente, rep[E[:, 0]]))
-    r_e = rep[E[ordre, 0]]
-    premier = np.r_[True, r_e[1:] != r_e[:-1]]
-    choisi = dict(zip(r_e[premier].tolist(), pt[ordre][premier]))
-    return [choisi.get(int(rep[v]), np.array([pos[v, 0], lim[v], pos[v, 2]])) for v in bord.tolist()]
+    drop = np.maximum(a[:, 1] - b[:, 1], 1e-12)
+    pt = a + ((a[:, 1] - h) / drop)[:, None] * (b - a)
+    slope = np.hypot(b[:, 0] - a[:, 0], b[:, 2] - a[:, 2]) / drop
+    order = np.lexsort((slope, rep[E[:, 0]]))
+    r_e = rep[E[order, 0]]
+    first = np.r_[True, r_e[1:] != r_e[:-1]]
+    chosen = dict(zip(r_e[first].tolist(), pt[order][first]))
+    return [chosen.get(int(rep[v]), np.array([pos[v, 0], lim[v], pos[v, 2]])) for v in border.tolist()]
 
 
-def _hauteur(haut, q, c):
+def _height(top, q, c):
     """Cut height interpolated between sectors, at the azimuth of each point."""
-    a = (np.arctan2(q[:, 2] - c[1], q[:, 0] - c[0]) + np.pi) / (2 * np.pi) * SECTEURS - 0.5
-    k = np.arange(SECTEURS)
-    return np.interp(a % SECTEURS, np.concatenate([k - SECTEURS, k, k + SECTEURS]), np.tile(haut, 3))
+    a = (np.arctan2(q[:, 2] - c[1], q[:, 0] - c[0]) + np.pi) / (2 * np.pi) * SECTORS - 0.5
+    k = np.arange(SECTORS)
+    return np.interp(a % SECTORS, np.concatenate([k - SECTORS, k, k + SECTORS]), np.tile(top, 3))
 
 
 
-def _sous_le_visage(pos, nor, Fv, q):
+def _under_face(pos, nor, Fv, q):
     """Signed distance (positive outside) from each point of `q` to the skin `Fv`, and the outward normal at the foot;
     nan when no triangle receives it vertically (at the face edge, the sign means nothing)."""
     a, b, c = pos[Fv[:, 0]], pos[Fv[:, 1]], pos[Fv[:, 2]]
@@ -363,38 +363,38 @@ def _sous_le_visage(pos, nor, Fv, q):
     return dist, nn
 
 
-def _rentrer(pos, nor, faces, fm, i_peau, i_vis, fige):
+def _tuck(pos, nor, faces, fm, i_skin, i_vis, frozen):
     """The kept body head that lies flush with the face goes under it.
 
-    The cut keeps the body up to `SOUS_VISAGE_MM` under the bottom of the face: otherwise, a gap under the face.
+    The cut keeps the body up to `UNDER_FACE_MM` under the bottom of the face: otherwise, a gap under the face.
     In that strip, the body skin stayed at the back of the head 0.4-1.3 mm in front of the face, the two
     skins crossing (survey of 10/11 on the sixteen heads: 2 to 16 faces each). Returns (positions, summary);
     the frozen neck does not move. The faces moved under remain: on Nicole, 36 of the 53 are still visible
     from outside between the face edge and the skin (rays, hair on, 10/11)."""
     Fv = faces[np.isin(fm, i_vis)]
-    vp = np.unique(faces[fm == i_peau])
-    vp = vp[~fige[vp]]
+    vp = np.unique(faces[fm == i_skin])
+    vp = vp[~frozen[vp]]
     pv = pos[np.unique(Fv)]
-    lo, hi = pv.min(0) - AFFLEURE_MM * MM, pv.max(0) + AFFLEURE_MM * MM
+    lo, hi = pv.min(0) - FLUSH_MM * MM, pv.max(0) + FLUSH_MM * MM
     vp = vp[((pos[vp] > lo) & (pos[vp] < hi)).all(1)]
-    d, n = _sous_le_visage(pos, nor, Fv, pos[vp])
+    d, n = _under_face(pos, nor, Fv, pos[vp])
     pos = pos.copy()
-    bouge = (d > -RENTRE_MM * MM) & (d < AFFLEURE_MM * MM)
-    pos[vp[bouge]] -= ((d[bouge] + RENTRE_MM * MM)[:, None]) * n[bouge]
-    return pos, {"sommets_rentres": int(bouge.sum())}
+    moves = (d > -TUCKED_MM * MM) & (d < FLUSH_MM * MM)
+    pos[vp[moves]] -= ((d[moves] + TUCKED_MM * MM)[:, None]) * n[moves]
+    return pos, {"vertices_rentres": int(moves.sum())}
 
 
-def _unifier_normales(s, faces, fm, i_visage):
+def _unify_normals(s, faces, fm, i_face):
     """A single normal on both sides of the face's internal seam (颜 / 颜_A)."""
-    if len(i_visage) < 2:
+    if len(i_face) < 2:
         return
     pos = np.asarray(s["pos"], float)
     nor = np.asarray(s["nor"], float)
-    v0 = np.unique(faces[fm == i_visage[0]])
-    v1 = np.unique(faces[fm == i_visage[1]])
-    cle = lambda v: [tuple(x) for x in np.round(pos[v] / 1e-4).astype(np.int64)]
-    m1 = {k: j for k, j in zip(cle(v1), v1)}
-    for a, k in zip(v0.tolist(), cle(v0)):
+    v0 = np.unique(faces[fm == i_face[0]])
+    v1 = np.unique(faces[fm == i_face[1]])
+    the_key = lambda v: [tuple(x) for x in np.round(pos[v] / 1e-4).astype(np.int64)]
+    m1 = {k: j for k, j in zip(the_key(v1), v1)}
+    for a, k in zip(v0.tolist(), the_key(v0)):
         if k in m1:
             b = m1[k]
             nm = nor[a] + nor[b]
@@ -402,21 +402,21 @@ def _unifier_normales(s, faces, fm, i_visage):
             s["nor"][a] = s["nor"][b] = tuple(float(x) for x in nm)
 
 
-def _soudes(pos):
+def _welded(pos):
     """Shared label for the copies of a same vertex (UV and material seams)."""
     _, rep = np.unique(np.round(np.asarray(pos, float) / 1e-4).astype(np.int64), axis=0, return_inverse=True)
     return rep.ravel()
 
 
-def _aretes(rep, F):
+def _edges(rep, F):
     return np.sort(rep[np.concatenate([F[:, [0, 1]], F[:, [1, 2]], F[:, [2, 0]]])], axis=1)
 
 
-def _peau_pres(pos, Fb, Fi):
+def _skin_near(pos, Fb, Fi):
     """Faces of `Fb` that have a vertex near the bounding box of faces `Fi`."""
     vi = np.unique(Fi)
-    marge = (PROCHE_MM + NUQUE_MM) * MM
-    lo, hi = pos[vi].min(0) - marge, pos[vi].max(0) + marge
+    margin = (NEAR_MM + NAPE_MM) * MM
+    lo, hi = pos[vi].min(0) - margin, pos[vi].max(0) + margin
     return Fb[((pos[Fb] > lo) & (pos[Fb] < hi)).all(2).any(1)]
 
 
@@ -440,9 +440,9 @@ def _point_triangle(p, a, b, c):
     return np.where(np.isfinite(r), r, a)
 
 
-def _distance_au_corps(pos, nor, Fb, q):
+def _distance_to_body(pos, nor, Fb, q):
     """Signed distance (positive outside) from each point of `q` to the closest point of the skin `Fb`,
-    outward normal of the triangle carrying it, and that point. The vertical projection of `_sous_le_visage`
+    outward normal of the triangle carrying it, and that point. The vertical projection of `_under_face`
     sometimes picked a triangle on the other side of the neck (60 mm inside, survey of 10/11 on Grace, Anby, ZhuYuan)."""
     a, b, c = pos[Fb[:, 0]], pos[Fb[:, 1]], pos[Fb[:, 2]]
     n = np.cross(b - a, c - a)
@@ -457,24 +457,24 @@ def _distance_au_corps(pos, nor, Fb, q):
     return d, nn, pp
 
 
-def _bord_de_nuque(pos, nor, faces, fm, peaux, Fb):
-    """Free edge of the head skins `peaux` taken together (without the edges of another part): its lower
-    welded vertices within `PROCHE_MM` of the body skin `Fb`, the others, the label `rep` and one vertex
+def _border_of_nape(pos, nor, faces, fm, skins, Fb):
+    """Free edge of the head skins `skins` taken together (without the edges of another part): its lower
+    welded vertices within `NEAR_MM` of the body skin `Fb`, the others, the label `rep` and one vertex
     per label."""
-    rep = _soudes(pos)
+    rep = _welded(pos)
     m = rep.max() + 1
-    premier = np.zeros(m, int)
-    premier[rep[::-1]] = np.arange(len(rep))[::-1]
-    Fi = faces[np.isin(fm, peaux)]
-    u, n = np.unique(_aretes(rep, Fi), axis=0, return_counts=True)
+    first = np.zeros(m, int)
+    first[rep[::-1]] = np.arange(len(rep))[::-1]
+    Fi = faces[np.isin(fm, skins)]
+    u, n = np.unique(_edges(rep, Fi), axis=0, return_counts=True)
     b = u[n == 1]
-    Fo = faces[~np.isin(fm, peaux)]
+    Fo = faces[~np.isin(fm, skins)]
     if len(Fo):
-        Eo = _aretes(rep, Fo)
+        Eo = _edges(rep, Fo)
         b = b[~np.isin(b[:, 0] * m + b[:, 1], Eo[:, 0] * m + Eo[:, 1])]
     vb = np.unique(b)
     if not len(vb) or not len(Fb):
-        return vb[:0], vb, rep, premier
+        return vb[:0], vb, rep, first
     # lower edge (under the jaw, sides, nape): the taken skin is not below the edge; the hairline edge,
     # with skin below it (pointing down by at least 0.5 on four heads, 10/11), also passes near the
     # body at the nape (16 mm on Grace) and does not move
@@ -483,47 +483,47 @@ def _bord_de_nuque(pos, nor, faces, fm, peaux, Fb):
     As = np.sort(A, axis=1)
     o = np.argsort(As[:, 0] * m + As[:, 1])
     k = o[np.searchsorted((As[:, 0] * m + As[:, 1])[o], b[:, 0] * m + b[:, 1])]
-    P = pos[premier]
+    P = pos[first]
     e = P[b[:, 1]] - P[b[:, 0]]
     e /= np.maximum(np.linalg.norm(e, axis=1), 1e-12)[:, None]
-    dedans = P[t3[k]] - 0.5 * (P[b[:, 0]] + P[b[:, 1]])
-    dedans -= (dedans * e).sum(1)[:, None] * e
-    dedans /= np.maximum(np.linalg.norm(dedans, axis=1), 1e-12)[:, None]
-    bas = np.isin(vb, b[dedans[:, 1] > -0.4])
-    d, _, _ = _distance_au_corps(pos, nor, Fb, P[vb])
-    proche = bas & (np.abs(d) < PROCHE_MM * MM)
-    return vb[proche], vb[~proche], rep, premier
+    inside = P[t3[k]] - 0.5 * (P[b[:, 0]] + P[b[:, 1]])
+    inside -= (inside * e).sum(1)[:, None] * e
+    inside /= np.maximum(np.linalg.norm(inside, axis=1), 1e-12)[:, None]
+    bottom = np.isin(vb, b[inside[:, 1] > -0.4])
+    d, _, _ = _distance_to_body(pos, nor, Fb, P[vb])
+    nearest = bottom & (np.abs(d) < NEAR_MM * MM)
+    return vb[nearest], vb[~nearest], rep, first
 
 
-def _melanger(s, v, j, w):
+def _mix(s, v, j, w):
     """Weights of vertex v pulled towards those of vertex j, by the share w (four bones at most)."""
-    acc = {}
+    accessory = {}
     for src, f in ((v, 1.0 - w), (j, w)):
-        for b, x in zip(s["os"][src], s["poids"][src]):
+        for b, x in zip(s["bones"][src], s["weights"][src]):
             if b >= 0 and x > 0:
-                acc[int(b)] = acc.get(int(b), 0.0) + f * float(x)
-    pris = sorted(acc.items(), key=lambda kv: -kv[1])[:4]
-    tot = sum(x for _, x in pris)
-    os_, p = [b for b, _ in pris], [x / tot for _, x in pris]
+                accessory[int(b)] = accessory.get(int(b), 0.0) + f * float(x)
+    taken = sorted(accessory.items(), key=lambda kv: -kv[1])[:4]
+    tot = sum(x for _, x in taken)
+    os_, p = [b for b, _ in taken], [x / tot for _, x in taken]
     s["sdef"][v] = None
     if len(os_) == 1:
-        s["type"][v], s["os"][v], s["poids"][v] = 0, (os_[0], -1, -1, -1), (1.0, 0.0, 0.0, 0.0)
+        s["type"][v], s["bones"][v], s["weights"][v] = 0, (os_[0], -1, -1, -1), (1.0, 0.0, 0.0, 0.0)
     elif len(os_) == 2:
-        s["type"][v], s["os"][v], s["poids"][v] = 1, (os_[0], os_[1], -1, -1), (p[0], 1.0 - p[0], 0.0, 0.0)
+        s["type"][v], s["bones"][v], s["weights"][v] = 1, (os_[0], os_[1], -1, -1), (p[0], 1.0 - p[0], 0.0, 0.0)
     else:
         os_ += [os_[0]] * (4 - len(os_))
         p += [0.0] * (4 - len(p))
-        s["type"][v], s["os"][v], s["poids"][v] = 2, tuple(os_), tuple(p)
+        s["type"][v], s["bones"][v], s["weights"][v] = 2, tuple(os_), tuple(p)
 
 
-def _poser_nuque(s, faces, fm, i_peau, i_ile, i_visage):
+def _place_nape(s, faces, fm, i_skin, i_island, i_face):
     """The bottom of the head's scalp slides under the body's neck, which does not move.
 
-    The taken scalp (`crane_du_jeu`) stops where the head carries it at `COU_POIDS`; the donor head's
+    The taken scalp (`skull_of_game`) stops where the head carries it at `NECK_WEIGHT`; the donor head's
     neck was thicker than the body's: at that height, this edge stayed 3 to 9 mm outside (survey of
-    10/11 on six heads), open under the hair. Each vertex of that edge goes `RENTRE_MM` under the body
-    skin; scalp vertices within `NUQUE_MM` of the edge (along the skin) smoothly follow the mean
-    displacement of the neighbouring edge vertices (within `LISSE_MM`), with the body's normal and
+    10/11 on six heads), open under the hair. Each vertex of that edge goes `TUCKED_MM` under the body
+    skin; scalp vertices within `NAPE_MM` of the edge (along the skin) smoothly follow the mean
+    displacement of the neighbouring edge vertices (within `SMOOTH_MM`), with the body's normal and
     weights (they turn with the neck) and no outline; at the top of the strip, nothing changes.
     Measured each on its own, a high vertex under the hair, with no body neck facing it, was pulled
     towards the shoulder (up to 45 mm on Miyabi, 10/11). The bottom of the face (`i_visage`) is taken
@@ -532,20 +532,20 @@ def _poser_nuque(s, faces, fm, i_peau, i_ile, i_visage):
     stitched to another part stay put."""
     pos = np.asarray(s["pos"], float)
     nor = np.asarray(s["nor"], float)
-    peaux = [i_ile] + list(i_visage)
-    if not (fm == i_ile).any():
-        return {"nuque_bord": 0}
-    Fi = faces[np.isin(fm, peaux)]
-    Fb = _peau_pres(pos, faces[fm == i_peau], Fi)
-    graines, loin, rep, premier = _bord_de_nuque(pos, nor, faces, fm, peaux, Fb)
-    bilan = {"nuque_bord": int(len(graines)), "nuque_bord_loin": int(len(loin))}
-    if not len(graines):
-        return bilan
-    P = pos[premier]
-    E = np.unique(_aretes(rep, Fi), axis=0)
+    skins = [i_island] + list(i_face)
+    if not (fm == i_island).any():
+        return {"nape_border": 0}
+    Fi = faces[np.isin(fm, skins)]
+    Fb = _skin_near(pos, faces[fm == i_skin], Fi)
+    seeds, far, rep, first = _border_of_nape(pos, nor, faces, fm, skins, Fb)
+    assessment = {"nape_border": int(len(seeds)), "nape_border_far": int(len(far))}
+    if not len(seeds):
+        return assessment
+    P = pos[first]
+    E = np.unique(_edges(rep, Fi), axis=0)
     L = np.linalg.norm(P[E[:, 0]] - P[E[:, 1]], axis=1)
     g = np.full(len(P), np.inf)
-    g[graines] = 0.0
+    g[seeds] = 0.0
     for _ in range(len(P)):
         g2 = g.copy()
         np.minimum.at(g2, E[:, 0], g[E[:, 1]] + L)
@@ -553,92 +553,92 @@ def _poser_nuque(s, faces, fm, i_peau, i_ile, i_visage):
         if np.array_equal(g2, g):
             break
         g = g2
-    cousu = np.zeros(len(P), bool)
-    cousu[rep[np.unique(faces[~np.isin(fm, peaux + [i_peau])])]] = True
+    sewn = np.zeros(len(P), bool)
+    sewn[rep[np.unique(faces[~np.isin(fm, skins + [i_skin])])]] = True
     vi = np.unique(Fi)
     r = np.unique(rep[vi])
-    r = r[(g[r] < NUQUE_MM * MM) & ~cousu[r]]
-    x = 1.0 - g[r] / (NUQUE_MM * MM)
+    r = r[(g[r] < NAPE_MM * MM) & ~sewn[r]]
+    x = 1.0 - g[r] / (NAPE_MM * MM)
     w = x * x * (3.0 - 2.0 * x)
-    d, n, pp = _distance_au_corps(pos, nor, Fb, P[graines])
-    dep_g = pp - RENTRE_MM * MM * n - P[graines]
-    K = np.exp(-(np.linalg.norm(P[r][:, None] - P[graines][None], axis=2) / (LISSE_MM * MM)) ** 2)
-    dep = w[:, None] * (K @ dep_g) / np.maximum(K.sum(1), 1e-12)[:, None]
-    est_g = np.isin(r, graines)
-    dep[est_g] = dep_g[np.searchsorted(graines, r[est_g])]
+    d, n, pp = _distance_to_body(pos, nor, Fb, P[seeds])
+    disp_g = pp - TUCKED_MM * MM * n - P[seeds]
+    K = np.exp(-(np.linalg.norm(P[r][:, None] - P[seeds][None], axis=2) / (SMOOTH_MM * MM)) ** 2)
+    disp = w[:, None] * (K @ disp_g) / np.maximum(K.sum(1), 1e-12)[:, None]
+    is_g = np.isin(r, seeds)
+    disp[is_g] = disp_g[np.searchsorted(seeds, r[is_g])]
     vb = np.unique(Fb)
-    cible = P[r] + dep
-    j = vb[np.argmin(((cible[:, None] - pos[vb][None]) ** 2).sum(-1), axis=1)]
-    a_ile = np.zeros(len(pos), bool)
-    a_ile[vi] = True
-    for v in np.where(a_ile & np.isin(rep, r))[0].tolist():
+    target = P[r] + disp
+    j = vb[np.argmin(((target[:, None] - pos[vb][None]) ** 2).sum(-1), axis=1)]
+    a_island = np.zeros(len(pos), bool)
+    a_island[vi] = True
+    for v in np.where(a_island & np.isin(rep, r))[0].tolist():
         k = int(np.searchsorted(r, rep[v]))
-        s["pos"][v] = tuple(float(c) for c in pos[v] + dep[k])
+        s["pos"][v] = tuple(float(c) for c in pos[v] + disp[k])
         nv = (1.0 - w[k]) * nor[v] + w[k] * nor[j[k]]
         s["nor"][v] = tuple(float(c) for c in nv / max(float(np.linalg.norm(nv)), 1e-12))
-        _melanger(s, v, int(j[k]), float(w[k]))
+        _mix(s, v, int(j[k]), float(w[k]))
         s["contour"][v] = float(s["contour"][v]) * (1.0 - float(w[k]))
-    bilan.update({"nuque_sommets": int((a_ile & np.isin(rep, r)).sum()),
-                  "nuque_deplacement_mm": round(float(np.linalg.norm(dep, axis=1).max() / MM), 1),
-                  "nuque_ecart_bord_mm": [round(float(x / MM), 1) for x in np.percentile(d, [0, 50, 100])]})
-    return bilan
+    assessment.update({"nape_vertices": int((a_island & np.isin(rep, r)).sum()),
+                  "nape_shift_mm": round(float(np.linalg.norm(disp, axis=1).max() / MM), 1),
+                  "nape_gap_border_mm": [round(float(x / MM), 1) for x in np.percentile(d, [0, 50, 100])]})
+    return assessment
 
 
-def appliquer(s, faces, mat_face, materiaux, i_peau, i_visage, cou_tete, axe, i_ile=None, os_tete=None):
+def apply(s, faces, mat_face, materials, i_skin, i_face, neck_head, axis, i_island=None, os_head=None):
     """Remove the body's scalp without touching its neck; returns (kept faces, summary) and updates
-    `materiaux`.
+    `materials`.
 
     i_ile: material of the ears and scalp brought by the head; the body goes under it as under the
-    face, and the bottom of the scalp under the body's neck (`_poser_nuque`).
-    os_tete: the head bone and its children (`os_de_tete`); without them, nothing counts as neck."""
+    face, and the bottom of the scalp under the body's neck (`_place_nape`).
+    os_head: the head bone and its children (`os_of_head`); without them, nothing counts as neck."""
     pos0 = np.asarray(s["pos"], float)
-    fp = faces[mat_face == i_peau]
-    fige = np.zeros(len(pos0), bool)
-    if os_tete is not None:
-        o, w = np.asarray(s["os"]), np.asarray(s["poids"], float)
-        cou = np.zeros(len(pos0), bool)
-        cou[np.unique(fp)] = True
-        cou &= (w * np.isin(o, os_tete)).sum(1) < COU_POIDS * w.sum(1)
-        fige[np.unique(fp[cou[fp].any(1)])] = True
-        # copies of a frozen vertex (UV seams) are frozen too: `_rentrer` pushed only one of them and the
+    fp = faces[mat_face == i_skin]
+    frozen = np.zeros(len(pos0), bool)
+    if os_head is not None:
+        o, w = np.asarray(s["bones"]), np.asarray(s["weights"], float)
+        neck = np.zeros(len(pos0), bool)
+        neck[np.unique(fp)] = True
+        neck &= (w * np.isin(o, os_head)).sum(1) < NECK_WEIGHT * w.sum(1)
+        frozen[np.unique(fp[neck[fp].any(1)])] = True
+        # copies of a frozen vertex (UV seams) are frozen too: `_tuck` pushed only one of them and the
         # skin split at the neck edge, 0.6 to 3.5 mm slits on nine heads out of ten (survey of 10/11)
         vp = np.unique(fp)
-        rep = _soudes(pos0)
-        fige[vp] |= np.isin(rep[vp], rep[fige])
-    if i_ile is not None:
-        # above the edge of the head scalp that will rest there, the body keeps `RECOUVRE_MM` of skin underneath
-        y0 = pos0[np.unique(faces[np.isin(mat_face, i_visage)]), 1].min() - ZONE_MM * MM
-        Fb0 = faces[(mat_face == i_peau) & ~_crane_du_corps(pos0, faces, mat_face, i_peau, y0)]
-        Fb0 = _peau_pres(pos0, Fb0, faces[mat_face == i_ile])
-        graines, _, _, premier = _bord_de_nuque(pos0, np.asarray(s["nor"], float), faces, mat_face, [i_ile], Fb0)
-        if len(graines):
-            cou_tete = np.vstack([np.asarray(cou_tete, float).reshape(-1, 3),
-                                  pos0[premier[graines]] + np.array([0.0, RECOUVRE_MM * MM, 0.0])])
-    retirer, bord, lim, bilan = couper(pos0, faces, mat_face, i_peau, i_visage, cou_tete, axe, fige)
-    bilan["sommets_figes"] = int(fige.sum())
-    garde = ~retirer
-    for v, p in zip(bord.tolist(), _sur_la_coupe(pos0, faces[garde & (mat_face == i_peau)], bord, lim)):
+        rep = _welded(pos0)
+        frozen[vp] |= np.isin(rep[vp], rep[frozen])
+    if i_island is not None:
+        # above the edge of the head scalp that will rest there, the body keeps `COVERS_MM` of skin underneath
+        y0 = pos0[np.unique(faces[np.isin(mat_face, i_face)]), 1].min() - ZONE_MM * MM
+        Fb0 = faces[(mat_face == i_skin) & ~_skull_of_body(pos0, faces, mat_face, i_skin, y0)]
+        Fb0 = _skin_near(pos0, Fb0, faces[mat_face == i_island])
+        seeds, _, _, first = _border_of_nape(pos0, np.asarray(s["nor"], float), faces, mat_face, [i_island], Fb0)
+        if len(seeds):
+            neck_head = np.vstack([np.asarray(neck_head, float).reshape(-1, 3),
+                                  pos0[first[seeds]] + np.array([0.0, COVERS_MM * MM, 0.0])])
+    remove, border, lim, assessment = cut(pos0, faces, mat_face, i_skin, i_face, neck_head, axis, frozen)
+    assessment["vertices_figes"] = int(frozen.sum())
+    guard = ~remove
+    for v, p in zip(border.tolist(), _on_cut(pos0, faces[guard & (mat_face == i_skin)], border, lim)):
         s["pos"][v] = tuple(float(x) for x in p)
-    faces, fm = faces[garde], mat_face[garde]
-    if i_ile is not None:
-        bilan.update(_poser_nuque(s, faces, fm, i_peau, i_ile, list(i_visage)))
-    i_vis_tout = list(i_visage) + ([i_ile] if i_ile is not None else [])
-    pos1, b_r = _rentrer(np.asarray(s["pos"], float), np.asarray(s["nor"], float), faces, fm, i_peau,
-                                  i_vis_tout, fige)
+    faces, fm = faces[guard], mat_face[guard]
+    if i_island is not None:
+        assessment.update(_place_nape(s, faces, fm, i_skin, i_island, list(i_face)))
+    i_vis_all = list(i_face) + ([i_island] if i_island is not None else [])
+    pos1, b_r = _tuck(np.asarray(s["pos"], float), np.asarray(s["nor"], float), faces, fm, i_skin,
+                                  i_vis_all, frozen)
     for v in np.where((pos1 != np.asarray(s["pos"], float)).any(1))[0].tolist():
         s["pos"][v] = tuple(float(x) for x in pos1[v])
-    bilan.update(b_r)
-    for i, m in enumerate(materiaux):
+    assessment.update(b_r)
+    for i, m in enumerate(materials):
         m["n_indices"] = int(3 * (fm == i).sum())
-    _unifier_normales(s, faces, fm, list(i_visage))
+    _unify_normals(s, faces, fm, list(i_face))
     pos = np.asarray(s["pos"], float)
-    vv = np.unique(faces[np.isin(fm, i_vis_tout)])
-    vp = np.unique(faces[fm == i_peau])
-    lo, hi = pos[vv].min(0) - SANS_TRAIT_MM * MM, pos[vv].max(0) + SANS_TRAIT_MM * MM
+    vv = np.unique(faces[np.isin(fm, i_vis_all)])
+    vp = np.unique(faces[fm == i_skin])
+    lo, hi = pos[vv].min(0) - WITHOUT_TRAIT_MM * MM, pos[vv].max(0) + WITHOUT_TRAIT_MM * MM
     vp = vp[((pos[vp] > lo) & (pos[vp] < hi)).all(1)]
     d = np.array([np.sqrt(((pos[vv] - pos[i]) ** 2).sum(1)).min() for i in vp.tolist()]) if len(vp) else np.zeros(0)
-    sans = vp[(d < SANS_TRAIT_MM * MM) & ~fige[vp]]
-    for i in sans.tolist():
+    without = vp[(d < WITHOUT_TRAIT_MM * MM) & ~frozen[vp]]
+    for i in without.tolist():
         s["contour"][i] = 0.0
-    bilan["sans_trait"] = int(len(sans))
-    return faces, bilan
+    assessment["without_trait"] = int(len(without))
+    return faces, assessment

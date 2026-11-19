@@ -1,111 +1,111 @@
 {
- "format": "chimera-rendu",
- "version": 1,
- "nom": "Sunset",
- "lumiere": {
+ "format": "chimera-render",
+ "version": 2,
+ "name": "Sunset",
+ "light": {
   "angle": 28.64788975654116,
-  "hauteur": 36.86989764584401,
-  "couleur": [
+  "height": 36.86989764584401,
+  "color": [
    1,
    0.818182,
    0.654545
   ],
   "force": 1.1,
-  "contour": [
+  "rim": [
    1,
    0.72,
    0.48
   ],
-  "forceContour": 1,
-  "ciel": [
+  "forceRim": 1,
+  "sky": [
    0.03,
    0.02,
    0.07
   ],
-  "terre": [
+  "ground": [
    0.08,
    0.03,
    0.01
   ]
  },
- "ombre": {
-  "seuil": 0.46,
-  "douceur": 0.025,
-  "teinte": [
+ "shadow": {
+  "threshold": 0.46,
+  "softness": 0.025,
+  "tint": [
    0.304,
    0.2295,
    0.529
   ],
-  "teinteCheveux": [
+  "tintHair": [
    0.342,
    0.2295,
    0.506
   ],
   "saturation": 1.15,
-  "lisere": 1,
-  "creux": 1,
-  "portees": true,
-  "forcePortees": 1,
+  "edgeBand": 1,
+  "crevices": 1,
+  "casts": true,
+  "castStrength": 1,
   "contact": 1
  },
- "peau": {
-  "seuil": 0.46,
-  "douceur": 0.09,
-  "teinte": [
+ "skin": {
+  "threshold": 0.46,
+  "softness": 0.09,
+  "tint": [
    0.57,
    0.306,
    0.5405
   ],
   "transmission": 1,
-  "rose": 1,
-  "ombreYeux": 1
+  "blush": 1,
+  "shadowEyes": 1
  },
- "matiere": {
-  "vetements": true,
-  "cheveux": 1
+ "material": {
+  "clothes": true,
+  "hair": 1
  },
- "trait": {
-  "actif": false,
-  "epaisseur": 1,
-  "opacite": 1,
-  "couleur": [
+ "outline": {
+  "active": false,
+  "thickness": 1,
+  "opacity": 1,
+  "color": [
    0.16,
    0.09,
    0.13
   ],
-  "partCouleur": 0
+  "partColor": 0
  },
- "fond": {
-  "centre": [
+ "background": {
+  "center": [
    0.42,
    0.22,
    0.22
   ],
-  "bord": [
+  "border": [
    0.1,
    0.05,
    0.12
   ]
  },
- "sol": {
-  "actif": true,
-  "lumiere": [
+ "floor": {
+  "active": true,
+  "light": [
    0.45,
    0.27,
    0.26
   ],
-  "ombre": [
+  "shadow": [
    0.13,
    0.07,
    0.14
   ]
  },
  "image": {
-  "exposition": 0.77,
+  "exposure": 0.77,
   "saturation": 1.08,
   "halo": 1,
-  "flou": 1,
-  "vignette": 0.2,
+  "blur": 1,
+  "thumbnail": 0.2,
   "grain": 0.045
  }
 }

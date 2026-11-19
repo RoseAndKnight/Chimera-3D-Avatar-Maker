@@ -10,13 +10,13 @@ w < 0 = inverse) composed before the bone's own pose.
 """
 import numpy as np
 
-IDENTITE = np.array([1.0, 0.0, 0.0, 0.0])
+IDENTITY = np.array([1.0, 0.0, 0.0, 0.0])
 
 
-def q_axe_angle(axe, degres):
-    a = np.asarray(axe, dtype=np.float64)
+def q_axe_angle(axis, degrees):
+    a = np.asarray(axis, dtype=np.float64)
     a = a / np.linalg.norm(a)
-    t = np.radians(degres) / 2.0
+    t = np.radians(degrees) / 2.0
     return np.concatenate([[np.cos(t)], np.sin(t) * a])
 
 
@@ -40,7 +40,7 @@ def q_mat(q):
                      [2 * (x * z - y * w), 2 * (y * z + x * w), 1 - 2 * (x * x + y * y)]])
 
 
-def q_puissance(q, t):
+def q_power(q, t):
     """q ** t (slerp from the identity to q at fraction t; t < 0 gives the inverse)."""
     q = np.asarray(q, dtype=np.float64)
     if q[0] < 0:
@@ -49,70 +49,70 @@ def q_puissance(q, t):
     ang = 2 * np.arccos(w)
     s = np.sqrt(max(0.0, 1 - w * w))
     if s < 1e-12:
-        return IDENTITE.copy()
-    axe = q[1:] / s
-    return np.concatenate([[np.cos(ang * t / 2)], np.sin(ang * t / 2) * axe])
+        return IDENTITY.copy()
+    axis = q[1:] / s
+    return np.concatenate([[np.cos(ang * t / 2)], np.sin(ang * t / 2) * axis])
 
 
-def q_miroir_x(q):
+def q_mirror_x(q):
     """Mirror rotation through the plane x = 0 (left <-> right)."""
     return np.array([q[0], q[1], -q[2], -q[3]])
 
 
-def ordre_topologique(parents, sources_ajout):
+def order_topologique(parents, sources_addition):
     """Order in which each bone comes after its parent and after the source of its append."""
     n = len(parents)
     deps = [set() for _ in range(n)]
     for i in range(n):
         if parents[i] >= 0:
             deps[i].add(int(parents[i]))
-        if sources_ajout[i] >= 0 and sources_ajout[i] != i:
-            deps[i].add(int(sources_ajout[i]))
-    ordre, fait, en_cours = [], [False] * n, [False] * n
+        if sources_addition[i] >= 0 and sources_addition[i] != i:
+            deps[i].add(int(sources_addition[i]))
+    order, done, in_progress = [], [False] * n, [False] * n
 
-    def visite(i):
-        if fait[i]:
+    def visited(i):
+        if done[i]:
             return
-        if en_cours[i]:
+        if in_progress[i]:
             raise ValueError("cycle in the bones around %d" % i)
-        en_cours[i] = True
+        in_progress[i] = True
         for d in deps[i]:
-            visite(d)
-        en_cours[i] = False
-        fait[i] = True
-        ordre.append(i)
+            visited(d)
+        in_progress[i] = False
+        done[i] = True
+        order.append(i)
 
     for i in range(n):
-        visite(i)
-    return ordre
+        visited(i)
+    return order
 
 
-def cinematique(tetes, parents, ajout_source, ajout_facteur, ajout_rot, ajout_dep,
-                rotations=None, deplacements=None, ajouts_actifs=None):
+def kinematics(heads, parents, addition_source, addition_factor, addition_rot, addition_disp,
+                rotations=None, displacements=None, additions_actives=None):
     """World matrices of each bone (B, 3, 3) and translations (B, 3).
 
-    rotations: dict bone -> local quaternion; deplacements: dict bone -> vector.
-    ajouts_actifs: boolean array (B,) to switch an append off (tests E-06, E-07).
-    Returns (R, t) such that p' = R[b] @ (p - tetes[b]) + t[b].
+    rotations: dict bone -> local quaternion; displacements: dict bone -> vector.
+    additions_actives: boolean array (B,) to switch an append off (tests E-06, E-07).
+    Returns (R, t) such that p' = R[b] @ (p - heads[b]) + t[b].
     """
     n = len(parents)
     rotations = rotations or {}
-    deplacements = deplacements or {}
-    if ajouts_actifs is None:
-        ajouts_actifs = np.ones(n, dtype=bool)
-    q_eff = [IDENTITE.copy() for _ in range(n)]
+    displacements = displacements or {}
+    if additions_actives is None:
+        additions_actives = np.ones(n, dtype=bool)
+    q_eff = [IDENTITY.copy() for _ in range(n)]
     d_eff = [np.zeros(3) for _ in range(n)]
     R = np.zeros((n, 3, 3))
     t = np.zeros((n, 3))
-    for b in ordre_topologique(parents, ajout_source):
-        q = np.asarray(rotations.get(b, IDENTITE), dtype=np.float64)
-        d = np.asarray(deplacements.get(b, np.zeros(3)), dtype=np.float64)
-        s = ajout_source[b]
-        if s >= 0 and ajouts_actifs[b]:
-            w = float(ajout_facteur[b])
-            if ajout_rot[b]:
-                q = q_mul(q_puissance(q_eff[s], w), q)
-            if ajout_dep[b]:
+    for b in order_topologique(parents, addition_source):
+        q = np.asarray(rotations.get(b, IDENTITY), dtype=np.float64)
+        d = np.asarray(displacements.get(b, np.zeros(3)), dtype=np.float64)
+        s = addition_source[b]
+        if s >= 0 and additions_actives[b]:
+            w = float(addition_factor[b])
+            if addition_rot[b]:
+                q = q_mul(q_power(q_eff[s], w), q)
+            if addition_disp[b]:
                 d = d + w * d_eff[s]
         q_eff[b] = q
         d_eff[b] = d
@@ -120,32 +120,32 @@ def cinematique(tetes, parents, ajout_source, ajout_facteur, ajout_rot, ajout_de
         Rl = q_mat(q)
         if p < 0:
             R[b] = Rl
-            t[b] = tetes[b] + d
+            t[b] = heads[b] + d
         else:
             R[b] = R[p] @ Rl
-            t[b] = R[p] @ (tetes[b] - tetes[p] + d) + t[p]
+            t[b] = R[p] @ (heads[b] - heads[p] + d) + t[p]
     return R, t
 
 
-def skinning(pos, idx, poids, tetes, R, t, normaliser=True):
-    """Linear skinning. idx, poids: (n, K) with idx = -1 for an empty slot.
+def skinning(pos, idx, weight, heads, R, t, normalize=True):
+    """Linear skinning. idx, weight: (n, K) with idx = -1 for an empty slot.
 
     normaliser=True reproduces Blender's Armature modifier (division by the
     sum of the weights, vertices with a zero sum left in place); False reproduces MMD.
     """
     pos = np.asarray(pos, dtype=np.float64)
     out = np.zeros_like(pos)
-    somme = np.zeros(len(pos))
+    total = np.zeros(len(pos))
     for k in range(idx.shape[1]):
         b = idx[:, k]
-        w = np.where(b >= 0, poids[:, k], 0.0)
+        w = np.where(b >= 0, weight[:, k], 0.0)
         bb = np.where(b >= 0, b, 0)
-        loc = pos - tetes[bb]
-        dep = np.einsum("nij,nj->ni", R[bb], loc) + t[bb]
-        out += w[:, None] * dep
-        somme += w
-    if normaliser:
-        ok = somme > 1e-4
-        out[ok] /= somme[ok, None]
+        loc = pos - heads[bb]
+        disp = np.einsum("nij,nj->ni", R[bb], loc) + t[bb]
+        out += w[:, None] * disp
+        total += w
+    if normalize:
+        ok = total > 1e-4
+        out[ok] /= total[ok, None]
         out[~ok] = pos[~ok]
     return out

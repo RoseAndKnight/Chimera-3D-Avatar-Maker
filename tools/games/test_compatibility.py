@@ -10,23 +10,23 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import compatibility as K  # noqa: E402
 
 
-class Compatibilite(unittest.TestCase):
-    def test_declarations_completes(self):
-        self.assertTrue(K.declares())
-        for n in K.declares():
-            self.assertEqual(K.erreurs(n), [], n)
+class Compatibility(unittest.TestCase):
+    def test_declarations_complete(self):
+        self.assertTrue(K.declared())
+        for n in K.declared():
+            self.assertEqual(K.errors(n), [], n)
 
-    def test_document_a_jour(self):
-        self.assertEqual(K.verifier(), [])
+    def test_document_a_day(self):
+        self.assertEqual(K.check(), [])
 
-    def test_section_sans_etat_de_la_machine(self):
+    def test_section_without_state_of_machine(self):
         # the document must depend only on the descriptions, not on the settings or the disk of the machine
-        t = K.tableau()
+        t = K.array()
         self.assertNotIn(os.path.expanduser("~"), t)
         self.assertNotIn("present", t)
 
-    def test_aucun_lien_de_telechargement(self):
-        self.assertNotIn("http", K.tableau())
+    def test_none_link_of_download(self):
+        self.assertNotIn("http", K.array())
 
 
 if __name__ == "__main__":

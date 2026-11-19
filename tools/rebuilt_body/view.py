@@ -1,7 +1,7 @@
 """Grey views of a mesh, without Blender (numpy only): simple shading, edges optional.
 
-    python3 -I view.py <pmx> <sortie.png> [--mat 肌] [--vues face,profil,dos] [--boite x0,y0,z0,x1,y1,z1 (cm)]
-                       [--fil] [--taille 900]
+    python3 -I view.py <pmx> <output.png> [--mat 肌] [--views face,profile,back] [--box x0,y0,z0,x1,y1,z1 (cm)]
+                       [--fil] [--size 900]
 Used to look at a body (reference or remade) when the Blender queue is busy.
 """
 import os
@@ -9,31 +9,31 @@ import sys
 
 import numpy as np
 
-ICI = os.path.dirname(os.path.abspath(__file__))
+HERE = os.path.dirname(os.path.abspath(__file__))
 for d in ("atlas", "head", "rebuilt_head"):
-    sys.path.insert(0, os.path.join(ICI, "..", d))
+    sys.path.insert(0, os.path.join(HERE, "..", d))
 
-VUES = {"face": (0, 0), "trois": (35, 5), "profil": (90, 0), "dos": (180, 0), "arriere3": (145, 5),
-        "dessous": (180, -55), "dessus": (0, 60), "dosbas": (180, -25), "profil2": (-90, 0)}
+VIEWS = {"face": (0, 0), "three_quarter": (35, 5), "profile": (90, 0), "back": (180, 0), "back_three_quarter": (145, 5),
+         "under": (180, -55), "over": (0, 60), "low_back": (180, -25), "profile_other": (-90, 0)}
 
 
 def base(az, el):
     """Camera frame (right, up, towards the eye); the model faces -z, y up."""
     az, el = np.radians(az), np.radians(el)
-    oeil = np.array([np.sin(az) * np.cos(el), np.sin(el), -np.cos(az) * np.cos(el)])
-    droite = np.cross([0, 1, 0], oeil)
-    droite /= np.linalg.norm(droite)
-    haut = np.cross(oeil, droite)
-    return droite, haut, oeil
+    eye = np.array([np.sin(az) * np.cos(el), np.sin(el), -np.cos(az) * np.cos(el)])
+    right = np.cross([0, 1, 0], eye)
+    right /= np.linalg.norm(right)
+    top = np.cross(eye, right)
+    return right, top, eye
 
 
-def rendre(V, F, vue, T=900, boite=None, fil=False, couleur=None, lisse=True):
-    """Image (T, T, 3) uint8. V in cm, F triangles. couleur: (n_faces, 3) between 0 and 1, or None."""
-    d, h, o = base(*vue)
+def render(V, F, view, T=900, box=None, thread=False, color=None, smooth=True):
+    """Image (T, T, 3) uint8. V in cm, F triangles. color: (n_faces, 3) between 0 and 1, or None."""
+    d, h, o = base(*view)
     P = np.stack([V @ d, V @ h, V @ o], 1)
     sel = np.ones(len(V), bool)
-    if boite is not None:
-        b = np.asarray(boite, float).reshape(2, 3)
+    if box is not None:
+        b = np.asarray(box, float).reshape(2, 3)
         sel = np.all((V >= b[0]) & (V <= b[1]), 1)
     Fs = F[sel[F].all(1)]
     idf = np.where(sel[F].all(1))[0]
@@ -47,7 +47,7 @@ def rendre(V, F, vue, T=900, boite=None, fil=False, couleur=None, lisse=True):
     Z = P[:, 2]
     fn = np.cross(V[F[:, 1]] - V[F[:, 0]], V[F[:, 2]] - V[F[:, 0]])
     fn /= np.maximum(np.linalg.norm(fn, axis=1), 1e-12)[:, None]
-    if lisse:
+    if smooth:
         vn = np.zeros_like(V)
         for k in range(3):
             np.add.at(vn, F[:, k], fn)
@@ -77,25 +77,25 @@ def rendre(V, F, vue, T=900, boite=None, fil=False, couleur=None, lisse=True):
         m &= z > zz
         if not m.any():
             continue
-        if lisse:
+        if smooth:
             nn = w0[..., None] * vn[a] + w1[..., None] * vn[b_] + w2[..., None] * vn[c_]
             nn /= np.maximum(np.linalg.norm(nn, axis=2), 1e-9)[..., None]
             e = nn @ lum
-            dos = (nn @ o) < 0
+            back = (nn @ o) < 0
         else:
             e = np.full(z.shape, fn[idf[n]] @ lum)
-            dos = np.full(z.shape, fn[idf[n]] @ o < 0)
+            back = np.full(z.shape, fn[idf[n]] @ o < 0)
         e = 0.28 + 0.72 * np.clip(e, 0, 1)
-        col = np.array([0.86, 0.80, 0.78]) if couleur is None else couleur[idf[n]]
-        px = e[..., None] * col
-        px = np.where(dos[..., None], np.array([0.55, 0.15, 0.15]) * 0.8, px)   # back side: dark red
-        if fil:
-            bord = np.minimum(np.minimum(w0, w1), w2)
+        collar = np.array([0.86, 0.80, 0.78]) if color is None else color[idf[n]]
+        px = e[..., None] * collar
+        px = np.where(back[..., None], np.array([0.55, 0.15, 0.15]) * 0.8, px)   # back side: dark red
+        if thread:
+            border = np.minimum(np.minimum(w0, w1), w2)
             # distance in pixels to the closest edge (approximated by the triangle's height)
-            aire2 = abs(den)
+            area2 = abs(den)
             L = np.array([np.hypot(xs[1] - xs[2], ys[1] - ys[2]), np.hypot(xs[2] - xs[0], ys[2] - ys[0]),
                           np.hypot(xs[0] - xs[1], ys[0] - ys[1])])
-            dpx = np.minimum(np.minimum(w0 * aire2 / max(L[0], 1e-6), w1 * aire2 / max(L[1], 1e-6)), w2 * aire2 / max(L[2], 1e-6))
+            dpx = np.minimum(np.minimum(w0 * area2 / max(L[0], 1e-6), w1 * area2 / max(L[1], 1e-6)), w2 * area2 / max(L[2], 1e-6))
             px = np.where((dpx < 0.6)[..., None], px * 0.25, px)
         sub = img[y0:y1, x0:x1]
         sub[m] = px[m]
@@ -103,27 +103,27 @@ def rendre(V, F, vue, T=900, boite=None, fil=False, couleur=None, lisse=True):
     return (np.clip(img, 0, 1) * 255).astype(np.uint8)
 
 
-def charger(chemin, mats=("肌",)):
+def load(path, mats=("肌",)):
     import pmx as PMX
-    P = PMX.lire(chemin)
-    t = PMX.vers_tableaux(P)
-    noms = [m["nom"] for m in P["materiaux"]]
-    sel = np.isin(t["mat_face"], [noms.index(n) for n in mats if n in noms])
+    P = PMX.read(path)
+    t = PMX.to_arrays(P)
+    names = [m["name"] for m in P["materials"]]
+    sel = np.isin(t["mat_face"], [names.index(n) for n in mats if n in names])
     return t["pos"] * 8.0, t["faces"][sel]
 
 
-def planche(V, F, vues, sortie, T=900, boite=None, fil=False, couleur=None, lisse=True):
+def sheet(V, F, views, output, T=900, box=None, thread=False, color=None, smooth=True):
     import png
-    ims = [rendre(V, F, VUES[v] if isinstance(v, str) else v, T, boite, fil, couleur, lisse) for v in vues]
-    png.ecrire(sortie, np.concatenate(ims, 1))
+    ims = [render(V, F, VIEWS[v] if isinstance(v, str) else v, T, box, thread, color, smooth) for v in views]
+    png.write(output, np.concatenate(ims, 1))
 
 
 if __name__ == "__main__":
     a = sys.argv[1:]
 
-    def opt(nom, defaut=None):
-        return a[a.index(nom) + 1] if nom in a else defaut
-    V, F = charger(a[0], tuple(opt("--mat", "肌").split(",")))
-    b = opt("--boite")
-    planche(V, F, opt("--vues", "face,profil,dos").split(","), a[1], int(opt("--taille", "900")),
-            [float(x) for x in b.split(",")] if b else None, "--fil" in a, lisse="--plat" not in a)
+    def opt(name, default=None):
+        return a[a.index(name) + 1] if name in a else default
+    V, F = load(a[0], tuple(opt("--mat", "肌").split(",")))
+    b = opt("--box")
+    sheet(V, F, opt("--views", "face,profile,back").split(","), a[1], int(opt("--size", "900")),
+            [float(x) for x in b.split(",")] if b else None, "--fil" in a, smooth="--flat" not in a)

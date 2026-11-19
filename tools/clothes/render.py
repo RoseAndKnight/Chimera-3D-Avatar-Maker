@@ -1,11 +1,11 @@
 """Toon renders of a built garment: two-tone shading, outline via an inverted shell, test-bench poses.
 
     bin/blender-queue -b --factory-startup --python tools/clothes/render.py -- \
-        --pmx resultat.pmx --sortie DOSSIER [--vues face,trois_quarts,dos,bras_leves,col,manche] (+ epaule)
-        [--echantillons 16] [--taille 720] [--planche planche.png] [--mat T恤] [--cadre haut|corps]
-    Lower body: --cadre corps (overall views of the whole body, feet included) and the views
-    accroupi, marche, taille, taille_dos, fesses, cheville, e.g. --mat 裤子 --cadre corps --vues
-    face,trois_quarts,dos,accroupi,bras_leves,taille_dos,taille,cheville,visage
+        --pmx result.pmx --output FOLDER [--views face,three_quarters,back,arms_raised,collar,sleeve] (+ shoulder)
+        [--samples 16] [--size 720] [--sheet sheet.png] [--mat T恤] [--frame top|body]
+    Lower body: --frame body (overall views of the whole body, feet included) and the views
+    squat, step, waist, waist_back, buttocks, ankle, e.g. --mat 裤子 --frame body --views
+    face,three_quarters,back,squat,arms_raised,waist_back,waist,ankle,face_close
 
 Why not contact_sheet.py: emission alone shows the texture but not the shape (the bridge over the
 cleavage, the thickness of hems, painted folds against the actual shading).
@@ -13,7 +13,7 @@ Here: Diffuse -> Shader to RGB -> constant ramp (two tones, like MMD toon), x te
 diffuse; outline = flipped Solidify shell, with the PMX outline colour and size (flag 0x10),
 thickness following each vertex's outline weight.
 Views: orthographic camera; "face" looks at the character from the front (-Y in Blender = front).
-Poses: test bench from tools/atlas/bench.py (P1 = arms raised), skinning by primitives.deformer.
+Poses: test bench from tools/atlas/bench.py (P1 = arms raised), skinning by primitives.deform.
 """
 import argparse
 import math
@@ -24,57 +24,57 @@ import bpy
 import numpy as np
 from mathutils import Vector
 
-ICI = os.path.dirname(os.path.abspath(__file__))
-sys.path.insert(0, ICI)
+HERE = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, HERE)
 import model as MD  # noqa: E402
 from model import P  # noqa: E402
-import bench as BANC  # noqa: E402
+import bench as BENCH  # noqa: E402
 
 # name: (pose, azimuth deg, framing); framing = (centre z or bone, half-height m, x offset m)
-VUES = {
-    "face": (None, 0, ("haut", None)),
-    "trois_quarts": (None, 35, ("haut", None)),
-    "dos": (None, 180, ("haut", None)),
-    "bras_leves": ("P1", 20, ("haut_leve", None)),
-    "col": (None, 15, ("首", 0.13)),
-    "manche": (None, 70, ("左腕", 0.16)),
-    "epaule": ("P1", 20, ("右肩", 0.07)),     # close-up, arms raised: drawstring, strands on the shoulder
-    "visage": (None, 0, ("頭", 0.10)),       # face close-up (tint of the grafted head)
-    "visage_34": (None, 35, ("頭", 0.10)),   # face seam: cheek, jaw, neck
-    "visage_profil": (None, 90, ("頭", 0.10)),
-    "profil": (None, 90, ("頭", 0.11)),
-    "dessous_menton": (None, 22, ("首", 0.11), -28),  # low angle under the chin and jaw
-    "tete_dos": (None, 180, ("頭", 0.12)),
-    "nuque": (None, 125, ("首", 0.14)),       # back seam: top of the head's neck over the body's neck
-    # lower body (trousers); with --cadre corps, the "haut" views take in the whole body
-    "accroupi": ("P7@D", 35, ("haut", None)),   # bench squat: hips 110 deg, knees 140 deg
-    "marche": ("P12", 60, ("haut", None)),      # walking step
-    "assise": ("ASSIS", 40, ("haut", None)),    # seated on a chair: hips and knees at 90 deg
-    "jambe_pliee": ("P5@60", 40, ("haut", None)),  # left thigh raised 60 deg
-    "taille": (None, 30, ("下半身", 0.16)),      # close-up of the top / trousers seam
-    "taille_dos": (None, 180, ("下半身", 0.16)),
-    "fesses": (None, 180, ("下半身", 0.13)),     # back of the waist and buttocks: back pockets
-    "cheville": (None, 30, ("左足首", 0.11)),    # close-up of the lower leg
+VIEWS = {
+    "face": (None, 0, ("top", None)),
+    "three_quarters": (None, 35, ("top", None)),
+    "back": (None, 180, ("top", None)),
+    "arms_raised": ("P1", 20, ("top_raised", None)),
+    "collar": (None, 15, ("首", 0.13)),
+    "sleeve": (None, 70, ("左腕", 0.16)),
+    "shoulder": ("P1", 20, ("右肩", 0.07)),     # close-up, arms raised: drawstring, strands on the shoulder
+    "face_close": (None, 0, ("頭", 0.10)),       # face close-up (tint of the grafted head)
+    "face_34": (None, 35, ("頭", 0.10)),   # face seam: cheek, jaw, neck
+    "face_profile": (None, 90, ("頭", 0.10)),
+    "profile": (None, 90, ("頭", 0.11)),
+    "under_chin": (None, 22, ("首", 0.11), -28),  # low angle under the chin and jaw
+    "head_back": (None, 180, ("頭", 0.12)),
+    "nape": (None, 125, ("首", 0.14)),       # back seam: top of the head's neck over the body's neck
+    # lower body (trousers); with --frame body, the "top" views take in the whole body
+    "squat": ("P7@D", 35, ("top", None)),   # bench squat: hips 110 deg, knees 140 deg
+    "step": ("P12", 60, ("top", None)),      # walking step
+    "seat": ("ASSIS", 40, ("top", None)),    # seated on a chair: hips and knees at 90 deg
+    "leg_bent": ("P5@60", 40, ("top", None)),  # left thigh raised 60 deg
+    "waist": (None, 30, ("下半身", 0.16)),      # close-up of the top / trousers seam
+    "waist_back": (None, 180, ("下半身", 0.16)),
+    "buttocks": (None, 180, ("下半身", 0.13)),     # back of the waist and buttocks: back pockets
+    "ankle": (None, 30, ("左足首", 0.11)),    # close-up of the lower leg
 }
-PLANCHE = ["face", "trois_quarts", "dos", "bras_leves", "col", "manche"]
+SHEET = ["face", "three_quarters", "back", "arms_raised", "collar", "sleeve"]
 
 
 def args():
     a = sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else []
     p = argparse.ArgumentParser()
     p.add_argument("--pmx", required=True)
-    p.add_argument("--sortie", required=True)
-    p.add_argument("--vues", default=",".join(PLANCHE))
-    p.add_argument("--echantillons", type=int, default=16)
-    p.add_argument("--taille", type=int, default=720)
-    p.add_argument("--planche", default=None)
+    p.add_argument("--output", dest="output", required=True)
+    p.add_argument("--views", dest="views", default=",".join(SHEET))
+    p.add_argument("--samples", dest="samples", type=int, default=16)
+    p.add_argument("--size", dest="size", type=int, default=720)
+    p.add_argument("--sheet", dest="sheet", default=None)
     p.add_argument("--mat", default="T恤")
-    p.add_argument("--cadre", choices=("haut", "corps"), default="haut",
-                   help="overall views: haut = garment and head (default), corps = whole body")
+    p.add_argument("--frame", dest="frame", choices=("top", "body"), default="top",
+                   help="overall views: top = garment and head (default), body = whole body")
     return p.parse_args(a)
 
 
-def vider():
+def empty():
     for o in list(bpy.data.objects):
         bpy.data.objects.remove(o, do_unlink=True)
     for b in (bpy.data.meshes, bpy.data.materials, bpy.data.lights, bpy.data.cameras, bpy.data.worlds):
@@ -82,8 +82,8 @@ def vider():
             b.remove(x)
 
 
-def mat_toon(nom, image, diffus, ombre, peau=False):
-    m = bpy.data.materials.new(nom)
+def mat_toon(name, image, diffuse, shade, skin=False):
+    m = bpy.data.materials.new(name)
     nt = m.node_tree
     for n in list(nt.nodes):
         nt.nodes.remove(n)
@@ -92,10 +92,10 @@ def mat_toon(nom, image, diffus, ombre, peau=False):
     s2r = nt.nodes.new("ShaderNodeShaderToRGB")
     bw = nt.nodes.new("ShaderNodeRGBToBW")
     rp = nt.nodes.new("ShaderNodeValToRGB")
-    rp.color_ramp.interpolation = "EASE" if peau else "CONSTANT"
-    rp.color_ramp.elements[0].position = 0.20 if peau else 0.0
-    rp.color_ramp.elements[0].color = (*ombre, 1)
-    rp.color_ramp.elements[1].position = 0.75 if peau else 0.45
+    rp.color_ramp.interpolation = "EASE" if skin else "CONSTANT"
+    rp.color_ramp.elements[0].position = 0.20 if skin else 0.0
+    rp.color_ramp.elements[0].color = (*shade, 1)
+    rp.color_ramp.elements[1].position = 0.75 if skin else 0.45
     rp.color_ramp.elements[1].color = (1, 1, 1, 1)
     nt.links.new(dif.outputs[0], s2r.inputs[0])
     nt.links.new(s2r.outputs["Color"], bw.inputs[0])
@@ -118,16 +118,16 @@ def mat_toon(nom, image, diffus, ombre, peau=False):
         md.data_type, md.blend_type = "RGBA", "MULTIPLY"
         md.inputs["Factor"].default_value = 1.0
         nt.links.new(tx.outputs["Color"], md.inputs["A"])
-        md.inputs["B"].default_value = (*diffus[:3], 1)
+        md.inputs["B"].default_value = (*diffuse[:3], 1)
         nt.links.new(md.outputs["Result"], mul.inputs["A"])
         ma = nt.nodes.new("ShaderNodeMath")
         ma.operation = "MULTIPLY"
-        ma.inputs[1].default_value = diffus[3]
+        ma.inputs[1].default_value = diffuse[3]
         nt.links.new(tx.outputs["Alpha"], ma.inputs[0])
         nt.links.new(ma.outputs[0], mix.inputs[0])
     else:
-        mul.inputs["A"].default_value = (*[0.8 * x for x in diffus[:3]], 1)
-        mix.inputs[0].default_value = diffus[3]
+        mul.inputs["A"].default_value = (*[0.8 * x for x in diffuse[:3]], 1)
+        mix.inputs[0].default_value = diffuse[3]
     try:
         m.surface_render_method = "DITHERED"
     except Exception:
@@ -136,15 +136,15 @@ def mat_toon(nom, image, diffus, ombre, peau=False):
     return m
 
 
-def mat_contour(nom, couleur, visible):
-    m = bpy.data.materials.new(nom)
+def mat_outline(name, color, visible):
+    m = bpy.data.materials.new(name)
     nt = m.node_tree
     for n in list(nt.nodes):
         nt.nodes.remove(n)
     out = nt.nodes.new("ShaderNodeOutputMaterial")
     if visible:
         em = nt.nodes.new("ShaderNodeEmission")
-        em.inputs["Color"].default_value = (*couleur[:3], 1)
+        em.inputs["Color"].default_value = (*color[:3], 1)
         nt.links.new(em.outputs[0], out.inputs[0])
     else:
         tr = nt.nodes.new("ShaderNodeBsdfTransparent")
@@ -162,43 +162,43 @@ def srgb_lin(c):
     return np.where(c <= 0.04045, c / 12.92, ((c + 0.055) / 1.055) ** 2.4)
 
 
-def objet(M, pos, nom_vet):
-    dossier = os.path.dirname(M.chemin)
+def obj(M, pos, name_garment):
+    folder = os.path.dirname(M.path)
     n = len(M.mats)
-    mats, contours = [], []
+    mats, outlines = [], []
     cache = {}
     for k, m in enumerate(M.mats):
         t = m["texture"]
         img = None
         if 0 <= t < len(M.textures):
-            f = os.path.normpath(os.path.join(dossier, M.textures[t].replace("\\", "/")))
+            f = os.path.normpath(os.path.join(folder, M.textures[t].replace("\\", "/")))
             if os.path.exists(f):
                 img = cache.get(f) or bpy.data.images.load(f)
                 cache[f] = img
-        peau = M.role_materiau(k) == "peau" or m["nom"] in ("颜", "颜_A", "肌_cou", "首")
-        ombre = (0.86, 0.70, 0.68) if peau else (0.74, 0.74, 0.84)
-        mats.append(mat_toon("m%d" % k, img, m["diffus"], ombre, peau=peau))
-        cc = srgb_lin(m["contour_couleur"][:3])
-        contours.append(mat_contour("c%d" % k, cc, bool(m["drapeaux"] & 0x10)))
+        skin = M.role_material(k) == "skin" or m["name"] in ("颜", "颜_A", "肌_cou", "首")
+        shade = (0.86, 0.70, 0.68) if skin else (0.74, 0.74, 0.84)
+        mats.append(mat_toon("m%d" % k, img, m["diffuse"], shade, skin=skin))
+        cc = srgb_lin(m["outline_color"][:3])
+        outlines.append(mat_outline("c%d" % k, cc, bool(m["flags"] & 0x10)))
     ns = np.asarray(M.nor, float)
     ns = ns / np.maximum(np.linalg.norm(ns, axis=1, keepdims=True), 1e-12)
-    pos_c = pos + (0.0011 * np.asarray(M.contour, float))[:, None] * ns
+    pos_c = pos + (0.0011 * np.asarray(M.outline, float))[:, None] * ns
     nv = len(pos)
-    tout_pos = np.vstack([pos, pos_c])
-    avec_c = np.array([bool(m["drapeaux"] & 0x10) for m in M.mats], bool)
-    sel_c = avec_c[M.mf] & (np.asarray(M.contour, float)[M.F] > 0.05).any(1)
+    all_pos = np.vstack([pos, pos_c])
+    with_c = np.array([bool(m["flags"] & 0x10) for m in M.mats], bool)
+    sel_c = with_c[M.mf] & (np.asarray(M.outline, float)[M.F] > 0.05).any(1)
     Fc = M.F[sel_c][:, [0, 2, 1]] + nv
     tout_F = np.vstack([M.F, Fc])
-    me = bpy.data.meshes.new("modele")
-    me.from_pydata([tuple(p) for p in tout_pos], [], [tuple(int(x) for x in f) for f in tout_F])
+    me = bpy.data.meshes.new("model")
+    me.from_pydata([tuple(p) for p in all_pos], [], [tuple(int(x) for x in f) for f in tout_F])
     me.update()
     lay = me.uv_layers.new(name="UV")
     lu = M.uv[M.F.ravel()].copy()
     lu[:, 1] = 1 - lu[:, 1]
-    lu_c = M.uv[M.F[sel_c][:, [0, 2, 1]].ravel()].copy()
-    lu_c[:, 1] = 1 - lu_c[:, 1]
-    lay.data.foreach_set("uv", np.vstack([lu, lu_c]).astype(np.float32).ravel())
-    for m in mats + contours:
+    read_c = M.uv[M.F[sel_c][:, [0, 2, 1]].ravel()].copy()
+    read_c[:, 1] = 1 - read_c[:, 1]
+    lay.data.foreach_set("uv", np.vstack([lu, read_c]).astype(np.float32).ravel())
+    for m in mats + outlines:
         me.materials.append(m)
     me.polygons.foreach_set("material_index", np.concatenate([M.mf, M.mf[sel_c] + n]).astype(np.int32))
     me.polygons.foreach_set("use_smooth", np.ones(len(tout_F), bool))
@@ -207,18 +207,18 @@ def objet(M, pos, nom_vet):
         me.normals_split_custom_set_from_vertices([tuple(float(x) for x in v) for v in np.vstack([ns, -ns])])
     except Exception:
         pass
-    o = bpy.data.objects.new("modele", me)
+    o = bpy.data.objects.new("model", me)
     bpy.context.scene.collection.objects.link(o)
     return o
 
 
-def scene(taille, ech):
+def scene(size, samp):
     sc = bpy.context.scene
-    noms = [e.identifier for e in bpy.types.RenderSettings.bl_rna.properties["engine"].enum_items]
-    sc.render.engine = "BLENDER_EEVEE_NEXT" if "BLENDER_EEVEE_NEXT" in noms else "BLENDER_EEVEE"
-    sc.render.resolution_x = sc.render.resolution_y = taille
+    names = [e.identifier for e in bpy.types.RenderSettings.bl_rna.properties["engine"].enum_items]
+    sc.render.engine = "BLENDER_EEVEE_NEXT" if "BLENDER_EEVEE_NEXT" in names else "BLENDER_EEVEE"
+    sc.render.resolution_x = sc.render.resolution_y = size
     sc.view_settings.view_transform = "Standard"
-    w = bpy.data.worlds.new("fond")
+    w = bpy.data.worlds.new("background")
     sc.world = w
     w.color = (0.9, 0.9, 0.92)
     if w.node_tree is not None:
@@ -226,7 +226,7 @@ def scene(taille, ech):
         if bg is not None:
             bg.inputs[0].default_value = (0.8, 0.8, 0.83, 1)
     try:
-        sc.eevee.taa_render_samples = ech
+        sc.eevee.taa_render_samples = samp
         sc.eevee.use_raytracing = False
         sc.eevee.use_shadows = False
     except Exception:
@@ -243,98 +243,98 @@ def scene(taille, ech):
     return sc
 
 
-def rendre(centre, demi, azimut, chemin, elev=0):
+def render(center, half, azimuth, path, elev=0):
     sc = bpy.context.scene
     cd = bpy.data.cameras.new("cam")
     cd.type = "ORTHO"
-    cd.ortho_scale = 2 * demi
+    cd.ortho_scale = 2 * half
     cd.clip_end = 20
     cam = bpy.data.objects.new("cam", cd)
     sc.collection.objects.link(cam)
-    a, e = math.radians(azimut), math.radians(elev)
-    cam.location = Vector((centre[0] + 5 * math.sin(a) * math.cos(e),
-                           centre[1] - 5 * math.cos(a) * math.cos(e),
-                           centre[2] + 5 * math.sin(e)))
+    a, e = math.radians(azimuth), math.radians(elev)
+    cam.location = Vector((center[0] + 5 * math.sin(a) * math.cos(e),
+                           center[1] - 5 * math.cos(a) * math.cos(e),
+                           center[2] + 5 * math.sin(e)))
     cam.rotation_euler = (math.pi / 2 - e, 0, a)
     sc.camera = cam
-    sc.render.filepath = chemin
+    sc.render.filepath = path
     bpy.ops.render.render(write_still=True)
     bpy.data.objects.remove(cam, do_unlink=True)
 
 
-def assembler(chemins, chemin, colonnes, taille):
-    lignes = (len(chemins) + colonnes - 1) // colonnes
-    W, H = taille * colonnes, taille * lignes
+def assemble(paths, path, columns, size):
+    lines = (len(paths) + columns - 1) // columns
+    W, H = size * columns, size * lines
     out = np.ones((H, W, 4), np.float32)
-    for k, f in enumerate(chemins):
-        i, j = divmod(k, colonnes)
+    for k, f in enumerate(paths):
+        i, j = divmod(k, columns)
         im = bpy.data.images.load(f)
         px = np.empty(im.size[0] * im.size[1] * 4, np.float32)
         im.pixels.foreach_get(px)
         px = px.reshape(im.size[1], im.size[0], 4)
-        y0 = H - (i + 1) * taille
-        out[y0:y0 + taille, j * taille:(j + 1) * taille] = px[:taille, :taille]
+        y0 = H - (i + 1) * size
+        out[y0:y0 + size, j * size:(j + 1) * size] = px[:size, :size]
         bpy.data.images.remove(im)
-    img = bpy.data.images.new("planche", W, H, alpha=True)
+    img = bpy.data.images.new("sheet", W, H, alpha=True)
     img.pixels.foreach_set(out.ravel())
-    tmp = chemin[:-4] + ".tmp.png"
+    tmp = path[:-4] + ".tmp.png"
     img.filepath_raw = tmp
     img.file_format = "PNG"
     img.save()
-    os.replace(tmp, chemin)
+    os.replace(tmp, path)
 
 
 def main():
     a = args()
-    os.makedirs(a.sortie, exist_ok=True)
-    M = MD.Modele("rendu", chemin=os.path.abspath(a.pmx))
-    vet = np.isin(M.mf, [i for i, m in enumerate(M.mats) if m["nom"] == a.mat])
-    faites = []
-    pose_prec = "__aucune__"
+    os.makedirs(a.output, exist_ok=True)
+    M = MD.Model("render", path=os.path.abspath(a.pmx))
+    garment = np.isin(M.mf, [i for i, m in enumerate(M.mats) if m["name"] == a.mat])
+    made = []
+    pose_prev = "__aucune__"
     pos = M.pos
-    for nom in a.vues.split(","):
-        v_info = VUES[nom]
-        pose, az, (cadre, demi) = v_info[:3]
+    for name in a.views.split(","):
+        v_info = VIEWS[name]
+        pose, az, (frame, half) = v_info[:3]
         elev = v_info[3] if len(v_info) > 3 else 0
-        if pose != pose_prec:
+        if pose != pose_prev:
             pos = M.pos
             if pose:
-                rot = BANC.pose_banc(pose, M.sq)
-                pos = P.deformer(M.pos, M.idx, M.poids, M.sq, rotations=rot)[0]
-            vider()
-            scene(a.taille, a.echantillons)
-            objet(M, pos, a.mat)
-            pose_prec = pose
-        if cadre in ("haut", "haut_leve"):
-            pv = pos[np.unique(M.F[vet])] if a.cadre == "haut" else pos
+                rot = BENCH.pose_bench(pose, M.sq)
+                pos = P.deform(M.pos, M.idx, M.weight, M.sq, rotations=rot)[0]
+            empty()
+            scene(a.size, a.samples)
+            obj(M, pos, a.mat)
+            pose_prev = pose
+        if frame in ("top", "top_raised"):
+            pv = pos[np.unique(M.F[garment])] if a.frame == "top" else pos
             lo, hi = pv.min(0), pv.max(0)
             ztop = pos[:, 2].max()
-            zlo = lo[2] - (0.12 if a.cadre == "haut" else 0.03)
+            zlo = lo[2] - (0.12 if a.frame == "top" else 0.03)
             c = np.array([0.0, 0.5 * (lo[1] + hi[1]), 0.5 * (zlo + ztop)])
-            demi = 0.53 * max(ztop - zlo, (hi[0] - lo[0]) + 0.2)
+            half = 0.53 * max(ztop - zlo, (hi[0] - lo[0]) + 0.2)
         else:
-            b = M.noms_os.index(cadre)
-            c = M.tetes[b].copy()
+            b = M.names_os.index(frame)
+            c = M.heads[b].copy()
             if pose:   # posed bone: centre of the vertices it weights most
                 c = pos[M.dom == b].mean(0)
-            if cadre == "首":
-                c[2] += 0.01 if nom == "dessous_menton" else -0.04
-            if cadre == "頭":
+            if frame == "首":
+                c[2] += 0.01 if name == "under_chin" else -0.04
+            if frame == "頭":
                 c[2] += 0.07
-            if cadre == "下半身":
-                c[2] -= 0.12 if nom == "fesses" else 0.03
-            if cadre == "左足首":
+            if frame == "下半身":
+                c[2] -= 0.12 if name == "buttocks" else 0.03
+            if frame == "左足首":
                 c[2] += 0.03
-            if cadre == "左腕":
-                i = M.noms_os.index("左ひじ")
-                c = 0.5 * (c + M.tetes[i])
-        f = os.path.join(a.sortie, nom + ".png")
-        rendre(c, demi, az, f, elev=elev)
-        faites.append(f)
-        print("view", nom, "->", f)
-    if a.planche:
-        assembler(faites, os.path.join(a.sortie, a.planche), 3, a.taille)
-        print("contact sheet", os.path.join(a.sortie, a.planche))
+            if frame == "左腕":
+                i = M.names_os.index("左ひじ")
+                c = 0.5 * (c + M.heads[i])
+        f = os.path.join(a.output, name + ".png")
+        render(c, half, az, f, elev=elev)
+        made.append(f)
+        print("view", name, "->", f)
+    if a.sheet:
+        assemble(made, os.path.join(a.output, a.sheet), 3, a.size)
+        print("contact sheet", os.path.join(a.output, a.sheet))
 
 
 if __name__ == "__main__":

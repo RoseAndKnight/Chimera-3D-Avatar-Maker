@@ -7,13 +7,13 @@ import compatibility as K  # noqa: E402
 
 a = sys.argv[1:] or ["list"]
 if a[0] == "list":
-    K.liste()
+    K.items()
 elif a[0] == "table":
-    print(K.tableau(), end="")
+    print(K.array(), end="")
 elif a[0] == "write":
-    K.ecrire()
+    K.write()
 elif a[0] == "check":
-    e = K.verifier()
+    e = K.check()
     print("\n".join(e) if e else "COMPATIBILITY.md is up to date, declarations complete.")
     sys.exit(1 if e else 0)
 else:

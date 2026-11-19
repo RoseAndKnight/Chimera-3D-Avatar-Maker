@@ -1,6 +1,6 @@
 """The head of the free body: MakeHuman's (CC0), kept as it is above the neck of the grid.
 
-The grid (corps_refait) stops at the top of the neck on a ring. Above it, MakeHuman's faces are kept
+The rebuilt body's grid stops at the top of the neck on a ring. Above it, MakeHuman's faces are kept
 (jaw, face, skull, ears), and a band of triangles joins their edge to the ring. A game head
 stitched on afterwards (clothes/whole_head.py) covers the face; the skull stays underneath.
 """
@@ -9,35 +9,35 @@ import sys
 
 import numpy as np
 
-ICI = os.path.dirname(os.path.abspath(__file__))
-sys.path[:0] = [os.path.join(ICI, "..", d) for d in ("head", "custom_body")]
+HERE = os.path.dirname(os.path.abspath(__file__))
+sys.path[:0] = [os.path.join(HERE, "..", d) for d in ("head", "custom_body")]
 import geom as G              # noqa: E402
 import weights as PO            # noqa: E402
 
-MARGE = 0.3                   # cm between the neck ring and the cut of MakeHuman's head
-FONDU = 5.0                   # cm above the ring over which the weights go from those of the ring to the head bone
+MARGIN = 0.3                   # cm between the neck ring and the cut of MakeHuman's head
+BLENDED = 5.0                   # cm above the ring over which the weights go from those of the ring to the head bone
 
 
-def anneau(P, T, haut):
-    """The highest boundary loop (haut) or the lowest."""
-    b = G.boucles_bord(T)
+def loop(P, T, top):
+    """The highest boundary loop (top) or the lowest."""
+    b = G.border_loops(T)
     y = [P[x][:, 1].mean() for x in b]
-    return np.array(b[int(np.argmax(y) if haut else np.argmin(y))])
+    return np.array(b[int(np.argmax(y) if top else np.argmin(y))])
 
 
-def _pont(Pa, a, Pb, b):
+def _bridge(Pa, a, Pb, b):
     """Band of triangles between two closed loops a (below) and b (above), paired by the angle around
     the vertical axis: returns triplets ((0|1, index), ...) facing outwards."""
     c = 0.5 * (Pa[a].mean(0) + Pb[b].mean(0))
 
-    def tourner(P, l):
+    def turn(P, l):
         ang = np.arctan2(P[l][:, 0] - c[0], P[l][:, 2] - c[2])
         if ((np.diff(np.unwrap(np.r_[ang, ang[0]]))).sum() < 0):
             l, ang = l[::-1], ang[::-1]
         k = int(np.argmin(np.abs(ang)))
         return np.roll(l, -k), np.unwrap(np.roll(ang, -k))
-    a, ta = tourner(Pa, a)
-    b, tb = tourner(Pb, b)
+    a, ta = turn(Pa, a)
+    b, tb = turn(Pb, b)
     ta, tb = ta - ta[0], tb - tb[0]
     ta, tb = np.r_[ta, 2 * np.pi], np.r_[tb, 2 * np.pi]
     i = j = 0
@@ -58,78 +58,78 @@ def _pont(Pa, a, Pb, b):
     return tris
 
 
-def _couper(V, F, h):
+def _cut(V, F, h):
     """The triangles where h > 0 (h: one value per vertex), cut cleanly at h = 0: (vertices, triangles)."""
-    pts, cle = [], {}
+    pts, the_key = [], {}
 
-    def garde(i):
-        if ("v", i) not in cle:
-            cle[("v", i)] = len(pts)
+    def guard(i):
+        if ("v", i) not in the_key:
+            the_key[("v", i)] = len(pts)
             pts.append(V[i])
-        return cle[("v", i)]
+        return the_key[("v", i)]
 
-    def coupe(i, j):
+    def cutting(i, j):
         k = ("e", min(i, j), max(i, j))
-        if k not in cle:
-            cle[k] = len(pts)
+        if k not in the_key:
+            the_key[k] = len(pts)
             pts.append(V[i] + h[i] / (h[i] - h[j]) * (V[j] - V[i]))
-        return cle[k]
+        return the_key[k]
     T = []
     for f in F[(h[F] > 0).any(1)]:
         poly = []
         for a, b in zip(f, np.roll(f, -1)):
             if h[a] > 0:
-                poly.append(garde(a))
+                poly.append(guard(a))
             if (h[a] > 0) != (h[b] > 0):
-                poly.append(coupe(a, b))
+                poly.append(cutting(a, b))
         T += [(poly[0], poly[k], poly[k + 1]) for k in range(1, len(poly) - 1)]
     return np.array(pts), np.array(T)
 
 
-def faire(g, R, dy, journal=print):
+def make(g, R, dy, log=print):
     """g: grid in rest pose; R: MakeHuman's silhouette (same frame, dy cm lower).
-    Returns {P, tris (local indices), pont (triangles of global indices: grid then head), anneau}."""
-    an = anneau(g["P"], PO.triangles(g["quads"]), True)
+    Returns {P, tris (local indices), bridge (triangles of global indices: grid then head), loop}."""
+    an = loop(g["P"], PO.triangles(g["quads"]), True)
     A = g["P"][an]
     c = A.mean(0)
     V = R.V + [0.0, dy, 0.0]
     # the cut follows the ring: at each angle around the neck, MARGE cm above it
     ang = np.arctan2(A[:, 0] - c[0], A[:, 2] - c[2])
     o = np.argsort(ang)
-    haut = np.interp(np.arctan2(V[:, 0] - c[0], V[:, 2] - c[2]), ang[o], A[o, 1], period=2 * np.pi)
-    y0 = float(A[:, 1].min()) + MARGE
-    P, Tt = _couper(V, R.F, V[:, 1] - haut - MARGE)
+    top = np.interp(np.arctan2(V[:, 0] - c[0], V[:, 2] - c[2]), ang[o], A[o, 1], period=2 * np.pi)
+    y0 = float(A[:, 1].min()) + MARGIN
+    P, Tt = _cut(V, R.F, V[:, 1] - top - MARGIN)
     comp = np.arange(len(P))                       # the part that goes up to the top of the skull
     while True:
-        avant = comp.copy()
+        before = comp.copy()
         m = comp[Tt].min(1)
         for k in range(3):
             np.minimum.at(comp, Tt[:, k], m)
-        if (comp == avant).all():
+        if (comp == before).all():
             break
     Tt = Tt[comp[Tt[:, 0]] == comp[int(P[:, 1].argmax())]]
     ids = np.unique(Tt)
     loc = -np.ones(len(P), int)
     loc[ids] = np.arange(len(ids))
     P, Tt = P[ids], loc[Tt]
-    bord = anneau(P, Tt, False)
-    assert np.ptp(P[bord][:, 1]) < np.ptp(A[:, 1]) + 0.5, "the bottom edge of the head is not the neck cut"
-    pont = _pont(g["P"], an, P, bord)
+    border = loop(P, Tt, False)
+    assert np.ptp(P[border][:, 1]) < np.ptp(A[:, 1]) + 0.5, "the bottom edge of the head is not the neck cut"
+    bridge = _bridge(g["P"], an, P, border)
     n = len(g["P"])
-    pont = np.array([[s[1] + (n if s[0] else 0) for s in t] for t in pont])
-    journal("head: %d vertices, %d MakeHuman triangles above the neck (from y = %.1f cm); bridge of %d triangles "
-            "between the neck ring (%d vertices) and the cut (%d vertices)" % (len(P), len(Tt), y0, len(pont), len(an), len(bord)))
-    return {"P": P, "tris": Tt, "pont": pont, "anneau": an, "y0": y0, "dy": dy}
+    bridge = np.array([[s[1] + (n if s[0] else 0) for s in t] for t in bridge])
+    log("head: %d vertices, %d MakeHuman triangles above the neck (from y = %.1f cm); bridge of %d triangles "
+            "between the neck ring (%d vertices) and the cut (%d vertices)" % (len(P), len(Tt), y0, len(bridge), len(an), len(border)))
+    return {"P": P, "tris": Tt, "bridge": bridge, "loop": an, "y0": y0, "dy": dy}
 
 
-def poids(g, tete, w, i_tete):
+def weight(g, head, w, i_head):
     """Weights (on our skeleton) of the head vertices: those of the closest vertex of the neck ring,
     blended towards the head bone over FONDU cm."""
-    an = tete["anneau"]
+    an = head["loop"]
     A = g["P"][an]
-    k = np.linalg.norm(tete["P"][:, None] - A[None], axis=2).argmin(1)
-    s = np.clip((tete["P"][:, 1] - tete["y0"]) / FONDU, 0, 1)
+    k = np.linalg.norm(head["P"][:, None] - A[None], axis=2).argmin(1)
+    s = np.clip((head["P"][:, 1] - head["y0"]) / BLENDED, 0, 1)
     s = s * s * (3 - 2 * s)
     out = w[an][k] * (1 - s)[:, None]
-    out[:, i_tete] += s
+    out[:, i_head] += s
     return out

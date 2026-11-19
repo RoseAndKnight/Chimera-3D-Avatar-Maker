@@ -10,7 +10,7 @@ a single finished PMX.
 
 Installing on a new machine: `INSTALLATION.md` (repository root). The repository provides no model, not
 even the base body: as long as the prepared body, a face or a hairstyle is missing, `/` serves a page that says
-what to do (`serveur.accueil`, `catalogue.a_faire`), and `catalog.py prepare` stops without a body or a base head.
+what to do (`server.home`, `catalog.missing_for_prepare`), and `catalog.py prepare` stops without a body or a base head.
 
 Left column: Face, Hair, Top, Bottom, Shoes, Extras. Click a
 thumbnail and the view changes at once; drag with the mouse to turn, the wheel zooms. Clicking
@@ -20,17 +20,17 @@ carries the **Assemble** button. The "Rejected parts" panel lists the parts set 
 The view uses WebGL2. If the browser lacks it, the page draws the same scene in software and
 shows "Simplified preview": slower, less smooth, but the choice stays correct.
 
-**Assemble** goes through the real tools again (`coiffure.poser`, `porter`, `mesure`,
-`rendu`) and writes into `assemblages/<date>/`: `modele/resultat.pmx` (with its textures),
-`modele/resultat.vrm` (VRM 1.0: humanoid bones, 13 expressions, MToon materials, T-pose),
-`planche.png` (front, three-quarter, back), `controles.json` and `journal.txt`. The contact sheet does not show
+**Assemble** goes through the real tools again (`hairstyle.place`, `wear`, `measure`,
+`render`) and writes into `assemblies/<date>/`: `model/result.pmx` (with its textures),
+`model/result.vrm` (VRM 1.0: humanoid bones, 13 expressions, MToon materials, T-pose),
+`sheet.png` (front, three-quarter, back), `checks.json` and `log.txt`. The contact sheet does not show
 the "髮+" highlight layers of made hairstyles; the PMX keeps them. The VRM has no
 hair or skirt physics (spring bones).
 
-**Skeleton.** After the checks, the `squelette` step can replace, in `resultat.pmx`, the bones and weights
+**Skeleton.** After the checks, the `skeleton` step can replace, in `result.pmx`, the bones and weights
 of the body with a skeleton with readable names (`tools/custom_body/plug.py`), when its data exist
-(`<data>/corps-maison/squelette.json`); the version on the original bones then stays next to it
-(`modele/resultat-zzz.pmx`). Without these data, or with `workshop.skeleton` = `zzz`, the model keeps the bones of
+(`<data>/own-rig/skeleton.json`); the version on the original bones then stays next to it
+(`model/result-zzz.pmx`). Without these data, or with `workshop.skeleton` = `zzz`, the model keeps the bones of
 its base body, and the VRM comes out of it as is.
 
 ## Layers
@@ -47,11 +47,11 @@ in both directions, from the vertices of the lower part to the faces of the uppe
    outside, shoes and boots are always above the trousers, a belt goes over the bottom;
 3. **tuck in**, from top to bottom: each part is pressed under those above it, without going below
    1 mm above the skin (except under a boot, narrower than the leg). The thicknesses of a single part
-   (lining of a skirt) are put back in their order by `porter` (`couches_internes`);
+   (lining of a skirt) are put back in their order by `wear` (`inner_layers`);
 4. **push out**, from bottom to top: where room is lacking (two fitted parts), the upper part
    moves away by what is lacking, by 8 mm at most; a belt is always pushed out, never tightened;
 5. **mask**: the faces entirely hidden by an opaque upper part held to the body are
-   removed (`couvre.bin` says, per face, whether it is held, opaque, outer);
+   removed (`covers.bin` says, per face, whether it is held, opaque, outer);
 6. **push**: placed accessories (necklace, bag) come out above what they touch.
 
 A free flap that passes more than 25 mm in front of the upper part (ruffle, flared skirt hem under
@@ -65,7 +65,7 @@ edges of one part that cross a face of the other and the area of the lower part 
 the upper one, on six reference outfits (or `--pieces a,b,c`). To run again after any change to
 `outfit.py`.
 
-The hair falls over the adjusted outfit (`combinaison.coiffer`): a strand under the outer face
+The hair falls over the adjusted outfit (`outfit.hairstyle`): a strand under the outer face
 of a part comes out by the shortest way, except under a hat, a hood or glasses.
 
 
@@ -77,29 +77,29 @@ of a part comes out by the shortest way, except under a hat, a hood or glasses.
     python3 -I tools/workshop/catalog.py summary                               # counts and rejection reasons
 
 (`python3` = a Python with numpy, for example Blender's: `programs.python` in the settings, see below.)
-A part in the library format (`fiche.json`, `<part>.pmx`, `tex/`) is fitted on the
+A part in the library format (`record.json`, `<part>.pmx`, `tex/`) is fitted on the
 common body, measured (`measure.py`) then cached. Rejected are those whose fitting or
-measurement fails, or that fail `sous_la_peau` (more than 1 % of the vertices inside the body, counted by
-the fitting without a depth limit: `traversee_repos` only sees down to 10 mm), `traversee_repos`,
-`traversee_repos_p90_mm` or `poses_corps_seul`, as well as shoes without an upper (mere
+measurement fails, or that fail `under_skin` (more than 1 % of the vertices inside the body, counted by
+the fitting without a depth limit: `rest_crossing` only sees down to 10 mm), `rest_crossing`,
+`rest_crossing_p90_mm` or `body_only_poses`, as well as shoes without an upper (mere
 soles, the foot would stay bare). A check without a value is not a passed check: the record
-names it (`non_mesures`), and `summary` counts them. An accessory whose garment measurement
-discards all the parts (wing, bag, rivets) is no longer rejected for that (`mesure_sans_objet`);
-placed as one block, it is stuck into the body by nature and `sous_la_peau` does not apply to it.
-The record keeps the fitting method (`v_portage`) and the body (`corps`): `summary` counts the
+names it (`not_measured`), and `summary` counts them. An accessory whose garment measurement
+discards all the parts (wing, bag, rivets) is no longer rejected for that (`measure_not_applicable`);
+placed as one block, it is stuck into the body by nature and `under_skin` does not apply to it.
+The record keeps the fitting method (`v_portage`) and the body (`body`): `summary` counts the
 outdated parts, `prepare --stale` redoes them.
 The other checks, irrelevant on a bare body or tied to the source, stay recorded in the record.
 
 ## Where the files are
 
 The cache (light parts, assembled models) is in `workshop.cache` of the settings (`CHIMERA_CACHE`), by default
-`<data>/atelier-base-vroid`, for the base body `<data>/base-vroid/corps.pmx`: bare body, face
-(`tete.pmx`) and hairstyle (`coiffure.pmx`) of a VRoid Studio character, with `base.json` (base head of the VRoid
-game and its measurements), `PROVENANCE.md` (terms of use read from the file) and `controles.json`, written by
-`tools/vroid_base/build.py <modele.vrm>`. As long as that base does not exist, the free MakeHuman base
-(`<data>/base-libre/corps.pmx`, `tools/free_base`) is used if it is built, with the cache
-`<data>/atelier-base-libre`. Another base body is set with `workshop.body`, with its own cache
-(`workshop.cache`): a cache is only valid for the body its parts were fitted on. The assembled models are in `<cache>/assemblages/<date>/`. `CHIMERA_LAUNCHER` prefixes Blender launches (for example
+`<data>/workshop-vroid-base`, for the base body `<data>/vroid-base/body.pmx`: bare body, face
+(`head.pmx`) and hairstyle (`hairstyle.pmx`) of a VRoid Studio character, with `base.json` (base head of the VRoid
+game and its measurements), `PROVENANCE.md` (terms of use read from the file) and `checks.json`, written by
+`tools/vroid_base/build.py <model.vrm>`. As long as that base does not exist, the free MakeHuman base
+(`<data>/free-base/body.pmx`, `tools/free_base`) is used if it is built, with the cache
+`<data>/workshop-free-base`. Another base body is set with `workshop.body`, with its own cache
+(`workshop.cache`): a cache is only valid for the body its parts were fitted on. The assembled models are in `<cache>/assemblies/<date>/`. `CHIMERA_LAUNCHER` prefixes Blender launches (for example
 `systemd-run --user --scope -p MemoryMax=8G --`).
 
 ## Settings
@@ -114,18 +114,18 @@ overriding the previous one key by key:
 
 | Key | Public default | Variable | Role |
 |---|---|---|---|
-| `paths.data` | `donnees` (in the repository) | `CHIMERA_DATA` | data root (`<data>`: libraries, bodies, heads) |
-| `paths.skeletons` | `{data}/squelettes` | | bone namings per game (`maison.json`, `biped.json`) |
-| `workshop.cache` | `{data}/atelier-base-vroid` | `CHIMERA_CACHE` | Chimera's cache (fallback: `{data}/atelier-base-libre`) |
-| `workshop.body` | `{data}/base-vroid/corps.pmx` | `CHIMERA_BODY` | base body (`tools/vroid_base`; fallback: `{data}/base-libre/corps.pmx`) |
-| `workshop.skeleton` | `maison` | `CHIMERA_SKELETON` | `zzz` keeps the game's bones |
+| `paths.data` | `data` (in the repository) | `CHIMERA_DATA` | data root (`<data>`: libraries, bodies, heads) |
+| `paths.skeletons` | `{data}/skeletons` | | bone namings per game (one JSON file per skeleton) |
+| `workshop.cache` | `{data}/workshop-vroid-base` | `CHIMERA_CACHE` | Chimera's cache (fallback: `{data}/workshop-free-base`) |
+| `workshop.body` | `{data}/vroid-base/body.pmx` | `CHIMERA_BODY` | base body (`tools/vroid_base`; fallback: `{data}/free-base/body.pmx`) |
+| `workshop.skeleton` | `own-rig` | `CHIMERA_SKELETON` | `zzz` keeps the game's bones |
 | `programs.blender` | `blender` (looked up in the PATH) | `CHIMERA_BLENDER` | Blender of the queue |
 | `programs.python` | the running interpreter | `CHIMERA_PYTHON` | Python (numpy) of the sub-computations and of `bin/chimera` |
 | `compute.slots` | one per physical core, 2.5 GB each, 3 at least | `CHIMERA_SLOTS` (`BLENDER_PLACES` for the queue alone) | heavy computations at once |
 | `compute.launcher` | nothing | `CHIMERA_LAUNCHER` | prefix of Blender launches |
 | `compute.queue_dir` | `$TMPDIR/blender-queue-<uid>` | | folder of the locks of `bin/blender-queue` |
 | `games.active` | `vroid` | `CHIMERA_GAME` | game the models come from (its description: `tools/games/<game>/game.json`) |
-| `games.<game>.<source>` | the one in the description (`sources`) | | source folders of a game for your machine (e.g. `jeux.zzz.mmd_extrait`, `jeux.outerplane.personnages`) |
+| `games.<game>.<source>` | the one in the description (`sources`) | | source folders of a game for your machine (e.g. `games.zzz.mmd_extracted`, `games.outerplane.people`) |
 
 What the code knows about a game (characters, base head, special cases) is in its
 description, `tools/games/<game>/`; parts you made yourself are declared in `tools/games/homemade/`.
@@ -134,7 +134,7 @@ Adding a game: `tools/games/README.md`.
 In a value, `{data}` (or any dotted key between braces) is replaced; a relative path starts from the
 repository root; `~` is expanded. Example of `settings.json`:
 
-    {"paths": {"data": "~/mes-donnees"}, "programs": {"blender": "~/blender-5.2/blender"}}
+    {"paths": {"data": "~/my-data"}, "programs": {"blender": "~/blender-5.2/blender"}}
 
 To check: `python3 -I tools/settings.py all` (or `path workshop.cache`, `program blender`). Blender
 launches go through the queue `bin/blender-queue`, which reads the same settings.
@@ -149,23 +149,23 @@ and the stacking thresholds are in `layers.default.json` (repository root, track
 entry; a list (`closed_bottoms`, `also_takes`…) is replaced as a whole; `null` removes an entry.
 
     {"layers": {
-      "garments": {"jupe": {"rank": 33},
-                    "kimono": {"tab": "haut", "slot": "dessus", "rank": 57, "name": "kimono"}},
+      "garments": {"skirt": {"rank": 33},
+                    "kimono": {"tab": "top", "slot": "outer", "rank": 57, "name": "kimono"}},
       "accessories": {"broche": {"rank": 79, "exclusive": false}},
       "thresholds": {"max_outward_mm": 10}}}
 
 | Section | An entry | Role |
 |---|---|---|
-| `garments` | `tab`, `slot`, `rank` (required), `name`, `also_takes` | `type` of `fiche.json`: tab of the page, exclusive slot (two parts of the same slot are not worn together), rank (the smallest underneath), displayed name, extra slots taken (a dress takes top, bottom and underneath) |
-| `accessories` | `rank` (required), `exclusive`, `name`, `belt_like` | `sorte` of `fiche.json`; always in the extras tab; `belt_like`: goes around the body, adjusted with the garments, placed on the fabric without tightening it |
+| `garments` | `tab`, `slot`, `rank` (required), `name`, `also_takes` | `type` of `record.json`: tab of the page, exclusive slot (two parts of the same slot are not worn together), rank (the smallest underneath), displayed name, extra slots taken (a dress takes top, bottom and underneath) |
+| `accessories` | `rank` (required), `exclusive`, `name`, `belt_like` | `sort` of `record.json`; always in the extras tab; `belt_like`: goes around the body, adjusted with the garments, placed on the fabric without tightening it |
 | `outfit` | `ranks_in_outfit`, `closed_bottoms`, `tops`, `bottoms` | rank imposed during the adjustment (belt 36: over the bottom, under the jacket); bottoms that cover the underwear (it is not worn); a top whose hem comes out of a bottom is worn over it |
 | `thresholds` | millimetres (`_mm`), `flag_share`, `passes` | margins between layers and for accessories, floor above the skin, free flap, largest push-out, sag of coarse meshes, masking of hidden faces, flagging of a clipping |
 
-What stays in the code of `outfit.py`, on purpose: the search ranges (`PORTEE_RENTREE`, `PORTEE_PEAU`,
-`PORTEE`), the geometric criteria (`ACCORD`, `EMPREINTE`, `CONTACT`, `FIN`) and the grids (`CELLULE`, `VOXEL`,
-`VOXEL_CORPS`). These are choices of the algorithm, not render preferences: changing them means rereading
+What stays in the code of `outfit.py`, on purpose: the search ranges (`REACH_TUCKED`, `REACH_SKIN`,
+`REACH`), the geometric criteria (`MATCH`, `FINGERPRINT`, `CONTACT`, `END`) and the grids (`CELL`, `VOXEL`,
+`VOXEL_BODY`). These are choices of the algorithm, not render preferences: changing them means rereading
 the computation and running `check_layers.py` again. The same goes for the rule "a sock lower than the underwear goes
-under it" and the flags of `couvre.bin`.
+under it" and the flags of `covers.bin`.
 
 When the change takes effect:
 
@@ -180,10 +180,10 @@ When the change takes effect:
 - an added type or kind: its parts enter the catalogue at the next `catalog.py prepare` (which only
   does what is missing) or through `catalog.py add <folder>`. A part of a removed type stays in the cache
   and in the catalogue until it is deleted;
-- the page knows only four part tabs (`haut`, `bas`, `chaussures`, `accessoires`, written in
+- the page knows only four part tabs (`top`, `bottom`, `shoes`, `accessories`, written in
   `page/workshop.js`): a type filed under another tab does not appear there.
 
-To see the merged values: `python3 -I tools/settings.py value layers.garments.jupe`.
+To see the merged values: `python3 -I tools/settings.py value layers.garments.skirt`.
 
 Tests: `python3 -I tools/workshop/tests/test_workshop.py`.
 

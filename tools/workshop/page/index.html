@@ -7,152 +7,152 @@
 <link rel="icon" href="/page/chimera.svg">
 <link rel="stylesheet" href="/page/style.css">
 </head>
-<body data-vue="creer">
-<header id="bandeau">
-  <a class="marque" href="/" aria-label="Chimera 3D Avatar Maker">
-    <svg class="sceau" viewBox="0 0 32 32" aria-hidden="true">
+<body data-view="create">
+<header id="topbar">
+  <a class="brand" href="/" aria-label="Chimera 3D Avatar Maker">
+    <svg class="seal" viewBox="0 0 32 32" aria-hidden="true">
       <path class="s1" d="M24.6 7.9A12 12 0 0 0 9.2 6.1"/>
       <path class="s2" d="M6.3 8.9a12 12 0 0 0 0 14.2"/>
       <path class="s3" d="M9.2 25.9a12 12 0 0 0 15.4-1.8"/>
       <circle cx="16" cy="16" r="2.6"/>
     </svg>
-    <span class="nom">Chimera</span><span class="suite">3D Avatar Maker</span>
+    <span class="name">Chimera</span><span class="tagline">3D Avatar Maker</span>
   </a>
-  <nav id="vues" aria-label="Views">
-    <button data-v="creer" data-i="vue_creer"></button>
-    <button data-v="bibliotheque" data-i="vue_bibliotheque"></button>
-    <button data-v="personnages" data-i="vue_personnages"></button>
+  <nav id="views" aria-label="Views">
+    <button data-v="create" data-i="view_create"></button>
+    <button data-v="library" data-i="view_library"></button>
+    <button data-v="characters" data-i="view_characters"></button>
   </nav>
-  <div class="bord">
-    <span id="nombres"></span>
-    <button id="langue" title="Language"></button>
+  <div class="border">
+    <span id="counts"></span>
+    <button id="language" title="Language"></button>
   </div>
 </header>
 
 <!-- Create: choose the parts, see the character, tune the render, assemble -->
-<div id="creer" class="vue">
-  <section id="choix">
-    <nav id="onglets" aria-label="Categories"></nav>
-    <div id="rayon">
+<div id="create" class="view">
+  <section id="choice">
+    <nav id="tabs" aria-label="Categories"></nav>
+    <div id="shelf">
       <header>
-        <h1 id="titre-onglet"></h1>
-        <input id="recherche" type="search" aria-label="Search">
-        <div id="filtres"></div>
-        <div id="couleurs" hidden>
-          <span data-i="couleur"></span>
-          <div id="pastilles"></div>
+        <h1 id="title-tab"></h1>
+        <input id="search" type="search" aria-label="Search">
+        <div id="filters"></div>
+        <div id="colors" hidden>
+          <span data-i="color"></span>
+          <div id="dots"></div>
         </div>
       </header>
-      <div id="grille"></div>
+      <div id="grid"></div>
     </div>
   </section>
 
   <main id="scene">
-    <canvas id="vue"></canvas>
-    <div id="commandes">
-      <button data-vue="corps" data-i="cadre_corps"></button>
-      <button data-vue="visage" data-i="cadre_visage"></button>
-      <button data-vue="tour" id="tourner" data-i="tourner"></button>
+    <canvas id="view"></canvas>
+    <div id="controls">
+      <button data-view="body" data-i="frame_body"></button>
+      <button data-view="face" data-i="frame_face"></button>
+      <button data-view="turn" id="spin" data-i="spin"></button>
       <select id="expression" aria-label="Expression" hidden></select>
     </div>
-    <div id="simplifie" hidden data-i="simplifie"></div>
-    <div id="charge" hidden data-i="chargement"></div>
+    <div id="simplified" hidden data-i="simplified"></div>
+    <div id="loader" hidden data-i="loading"></div>
   </main>
 
-  <aside id="fiche">
-    <nav id="volets">
-      <button data-p="personnage" data-i="volet_personnage"></button>
-      <button data-p="rendu" data-i="volet_rendu"></button>
+  <aside id="details">
+    <nav id="panes">
+      <button data-p="character" data-i="panel_character"></button>
+      <button data-p="render" data-i="panel_render"></button>
     </nav>
 
-    <div id="volet-personnage" class="volet">
-      <label class="champ"><span data-i="nom_personnage"></span><input id="nom" type="text" maxlength="60" autocomplete="off"></label>
+    <div id="pane-character" class="pane">
+      <label class="field"><span data-i="character_name"></span><input id="name" type="text" maxlength="60" autocomplete="off"></label>
       <ul id="selection"></ul>
-      <details id="origines" hidden><summary data-i="origines"></summary><ul id="origines-liste"></ul></details>
-      <div id="alertes"></div>
-      <button id="assembler" class="principal" data-i="assembler"></button>
-      <p class="aide" data-i="aide_assembler"></p>
-      <div id="travail" hidden>
-        <div id="etape"></div>
-        <div id="barre" class="barre"><div></div></div>
-        <div id="resultat"></div>
+      <details id="origins" hidden><summary data-i="origins"></summary><ul id="origins-list"></ul></details>
+      <div id="warnings"></div>
+      <button id="assemble" class="primary" data-i="assemble"></button>
+      <p class="help" data-i="help_assemble"></p>
+      <div id="work" hidden>
+        <div id="step"></div>
+        <div id="bar" class="bar"><div></div></div>
+        <div id="result"></div>
       </div>
-      <details id="refus">
-        <summary><span data-i="refusees"></span> (<span id="nb-refus">0</span>)</summary>
-        <ul id="liste-refus"></ul>
+      <details id="refusals">
+        <summary><span data-i="refused"></span> (<span id="nb-refusals">0</span>)</summary>
+        <ul id="list-refusals"></ul>
       </details>
     </div>
 
-    <div id="volet-rendu" class="volet" hidden>
-      <div class="rang">
-        <label class="champ large"><span data-i="prereglage"></span><select id="prereglage"></select></label>
+    <div id="pane-render" class="pane" hidden>
+      <div class="rank">
+        <label class="field large"><span data-i="preset"></span><select id="preset"></select></label>
       </div>
-      <div class="rang">
-        <button id="rendu-importer" data-i="rendu_importer"></button>
-        <button id="rendu-exporter" data-i="rendu_exporter"></button>
-        <button id="rendu-defaut" data-i="rendu_defaut"></button>
-        <input id="rendu-fichier" type="file" accept=".json,application/json" hidden>
+      <div class="rank">
+        <button id="render-import" data-i="render_import"></button>
+        <button id="render-export" data-i="render_export"></button>
+        <button id="render-default" data-i="render_default"></button>
+        <input id="render-file" type="file" accept=".json,application/json" hidden>
       </div>
-      <p id="rendu-note" class="aide"></p>
-      <div id="reglages"></div>
+      <p id="render-note" class="help"></p>
+      <div id="settings"></div>
     </div>
   </aside>
 </div>
 
 <!-- Library: import models, extract their parts -->
-<div id="bibliotheque" class="vue page" hidden>
-  <div class="colonne">
-    <p id="manque" class="bandeau-note" hidden></p>
-    <section class="carte">
-      <h2><i>1</i><span data-i="importer_titre"></span></h2>
-      <p class="aide" data-i="importer_aide"></p>
-      <label id="depot">
-        <input id="fichier-modele" type="file" multiple hidden>
-        <b data-i="depot_titre"></b>
-        <span id="depot-formats"></span>
+<div id="library" class="view page" hidden>
+  <div class="spine">
+    <p id="missing" class="banner-note" hidden></p>
+    <section class="card">
+      <h2><i>1</i><span data-i="import_title"></span></h2>
+      <p class="help" data-i="import_help"></p>
+      <label id="drop">
+        <input id="file-model" type="file" multiple hidden>
+        <b data-i="drop_title"></b>
+        <span id="drop-formats"></span>
       </label>
-      <div id="import-etat"></div>
-      <div class="deux">
-        <div><h3 data-i="formats_entree"></h3><ul id="formats-entree" class="liste"></ul></div>
-        <div><h3 data-i="squelettes"></h3><ul id="liste-squelettes" class="liste"></ul></div>
+      <div id="import-state"></div>
+      <div class="two">
+        <div><h3 data-i="formats_input"></h3><ul id="formats-input" class="list"></ul></div>
+        <div><h3 data-i="skeletons"></h3><ul id="list-skeletons" class="list"></ul></div>
       </div>
     </section>
-    <section class="carte">
-      <h2><i>2</i><span data-i="extraire_titre"></span></h2>
-      <p class="aide" data-i="extraire_aide"></p>
-      <div id="modeles"></div>
-      <div class="rang" id="quoi">
-        <label><input type="checkbox" value="visages" checked> <span data-i="visages"></span></label>
-        <label><input type="checkbox" value="coiffures" checked> <span data-i="coiffures"></span></label>
-        <label><input type="checkbox" value="vetements" checked> <span data-i="vetements"></span></label>
-        <button id="extraire" class="principal" data-i="extraire"></button>
+    <section class="card">
+      <h2><i>2</i><span data-i="extract_title"></span></h2>
+      <p class="help" data-i="extract_help"></p>
+      <div id="models"></div>
+      <div class="rank" id="what">
+        <label><input type="checkbox" value="face_count" checked> <span data-i="face_count"></span></label>
+        <label><input type="checkbox" value="hairstyles" checked> <span data-i="hairstyles"></span></label>
+        <label><input type="checkbox" value="clothes" checked> <span data-i="clothes"></span></label>
+        <button id="extract" class="primary" data-i="extract"></button>
       </div>
       <div id="extraction" hidden>
-        <div id="extraction-etape"></div>
-        <div class="rang" id="extraction-suivi">
-          <div class="barre" id="extraction-barre"><div></div></div>
-          <button id="annuler" data-i="annuler" hidden></button>
+        <div id="extraction-step"></div>
+        <div class="rank" id="extraction-progress">
+          <div class="bar" id="extraction-bar"><div></div></div>
+          <button id="cancel" data-i="cancel" hidden></button>
         </div>
-        <p class="aide" id="extraction-serveur" data-i="extraction_serveur" hidden></p>
-        <pre id="extraction-journal"></pre>
+        <p class="help" id="extraction-server" data-i="extraction_server" hidden></p>
+        <pre id="extraction-log"></pre>
       </div>
     </section>
   </div>
 </div>
 
 <!-- Characters: what was assembled, to download -->
-<div id="personnages" class="vue page" hidden>
-  <div class="colonne">
-    <section class="carte">
-      <h2><span data-i="personnages_titre"></span></h2>
-      <p class="aide" data-i="personnages_aide"></p>
-      <ul id="formats-sortie" class="liste enligne"></ul>
-      <div id="galerie"></div>
+<div id="characters" class="view page" hidden>
+  <div class="spine">
+    <section class="card">
+      <h2><span data-i="characters_title"></span></h2>
+      <p class="help" data-i="characters_help"></p>
+      <ul id="formats-output" class="list inline"></ul>
+      <div id="gallery"></div>
     </section>
   </div>
 </div>
 
-<canvas id="atelier-vignette" width="256" height="256" hidden></canvas>
+<canvas id="workshop-thumbnail" width="256" height="256" hidden></canvas>
 <script type="module" src="/page/workshop.js"></script>
 </body>
 </html>

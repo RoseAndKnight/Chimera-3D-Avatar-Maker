@@ -1,29 +1,29 @@
 {
- "_lisez_moi": "Description of VRoid: the characters made with VRoid Studio (pixiv), exported as VRM 0.x or 1.0 (the VRoid Hub models are VRM 1.0). The models are not provided. tools/vroid/importer.py converts them into PMX in the common language, stored in sources.mmd_extrait; it reads os_mmd, pose, materiaux, morphes_mmd and panneaux from here. See tools/games/README.md.",
- "titre": "VRoid",
+ "_readme": "Description of VRoid: the characters made with VRoid Studio (pixiv), exported as VRM 0.x or 1.0 (the VRoid Hub models are VRM 1.0). The models are not provided. tools/vroid/importer.py converts them into PMX in the common language, stored in sources.mmd_extracted; it reads os_mmd, pose, materials, morphs_mmd and panels from here. See tools/games/README.md.",
+ "title": "VRoid",
  "format": "vrm",
  "sources": {
   "vrm": "{data}/sources/vroid/vrm",
-  "mmd_extrait": "{data}/sources/vroid/mmd-extrait"
+  "mmd_extracted": "{data}/sources/vroid/mmd-extracted"
  },
- "_modeles": "\"*\": every <Name>/ folder of mmd_extrait that holds <Name>.pmx is a character (what the importer writes). Everyone brings their own.",
- "modeles": "*",
- "tete_base": {
-  "_note": "Base head: the head of the character Chimera's base was built from (tools/vroid_base/build.py <model.vrm>). depuis_base: nom, premier_passage, ecart_yeux and centre_yeux are read from base.json next to the body (workshop.body), measured by tete.Tete on the base's head; nothing of that model is written here. The setting jeux.vroid.tete_base.<cle> wins.",
-  "depuis_base": true,
-  "_teinte": "VRoid paints a shadow on the neck: the body skin takes the tint of the face, not that of the neck ring (tete_entiere --teinte-base).",
-  "teinte": "visage"
+ "_models": "\"*\": every <Name>/ folder of mmd_extracted that holds <Name>.pmx is a character (what the importer writes). Everyone brings their own.",
+ "models": "*",
+ "base_head": {
+  "_note": "Base head: the head of the character Chimera's base was built from (tools/vroid_base/build.py <model.vrm>). since_base: name, first_pass, eye_gap and eyes_center are read from base.json next to the body (workshop.body), measured by head.Head on the base's head; nothing of that model is written here. The setting games.vroid.base_head.<key> wins.",
+  "since_base": true,
+  "_tint": "VRoid paints a shadow on the neck: the body skin takes the tint of the face, not that of the neck ring (whole_head.py --base-tint).",
+  "tint": "face"
  },
- "tetes": {
-  "ecart_yeux_typique": 0.98
+ "heads": {
+  "typical_eye_gap": 0.98
  },
- "catalogue": {
-  "_note": "\"toutes\": every character of mmd_extrait stored in the face library.",
-  "tetes": "toutes",
-  "coiffures": "toutes",
-  "petit": {
-   "tetes": "toutes",
-   "coiffures": "toutes"
+ "catalog": {
+  "_note": "\"all\": every character of mmd_extracted stored in the face library.",
+  "heads": "all",
+  "hairstyles": "all",
+  "small": {
+   "heads": "all",
+   "hairstyles": "all"
   }
  },
  "_os_mmd": "VRM 0.x humanoid bone -> MMD name (a VRM 1.0 thumb is read in the 0.x vocabulary: 1.0 thumbMetacarpal = 0.x thumbProximal, 1.0 thumbProximal = 0.x thumbIntermediate). The bones that the file does not declare as humanoid (hair, breasts, hood, fingertips) keep their names.",
@@ -87,13 +87,13 @@
  "os_fondus": [
   "_Bust\\d"
  ],
- "_pose": "bras: degrees by which the arms are lowered around the shoulder (VRoid exports in T-pose; Chimera's base body has its arms 47-50° below the horizontal). cou: height of the skin cut at the bottom of the neck, as a fraction of the distance from the neck bone to the head bone.",
+ "_pose": "arm: degrees by which the arms are lowered around the shoulder (VRoid exports in T-pose; Chimera's base body has its arms 47-50° below the horizontal). neck: height of the skin cut at the bottom of the neck, as a fraction of the distance from the neck bone to the head bone.",
  "pose": {
-  "bras": 48.0,
-  "cou": 0.3
+  "arm": 48.0,
+  "neck": 0.3
  },
- "_materiaux": "VRoid Studio material names (F00_000_00_Face_00_SKIN, N00_…_Hair_00_HAIR_01…) in the common language, first matching pattern wins; the order is also that of the PMX materials. A repeated name gets a number (髪, 髪2…). The materials that nothing translates keep their names: the outfit.",
- "materiaux": [
+ "_materials": "VRoid Studio material names (F00_000_00_Face_00_SKIN, N00_…_Hair_00_HAIR_01…) in the common language, first matching pattern wins; the order is also that of the PMX materials. A repeated name gets a number (髪, 髪2…). The materials that nothing translates keep their names: the outfit.",
+ "materials": [
   [
    "_Face_\\d+_SKIN",
    "颜"
@@ -159,8 +159,8 @@
    "饰品"
   ]
  ],
- "_morphes_mmd": "VRoid Studio face shapes (name after the mesh prefix) -> MMD morph. The others keep their names (Fcl_ALL_Joy, Fcl_HA_Fung1…).",
- "morphes_mmd": {
+ "_morphs_mmd": "VRoid Studio face shapes (name after the mesh prefix) -> MMD morph. The others keep their names (Fcl_ALL_Joy, Fcl_HA_Fung1…).",
+ "morphs_mmd": {
   "Fcl_EYE_Close": "まばたき",
   "Fcl_EYE_Close_L": "ウィンク２",
   "Fcl_EYE_Close_R": "ウィンク２右",
@@ -188,8 +188,8 @@
   "Fcl_MTH_Sorrow": "への字",
   "Fcl_MTH_Surprised": "▲"
  },
- "_panneaux": "MMD panel of a morph, from its name: 1 eyebrows, 2 eyes, 3 mouth, 4 other.",
- "panneaux": [
+ "_panels": "MMD panel of a morph, from its name: 1 eyebrows, 2 eyes, 3 mouth, 4 other.",
+ "panels": [
   [
    "Fcl_BRW_",
    1
@@ -203,53 +203,53 @@
    3
   ]
  ],
- "compatibilite": {
-  "_lisez_moi": "What the tool does with a VRoid character, according to the code and two trials: 15/11/2026 on three VRoid Studio sample models (AvatarSample A, B, C, VRM 0.x), 18/11/2026 through the workshop page on seven VRoid Hub models (VRM 1.0) and one VRM 0.x. Read by python3 -I tools/games; COMPATIBILITY.md is drawn from it.",
-  "niveau": "partiel",
-  "resume": "A character made with VRoid Studio or taken from VRoid Hub (.vrm, VRM 0.x or 1.0) gives Chimera its face, its hairstyle and its clothes, from import to assembly; tried on three sample models and eight other characters, without physics.",
+ "compatibility": {
+  "_readme": "What the tool does with a VRoid character, according to the code and two trials: 15/11/2026 on three VRoid Studio sample models (AvatarSample A, B, C, VRM 0.x), 18/11/2026 through the workshop page on seven VRoid Hub models (VRM 1.0) and one VRM 0.x. Read by python3 -I tools/games; COMPATIBILITY.md is drawn from it.",
+  "level": "partial",
+  "summary": "A character made with VRoid Studio or taken from VRoid Hub (.vrm, VRM 0.x or 1.0) gives Chimera its face, its hairstyle and its clothes, from import to assembly; tried on three sample models and eight other characters, without physics.",
   "formats": [
    "VRM 0.x (.vrm)",
    "VRM 1.0 (.vrm, VRoid Hub)"
   ],
-  "provenance": "Your own characters, made with VRoid Studio and exported as .vrm (VRM 0.x or 1.0), or VRoid Hub models whose licence allows it (the licence declared in the file is written in the PMX comment). No model is provided with the tool.",
+  "origin": "Your own characters, made with VRoid Studio and exported as .vrm (VRM 0.x or 1.0), or VRoid Hub models whose licence allows it (the licence declared in the file is written in the PMX comment). No model is provided with the tool.",
   "sources": {
    "vrm": {
-    "contenu": "your .vrm files; this folder is only for storage, the importer takes the files it is given"
+    "content": "your .vrm files; this folder is only for storage, the importer takes the files it is given"
    },
-   "mmd_extrait": {
-    "contenu": "what the importer writes: one `<Name>/` folder per character with `<Name>.pmx` and its textures"
+   "mmd_extracted": {
+    "content": "what the importer writes: one `<Name>/` folder per character with `<Name>.pmx` and its textures"
    }
   },
-  "prise_en_charge": {
-   "tetes": {
-    "niveau": "partiel",
+  "support": {
+   "heads": {
+    "level": "partial",
     "detail": "3 heads out of 3 kept on 15/11/2026, 8 out of 8 on 18/11/2026 (seven VRoid Hub models in VRM 1.0, one VRM 0.x), checked up close in the page: facing forward, eyes in place. The base head is stitched onto Chimera's body (closed head: no skull seam); the other faces go through face transfer. The body skin takes the tint of the face, the neck keeps the shadow that VRoid paints on it: without hair, the back of a transferred face's skull keeps the base head's tint. VRoid's neck is thinner than the free body's: slight fold in profile at the neck seam."
    },
-   "coiffures": {
-    "niveau": "partiel",
-    "detail": "3 hairstyles out of 3 kept on 15/11/2026, 5 out of 8 on 18/11/2026, held by the head bone: the springs of the locks are not carried over. A hairstyle is measured on its own head, then carried onto the base head: two VRoid Hub hairstyles lose too much skull coverage on the way (crane_sous_cheveux, one by 0.001), a third goes into the skin (cheveux_hors_peau)."
+   "hairstyles": {
+    "level": "partial",
+    "detail": "3 hairstyles out of 3 kept on 15/11/2026, 5 out of 8 on 18/11/2026, held by the head bone: the springs of the locks are not carried over. A hairstyle is measured on its own head, then carried onto the base head: two VRoid Hub hairstyles lose too much skull coverage on the way (skull_under_hair, one by 0.001), a third goes into the skin (hair_off_skin)."
    },
-   "vetements": {
-    "niveau": "partiel",
-    "detail": "9 parts kept out of 9 on 17/11/2026 (tops, bottoms, shoes); on 18/11/2026, 38 parts kept out of the 38 of a kind the workshop offers (24 others, straps, buckles, ornaments, are not offered on their own), one whole outfit per model checked in the page. VRoid cuts a garment from a whole template whose texture erases part of it (shorts are trousers with transparent legs): the import removes the faces that the texture erases entirely, and the part takes its real shape. The underwear that VRoid paints on the skin is not carried over: an open vest shows the skin. A loose top is filed as a coat. The pose check (poses_corps_seul) is not measured."
+   "clothes": {
+    "level": "partial",
+    "detail": "9 parts kept out of 9 on 17/11/2026 (tops, bottoms, shoes); on 18/11/2026, 38 parts kept out of the 38 of a kind the workshop offers (24 others, straps, buckles, ornaments, are not offered on their own), one whole outfit per model checked in the page. VRoid cuts a garment from a whole template whose texture erases part of it (shorts are trousers with transparent legs): the import removes the faces that the texture erases entirely, and the part takes its real shape. The underwear that VRoid paints on the skin is not carried over: an open vest shows the skin. A loose top is filed as a coat. The pose check (body_only_poses) is not measured."
    },
-   "accessoires": {
-    "niveau": "partiel",
+   "accessories": {
+    "level": "partial",
     "detail": "Necklace, harness, armband and a halo of VRoid Hub models kept on 18/11/2026 and seen worn with their outfit; straps, buckles and ornaments are not offered on their own."
    },
    "expressions": {
-    "niveau": "partiel",
-    "detail": "The face shapes (Fcl_*) become morphs with MMD names (\"morphes_mmd\"); in the page, all 8 expressions on four VRoid Hub models and the VRM 0.x one (18/11/2026). A model whose face was reworked outside VRoid Studio may carry fewer shapes (14 instead of 57): only the expressions its morphs make are offered."
+    "level": "partial",
+    "detail": "The face shapes (Fcl_*) become morphs with MMD names (\"morphs_mmd\"); in the page, all 8 expressions on four VRoid Hub models and the VRM 0.x one (18/11/2026). A model whose face was reworked outside VRoid Studio may carry fewer shapes (14 instead of 57): only the expressions its morphs make are offered."
    }
   },
-  "etapes": [
-   "Convert: `python3 -I tools/vroid/importer.py <file.vrm>... --output <mmd_extrait>` (`voir <file.vrm>` says what the file contains without writing anything).",
-   "Chimera's base (bare body, face and hairstyle): `python3 -I tools/vroid_base/build.py <file.vrm>` (output `{data}/base-vroid`, default `workshop.body` setting). The game's base head is this character's: name and eye measurements are read from `base-vroid/base.json`.",
-   "In `settings.json`: `games.active` = `vroid`, `jeux.vroid.mmd_extrait` = the output folder of step 1.",
-   "Libraries: `<python> -I tools/head/pivot.py --output <data>/tete-pivot --no-sheet`, `<python> -I tools/head/library.py extract --output <data>/bibliotheque-visage`, `<python> -I tools/head/hairstyle.py extract --library <data>/bibliotheque-visage`, `<python> -I tools/clothes/library.py extract --output <data>/bibliotheque-vetements`.",
-   "Chimera: `<python> -I tools/workshop/catalog.py prepare`, then `bilan`."
+  "steps": [
+   "Convert: `python3 -I tools/vroid/importer.py <file.vrm>... --output <mmd_extracted>` (`show <file.vrm>` says what the file contains without writing anything).",
+   "Chimera's base (bare body, face and hairstyle): `python3 -I tools/vroid_base/build.py <file.vrm>` (output `{data}/vroid-base`, default `workshop.body` setting). The game's base head is this character's: name and eye measurements are read from `vroid-base/base.json`.",
+   "In `settings.json`: `games.active` = `vroid`, `games.vroid.mmd_extracted` = the output folder of step 1.",
+   "Libraries: `<python> -I tools/head/pivot.py --output <data>/pivot-head --no-sheet`, `<python> -I tools/head/library.py extract --output <data>/face-library`, `<python> -I tools/head/hairstyle.py extract --library <data>/face-library`, `<python> -I tools/clothes/library.py extract --output <data>/clothes-library`.",
+   "Chimera: `<python> -I tools/workshop/catalog.py prepare`, then `summary`."
   ],
-  "limites": [
+  "limits": [
    "A VRM that is not a VRoid character (no VRoid Studio face material, \"..._Face_00_SKIN\") is refused with that reason: the face, hair and outfit are found through VRoid's material names.",
    "Tried on three VRoid Studio sample models (15/11/2026) and on eight characters through the workshop page (18/11/2026); physics and spring bones are never read.",
    "No physics: hair and garment flaps do not move on their own.",

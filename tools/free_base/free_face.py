@@ -1,9 +1,9 @@
 """The free face and hairstyle: enough to open Chimera without any game model.
 
-    python3 -I free_face.py <MakeHuman sources> <folder>      reads corps.pmx and forme.pkl; writes
-        tete.pmx       the free body and its eyes (materials 肌 and 目): Chimera's "base head"
-        coiffure.pmx   a bob with a fringe (material 髪), held by the head bone
-        yeux.png, cheveux.png
+    python3 -I free_face.py <MakeHuman sources> <folder>      reads body.pmx and shape.pkl; writes
+        head.pmx       the free body and its eyes (materials 肌 and 目): Chimera's "base head"
+        hairstyle.pmx  a bob with a fringe (material 髪), held by the head bone
+        eyes.png, hair.png
 
 Everything comes from MakeHuman (CC0): the eyes are its simple eyes (eyes/low-poly, placed on the helper
 vertices `helper-*-eye` of base.obj) and their texture; the hair is its helper volume `helper-hair` (locks
@@ -17,10 +17,10 @@ import sys
 
 import numpy as np
 
-ICI = os.path.dirname(os.path.abspath(__file__))
-sys.path[:0] = [ICI] + [os.path.join(ICI, "..", d) for d in ("custom_body", "rebuilt_body", "atlas", "head", "rebuilt_head")]
+HERE = os.path.dirname(os.path.abspath(__file__))
+sys.path[:0] = [HERE] + [os.path.join(HERE, "..", d) for d in ("custom_body", "rebuilt_body", "atlas", "head", "rebuilt_head")]
 import pmx as PMX             # noqa: E402
-import pmx_write as pmx_ecrire             # noqa: E402
+import pmx_write as pmx_write             # noqa: E402
 import png                    # noqa: E402
 import geom as G              # noqa: E402
 import makehuman as MH        # noqa: E402
@@ -28,25 +28,25 @@ import body as CO            # noqa: E402
 import free_head as TE       # noqa: E402
 
 CM = 8.0
-YEUX = {"obj": "eyes/low-poly/low-poly.obj", "mhclo": "eyes/low-poly/low-poly.mhclo", "texture": "eyes/materials/brown_eye.png"}
-CHEVEUX = (74, 52, 44)        # flat hair colour
-FRANGE = 2.3                  # cm above the centre of the eyes where the fringe stops
-CARRE = -11.0                 # cm relative to the centre of the eyes where the bob stops (sides and nape)
-FRANGE_ANGLE = (38.0, 62.0)   # degrees around the head, from the front: end of the fringe, start of the bob
-CALOTTE = 0.25                # cm between the skull skin and the cap
-CALOTTE_FRONT = 2.5           # cm above the eyes where the cap starts, in front (under the fringe)
-CALOTTE_NUQUE = -6.0          # and behind
+EYES = {"obj": "eyes/low-poly/low-poly.obj", "mhclo": "eyes/low-poly/low-poly.mhclo", "texture": "eyes/materials/brown_eye.png"}
+HAIR = (74, 52, 44)        # flat hair colour
+FRINGE = 2.3                  # cm above the centre of the eyes where the fringe stops
+SQUARE = -11.0                 # cm relative to the centre of the eyes where the bob stops (sides and nape)
+FRINGE_ANGLE = (38.0, 62.0)   # degrees around the head, from the front: end of the fringe, start of the bob
+CAP = 0.25                # cm between the skull skin and the cap
+CAP_FRONT = 2.5           # cm above the eyes where the cap starts, in front (under the fringe)
+CAP_NAPE = -6.0          # and behind
 
 
-def _lisse(u):
+def _smooth(u):
     u = np.clip(u, 0, 1)
     return u * u * (3 - 2 * u)
 
 
-def _obj(chemin):
+def _obj(path):
     """Vertices, uv, faces [(vertex, uv), ...] of an .obj."""
     V, UV, F = [], [], []
-    with open(chemin, encoding="utf-8", errors="replace") as f:
+    with open(path, encoding="utf-8", errors="replace") as f:
         for l in f:
             if l.startswith("v "):
                 V.append([float(x) for x in l.split()[1:4]])
@@ -57,13 +57,13 @@ def _obj(chemin):
     return np.array(V), np.array(UV), F
 
 
-def _indices_mhclo(chemin):
+def _indices_mhclo(path):
     """The base.obj vertices that each vertex of the item follows (mhclo with one index per line)."""
-    with open(chemin, encoding="utf-8") as f:
-        lignes = [l.strip() for l in f]
-    k = next(i for i, l in enumerate(lignes) if l.startswith("verts"))
+    with open(path, encoding="utf-8") as f:
+        lines = [l.strip() for l in f]
+    k = next(i for i, l in enumerate(lines) if l.startswith("verts"))
     out = []
-    for l in lignes[k + 1:]:
+    for l in lines[k + 1:]:
         if not l or l.startswith("#"):
             continue
         if len(l.split()) != 1:
@@ -81,93 +81,93 @@ def _triangles(faces):
     return T
 
 
-def lire(sources, d):
+def read(sources, d):
     """MakeHuman's vertices (silhouette of silhouette.json) in the frame of the finished body, at the level of
     the head: centimetres, the head moved back by the straightened neck, raised by the pose."""
-    V, _, J, Gr = MH.lire(os.path.join(sources, "base.obj"))
-    with open(os.path.join(d, "forme.pkl"), "rb") as f:
+    V, _, J, Gr = MH.read(os.path.join(sources, "base.obj"))
+    with open(os.path.join(d, "shape.pkl"), "rb") as f:
         g = pickle.load(f)
-    sol = J["ground"][1]
-    dy = g["tete"]["dy"]
-    vers = lambda p: (np.asarray(p, float) - [0, sol, 0]) * [10.0, 10.0, -10.0] + [0.0, dy, CO.COU_RECUL]   # noqa: E731
-    return vers(V), {k: vers(p) for k, p in J.items()}, Gr, g
+    ground = J["ground"][1]
+    dy = g["head"]["dy"]
+    to = lambda p: (np.asarray(p, float) - [0, ground, 0]) * [10.0, 10.0, -10.0] + [0.0, dy, CO.NECK_SETBACK]   # noqa: E731
+    return to(V), {k: to(p) for k, p in J.items()}, Gr, g
 
 
-def yeux(sources, P):
+def eyes(sources, P):
     """The two eyeballs: (positions, uv, triangles)."""
-    Vo, UV, F = _obj(os.path.join(sources, YEUX["obj"]))
-    ids = _indices_mhclo(os.path.join(sources, YEUX["mhclo"]))
+    Vo, UV, F = _obj(os.path.join(sources, EYES["obj"]))
+    ids = _indices_mhclo(os.path.join(sources, EYES["mhclo"]))
     assert len(ids) == len(Vo), "the eyes file does not follow one base.obj vertex per vertex"
-    coins, T = {}, []
+    corners, T = {}, []
     for t in _triangles(F):
-        T.append([coins.setdefault(c, len(coins)) for c in t])
-    c = np.array(list(coins))
+        T.append([corners.setdefault(c, len(corners)) for c in t])
+    c = np.array(list(corners))
     return P[ids[c[:, 0]]], UV[c[:, 1]] * [1.0, -1.0] + [0.0, 1.0], np.array(T)
 
 
-def cheveux(P, J, Gr, g):
+def hair(P, J, Gr, g):
     """The haircut: MakeHuman's locks trimmed, and the cap underneath. (positions, triangles)."""
-    oeil = 0.5 * (J["l-eye"] + J["r-eye"])
-    axe = J["head"]
+    eye = 0.5 * (J["l-eye"] + J["r-eye"])
+    axis = J["head"]
 
     def angle(X):
-        return np.degrees(np.abs(np.arctan2(X[:, 0], -(X[:, 2] - axe[2]))))
+        return np.degrees(np.abs(np.arctan2(X[:, 0], -(X[:, 2] - axis[2]))))
 
-    def entre(X, devant, derriere):
-        return oeil[1] + devant + (derriere - devant) * _lisse((angle(X) - FRANGE_ANGLE[0]) / (FRANGE_ANGLE[1] - FRANGE_ANGLE[0]))
+    def between(X, ahead, behind):
+        return eye[1] + ahead + (behind - ahead) * _smooth((angle(X) - FRINGE_ANGLE[0]) / (FRINGE_ANGLE[1] - FRINGE_ANGLE[0]))
     ids = np.unique(np.concatenate([np.array(f) for f in Gr["helper-hair"]]))
     loc = -np.ones(len(P), int)
     loc[ids] = np.arange(len(ids))
     M = P[ids]
     Tm = loc[np.array(_triangles(Gr["helper-hair"]))]
-    M, Tm = TE._couper(M, Tm, M[:, 1] - entre(M, FRANGE, CARRE))
-    t = g["tete"]
-    N = G.normales_sommets(t["P"], t["tris"])
-    Cp = t["P"] + CALOTTE * N
-    Cp, Tc = TE._couper(Cp, t["tris"], t["P"][:, 1] - entre(t["P"], CALOTTE_FRONT, CALOTTE_NUQUE))
-    u = np.unique(Tc)                                # _couper keeps every touched vertex: tighten
+    M, Tm = TE._cut(M, Tm, M[:, 1] - between(M, FRINGE, SQUARE))
+    t = g["head"]
+    N = G.normals_vertices(t["P"], t["tris"])
+    Cp = t["P"] + CAP * N
+    Cp, Tc = TE._cut(Cp, t["tris"], t["P"][:, 1] - between(t["P"], CAP_FRONT, CAP_NAPE))
+    u = np.unique(Tc)                                # the cut keeps every touched vertex: tighten
     loc = -np.ones(len(Cp), int)
     loc[u] = np.arange(len(u))
     return np.concatenate([M, Cp[u]]), np.concatenate([Tm, loc[Tc] + len(M)])
 
 
-def _materiau(nom, nom_en, texture, n_faces, contour=True):
-    return {"nom": nom, "nom_en": nom_en, "diffus": (1.0, 1.0, 1.0, 1.0), "speculaire": (0.0, 0.0, 0.0), "brillance": 5.0,
-            "ambiant": (0.5, 0.5, 0.5), "drapeaux": 0x1F if contour else 0x0F, "contour_couleur": (0.2, 0.14, 0.12, 1.0),
-            "contour_taille": 0.6, "texture": texture, "sphere": -1, "sphere_mode": 0, "toon_partage": 1, "toon": 0,
+def _material(name, name_en, texture, n_faces, outline=True):
+    return {"name": name, "name_en": name_en, "diffuse": (1.0, 1.0, 1.0, 1.0), "specular": (0.0, 0.0, 0.0), "brightness": 5.0,
+            "ambient": (0.5, 0.5, 0.5), "flags": 0x1F if outline else 0x0F, "outline_color": (0.2, 0.14, 0.12, 1.0),
+            "outline_size": 0.6, "texture": texture, "sphere": -1, "sphere_mode": 0, "toon_sharing": 1, "toon": 0,
             "memo": "", "n_indices": 3 * n_faces}
 
 
-def _sommets(P, T, uv, i_tete):
+def _vertices(P, T, uv, i_head):
     n = len(P)
-    N = G.normales_sommets(P, T)
+    N = G.normals_vertices(P, T)
     return {"pos": [tuple(p) for p in (P / CM).tolist()], "nor": [tuple(p) for p in N.tolist()],
             "uv": [tuple(float(x) for x in u) for u in uv], "uv_add": [[] for _ in range(n)], "type": [2] * n,
-            "os": [(i_tete, 0, 0, 0)] * n, "poids": [(1.0, 0.0, 0.0, 0.0)] * n, "sdef": [None] * n, "contour": [1.0] * n}
+            "bones": [(i_head, 0, 0, 0)] * n, "weights": [(1.0, 0.0, 0.0, 0.0)] * n, "sdef": [None] * n, "contour": [1.0] * n}
 
 
 def main():
     sources, d = sys.argv[1], sys.argv[2]
-    P, J, Gr, g = lire(sources, d)
-    corps = PMX.lire(os.path.join(d, "corps.pmx"))
-    i_tete = [o["nom"] for o in corps["os"]].index("頭")
+    P, J, Gr, g = read(sources, d)
+    body = PMX.read(os.path.join(d, "body.pmx"))
+    i_head = [o["name"] for o in body["bones"]].index("頭")
     # head: the body, then the eyes after it (the body vertices keep their index)
-    Py, uvy, Ty = yeux(sources, P)
-    sy = _sommets(Py, Ty, uvy, i_tete)
-    n0 = len(corps["sommets"]["pos"])
-    tete = dict(corps, nom="tête libre", nom_en="free head", textures=corps["textures"] + ["yeux.png"],
-                sommets={k: list(v) + list(sy[k]) for k, v in corps["sommets"].items()},
-                faces=list(corps["faces"]) + [tuple(int(x) + n0 for x in t) for t in Ty],
-                materiaux=corps["materiaux"] + [_materiau("目", "eyes", len(corps["textures"]), len(Ty), contour=False)])
-    shutil.copyfile(os.path.join(sources, YEUX["texture"]), os.path.join(d, "yeux.png"))
-    pmx_ecrire.ecrire(tete, os.path.join(d, "tete.pmx"))
-    Pc, Tc = cheveux(P, J, Gr, g)
-    png.ecrire(os.path.join(d, "cheveux.png"), np.full((8, 8, 3), CHEVEUX, np.uint8))
-    coiffure = dict(corps, nom="coiffure libre", nom_en="free hair", textures=["cheveux.png"],
-                    sommets=_sommets(Pc, Tc, np.full((len(Pc), 2), 0.5), i_tete),
-                    faces=[tuple(int(x) for x in t) for t in Tc], materiaux=[_materiau("髪", "hair", 0, len(Tc))])
-    pmx_ecrire.ecrire(coiffure, os.path.join(d, "coiffure.pmx"))
-    print("wrote tete.pmx (%d eye vertices, %d faces) and coiffure.pmx (%d vertices, %d faces)" % (len(Py), len(Ty), len(Pc), len(Tc)))
+    Py, uvy, Ty = eyes(sources, P)
+    sy = _vertices(Py, Ty, uvy, i_head)
+    n0 = len(body["vertices"]["pos"])
+    head = dict(body, name="free head", name_en="free head", textures=body["textures"] + ["eyes.png"],
+                vertices={k: list(v) + list(sy[k]) for k, v in body["vertices"].items()},
+                faces=list(body["faces"]) + [tuple(int(x) + n0 for x in t) for t in Ty],
+                materials=body["materials"] + [_material("目", "eyes", len(body["textures"]), len(Ty), outline=False)])
+    shutil.copyfile(os.path.join(sources, EYES["texture"]), os.path.join(d, "eyes.png"))
+    pmx_write.write(head, os.path.join(d, "head.pmx"))
+    Pc, Tc = hair(P, J, Gr, g)
+    png.write(os.path.join(d, "hair.png"), np.full((8, 8, 3), HAIR, np.uint8))
+    hairstyle = dict(body, name="free hairstyle", name_en="free hair", textures=["hair.png"],
+                    vertices=_vertices(Pc, Tc, np.full((len(Pc), 2), 0.5), i_head),
+                    faces=[tuple(int(x) for x in t) for t in Tc], materials=[_material("髪", "hair", 0, len(Tc))])
+    pmx_write.write(hairstyle, os.path.join(d, "hairstyle.pmx"))
+    print("wrote head.pmx (%d eye vertices, %d faces) and hairstyle.pmx (%d vertices, %d faces)" % (len(Py), len(Ty), len(Pc), len(Tc)))
 
 
 if __name__ == "__main__":

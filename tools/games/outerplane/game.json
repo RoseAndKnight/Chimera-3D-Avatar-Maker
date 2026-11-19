@@ -1,55 +1,59 @@
 {
- "_lisez_moi": "Description of Outerplane: its raw characters (heads converted into a donor PMX by tools/head/outerplane.py, library.py extract --outerplane).",
- "titre": "Outerplane",
+ "_readme": "Description of Outerplane: its raw characters (heads converted into a donor PMX by tools/head/outerplane.py, library.py extract --outerplane).",
+ "_fr_ok": {
+  "controle.glb": "file name set by the third-party extraction tool that lays out the character folders",
+  "rendu.json": "same: file name set by the third-party extraction tool"
+ },
+ "title": "Outerplane",
  "format": "glb",
- "compatibilite": {
-  "_lisez_moi": "What the tool does with this game's models, according to the code and the data of 15/11/2026. Read by python3 -I tools/games; COMPATIBILITY.md is drawn from it. No other tool reads it.",
-  "niveau": "partiel",
-  "resume": "The heads are converted and stored in the face library, but Chimera offers none of them today.",
+ "compatibility": {
+  "_readme": "What the tool does with this game's models, according to the code and the data of 15/11/2026. Read by python3 -I tools/games; COMPATIBILITY.md is drawn from it. No other tool reads it.",
+  "level": "partial",
+  "summary": "The heads are converted and stored in the face library, but Chimera offers none of them today.",
   "formats": ["GLB (binary glTF)", "rendu.json"],
-  "provenance": "An extraction of the game files by a third-party tool, laid out in the format of our extraction tool: one folder per character with `controle.glb` (mesh, bones, morphs), `rendu.json` (materials and textures) and the textures. No tool in this repository produces this format.",
+  "origin": "An extraction of the game files by a third-party tool, laid out in the format of our extraction tool: one folder per character with `controle.glb` (mesh, bones, morphs), `rendu.json` (materials and textures) and the textures. No tool in this repository produces this format.",
   "sources": {
-   "personnages": {
-    "contenu": "one folder per character (`<id>` or `<id>_<Name>`) with `controle.glb`, `rendu.json` and the textures named by `rendu.json`",
-    "verifier": {"dossiers_avec": ["controle.glb", "rendu.json"]}
+   "people": {
+    "content": "one folder per character (`<id>` or `<id>_<Name>`) with `controle.glb`, `rendu.json` and the textures named by `rendu.json`",
+    "check": {"folders_with": ["controle.glb", "rendu.json"]}
    }
   },
-  "prise_en_charge": {
-   "tetes": {"niveau": "partiel", "detail": "Converted into a donor PMX (tools/head/outerplane.py), then measured like a ZZZ head: 60 heads stored out of 78 on 15/11/2026, 14 rejected (eyeball welded to the skin, eyebrows without geometry), 4 left out. Not in Chimera's catalogue: running them through Chimera has never been tried. 16 heads do not close their eyes (blink at 30-93 %)."},
-   "coiffures": {"niveau": "partiel", "detail": "44 hairstyles measured in the face library, but not offered: Chimera only takes the hairstyles of a character whose outfit is cut."},
-   "vetements": {"niveau": "non", "detail": "The donor PMX contains only the head: cutting the outfits has never been done on these models."},
-   "accessoires": {"niveau": "non", "detail": "Same reason as the clothes."},
-   "expressions": {"niveau": "partiel", "detail": "The EYE_* and MOUTH_* morphs are renamed to MMD names (\"morphes_mmd\") during the conversion; the others keep their names. In the donor PMX only."}
+  "support": {
+   "heads": {"level": "partial", "detail": "Converted into a donor PMX (tools/head/outerplane.py), then measured like a ZZZ head: 60 heads stored out of 78 on 15/11/2026, 14 rejected (eyeball welded to the skin, eyebrows without geometry), 4 left out. Not in Chimera's catalogue: running them through Chimera has never been tried. 16 heads do not close their eyes (blink at 30-93 %)."},
+   "hairstyles": {"level": "partial", "detail": "44 hairstyles measured in the face library, but not offered: Chimera only takes the hairstyles of a character whose outfit is cut."},
+   "clothes": {"level": "non", "detail": "The donor PMX contains only the head: cutting the outfits has never been done on these models."},
+   "accessories": {"level": "non", "detail": "Same reason as the clothes."},
+   "expressions": {"level": "partial", "detail": "The EYE_* and MOUTH_* morphs are renamed to MMD names (\"morphs_mmd\") during the conversion; the others keep their names. In the donor PMX only."}
   },
-  "etapes": [
-   "Put the character folders in `personnages` (or write its path under `jeux.outerplane.personnages`). Check: `python3 -I tools/games` counts the folders that have `controle.glb` and `rendu.json`.",
-   "Heads: the ZZZ pipeline must have produced the pivot head (`<data>/tete-pivot`), then `<python> -I tools/head/library.py extract --outerplane --output <data>/bibliotheque-visage`; a single head as a trial: `<python> -I tools/head/outerplane.py convert <character folder> <output.pmx>`.",
-   "Hairstyles: `<python> -I tools/head/hairstyle.py extract --library <data>/bibliotheque-visage --only <names>`."
+  "steps": [
+   "Put the character folders in `{data}/sources/outerplane/people` (or write its path under `games.outerplane.people` in the settings). Check: `python3 -I tools/games` counts the folders that have `controle.glb` and `rendu.json`.",
+   "Heads: the ZZZ pipeline must have produced the pivot head (`<data>/pivot-head`), then `<python> -I tools/head/library.py extract --outerplane --output <data>/face-library`; a single head as a trial: `<python> -I tools/head/outerplane.py convert <character folder> <output.pmx>`.",
+   "Hairstyles: `<python> -I tools/head/hairstyle.py extract --library <data>/face-library --only <names>`."
   ],
-  "limites": [
+  "limits": [
    "Cannot be the active game (`games.active`): its description has neither a base head nor a list of models. Its heads go through the pivot head of the active game (ZZZ).",
-   "The \"materiaux\" table (FACE, FACE_EYE, HAIR, BODY) assumes this game's M_<id>_… material names; cutting the face into eyes, mouth and eyebrows is done by geometry and failed on 14 heads."
+   "The \"materials\" table (FACE, FACE_EYE, HAIR, BODY) assumes this game's M_<id>_… material names; cutting the face into eyes, mouth and eyebrows is done by geometry and failed on 14 heads."
   ]
  },
  "sources": {
-  "personnages": "{data}/sources/outerplane/personnages"
+  "people": "{data}/sources/outerplane/people"
  },
- "_exclus": "heads left out of the spectrum (METHODE.md, \"Outerplane (06/11)\"): not playable characters with a human face, or duplicates",
- "exclus": {
+ "_excluded": "heads left out of the spectrum (the research notes, \"Outerplane (06/11)\"): not playable characters with a human face, or duplicates",
+ "excluded": {
   "4041041": "not a human face (monster)",
   "4043041": "not a human face (monster)",
   "2000119_luna": "duplicate of 2000119_Luna",
   "2000034": "covered face (left out of the spectrum)"
  },
- "_materiaux": "Outerplane material names in the common language (tools/games/README.md), first matching pattern wins. A game GLB has four useful materials, M_<id>_FACE, _FACE_EYE, _HAIR…, _BODY… (M_<id>_ prefix optional, case-insensitive). FACE is not only the skin: tools/head/outerplane.py then cuts it by geometry into 颜, 目, 目光, 二重, 齿, 口舌, 颜2, 飾り; FACE_EYE (eyelashes and eyebrows mixed) into 眉 and 睫. BODY: clothed one-piece body, like 体 in ZZZ. Read by outerplane.py (role of each primitive) and by atlas/pmx.lire for a PMX stored in its source folders (there are none today).",
- "materiaux": [
+ "_materials": "Outerplane material names in the common language (tools/games/README.md), first matching pattern wins. A game GLB has four useful materials, M_<id>_FACE, _FACE_EYE, _HAIR…, _BODY… (M_<id>_ prefix optional, case-insensitive). FACE is not only the skin: tools/head/outerplane.py then cuts it by geometry into 颜, 目, 目光, 二重, 齿, 口舌, 颜2, 飾り; FACE_EYE (eyelashes and eyebrows mixed) into 眉 and 睫. BODY: clothed one-piece body, like 体 in ZZZ. Read by outerplane.py (role of each primitive) and by atlas/pmx.lire for a PMX stored in its source folders (there are none today).",
+ "materials": [
   ["^(?:M_[\\d,]+_?)?(?i:FACE)\\Z", "颜"],
   ["^(?:M_[\\d,]+_?)?(?i:FACE_EYE)\\Z", "眉睫"],
   ["^(?:M_[\\d,]+_?)?(?i:HAIR)", "髮"],
   ["^(?:M_[\\d,]+_?)?(?i:BODY)", "体"]
  ],
- "_morphes_mmd": "MMD names of the Outerplane morphs (after the typos are normalized); the others keep their names (EYE_SHY, MOUTH_PAIN...), in the eye or mouth panel",
- "morphes_mmd": {
+ "_morphs_mmd": "MMD names of the Outerplane morphs (after the typos are normalized); the others keep their names (EYE_SHY, MOUTH_PAIN...), in the eye or mouth panel",
+ "morphs_mmd": {
   "EYE_CLOSE": "まばたき",
   "EYE_SMILE": "笑い",
   "EYE_ANGRY": "怒り目",

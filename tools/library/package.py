@@ -6,7 +6,7 @@
 <installation> is a folder holding settings.json (the settings of the prepared data, read through CHIMERA_SETTINGS):
 nothing is written there. The output folder can be uploaded as is to a Hugging Face dataset repository.
 
-Which models go in: a VRoid Hub model (`h<id>`) only if its status in statuts.json is "originale" and the
+Which models go in: a VRoid Hub model (`h<id>`) only if its status in statuses.json is "originale" and the
 licence read on its page (sources.json of the cache) allows redistribution and the redistribution of modified
 versions; any other model only if its own file says so (VRM meta: CC0 or a VRoid Hub licence URL allowing both;
 for the base, the meta recorded by tools/vroid_base in provenance.json). Everything else is left out everywhere:
@@ -28,45 +28,45 @@ import time
 import urllib.parse
 from concurrent.futures import ProcessPoolExecutor
 
-ICI = os.path.dirname(os.path.abspath(__file__))
-OUTILS = os.path.dirname(ICI)
-DEPOT = os.path.dirname(OUTILS)
-sys.path.append(ICI)
+HERE = os.path.dirname(os.path.abspath(__file__))
+TOOLS = os.path.dirname(HERE)
+REPO = os.path.dirname(TOOLS)
+sys.path.append(HERE)
 import installation as I  # noqa: E402
 
 VERSION_CODE = 1          # version of this code the package is made for (index.json "code")
-LIMITE = 1800 << 20       # raw bytes per archive before compression (HF: < 200 GB recommended per file; small ones resume better)
-NIVEAU = 6                # gzip level
+LIMIT = 1800 << 20       # raw bytes per archive before compression (HF: < 200 GB recommended per file; small ones resume better)
+LEVEL = 6                # gzip level
 TEX = re.compile(rb"tex/([0-9a-f]{16}\.webp)")
 MACHINE = re.compile(rb"/(?:home|Users)/[^/\s\"]+/")   # a path into someone's home folder
 # in a refused item's folder only these remain (the page lists refused items by their record)
-REFUS_GARDE = ("meta.json", "vignette.png")
+REFUSALS_KEEP = ("meta.json", "thumbnail.png")
 
 
-def dire(*a):
+def say(*a):
     print(*a, flush=True)
 
 
 # ------------------------------------------------------------------ licences
 
-def licence_hub(v):
-    L = (v or {}).get("licence") or {}
+def license_hub(v):
+    L = (v or {}).get("license") or {}
     return L.get("allowRedistribution") is True and L.get("modification") == "allowModificationRedistribution"
 
 
-def meta_vrm(chemin):
+def vrm_meta(path):
     """VRM meta (0.x or 1.0) of a .vrm file, read from its glTF JSON chunk."""
-    with open(chemin, "rb") as f:
-        tete = f.read(20)
-        if tete[:4] != b"glTF":
-            raise ValueError("%s: not a glb" % chemin)
-        n = struct.unpack("<I", tete[12:16])[0]
+    with open(path, "rb") as f:
+        head = f.read(20)
+        if head[:4] != b"glTF":
+            raise ValueError("%s: not a glb" % path)
+        n = struct.unpack("<I", head[12:16])[0]
         j = json.loads(f.read(n))
     e = j.get("extensions") or {}
     return (e.get("VRMC_vrm") or {}).get("meta") or (e.get("VRM") or {}).get("meta") or {}
 
 
-def licence_fichier(m):
+def license_file(m):
     """Why a model's own VRM meta allows redistributing modified parts, or None."""
     if not m:
         return None
@@ -83,67 +83,73 @@ def licence_fichier(m):
 
 # ------------------------------------------------------------------ reading the installation
 
+def status_of(entry):
+    """Status of a model in statuses.json; the maintainer's file writes the key in French."""
+    e = entry or {}
+    return e.get("status") or e.get("statut")   # fr-ok: key of the maintainer's existing statuses file
+
+
 class Installation:
-    def __init__(self, dossier, statuts):
-        os.environ["CHIMERA_SETTINGS"] = os.path.join(os.path.abspath(dossier), "settings.json")
+    def __init__(self, folder, statuses):
+        os.environ["CHIMERA_SETTINGS"] = os.path.join(os.path.abspath(folder), "settings.json")
         for v in ("CHIMERA_DATA", "CHIMERA_CACHE", "CHIMERA_BODY", "CHIMERA_GAME"):
             os.environ.pop(v, None)
-        sys.path.insert(0, os.path.join(OUTILS, "workshop"))
-        sys.path.insert(0, os.path.join(OUTILS, "atlas"))
+        sys.path.insert(0, os.path.join(TOOLS, "workshop"))
+        sys.path.insert(0, os.path.join(TOOLS, "atlas"))
         import common as C
-        import games as jeux
+        import games as games
         self.C = C
-        self.rac = I.racines()
-        self.vrm = jeux.charger("vroid").chemin("vrm")
-        self.cache = self.rac["cache"]
-        self.sources = C.lire_json(os.path.join(self.cache, "sources.json"), {}) or {}
-        with open(statuts, encoding="utf-8") as f:
-            self.statuts = json.load(f)
+        self.rt = I.roots()
+        self.vrm = games.load("vroid").path("vrm")
+        self.cache = self.rt["cache"]
+        self.sources = C.read_json(os.path.join(self.cache, "sources.json"), {}) or {}
+        with open(statuses, encoding="utf-8") as f:
+            self.statuses = json.load(f)
 
-    def modeles_presents(self):
+    def models_present(self):
         C = self.C
-        n = set(os.listdir(os.path.join(self.cache, "tetes"))) | set(os.listdir(os.path.join(self.cache, "coiffures")))
-        for d in os.listdir(os.path.join(self.cache, "pieces")):
-            m = C.lire_json(os.path.join(self.cache, "pieces", d, "meta.json")) or {}
-            if m.get("perso"):
-                n.add(m["perso"])
-        # a model folder of the libraries: one holding its source PMX, face record or garment folders (not index/, essais/…)
-        for r, signe in (("visage", "fiche.json"), ("vetements", "decoupe.json"), ("mmd_extrait", None)):
-            for x in os.listdir(self.rac[r]):
-                d = os.path.join(self.rac[r], x)
-                if os.path.isfile(os.path.join(d, signe or x + ".pmx")):
+        n = set(os.listdir(os.path.join(self.cache, "heads"))) | set(os.listdir(os.path.join(self.cache, "hairstyles")))
+        for d in os.listdir(os.path.join(self.cache, "parts")):
+            m = C.read_json(os.path.join(self.cache, "parts", d, "meta.json")) or {}
+            if m.get("character"):
+                n.add(m["character"])
+        # a model folder of the libraries: one holding its source PMX, face record or garment folders (not index/, attempts/…)
+        for r, sign in (("face", "record.json"), ("clothes", "cutout.json"), ("mmd_extracted", None)):
+            for x in os.listdir(self.rt[r]):
+                d = os.path.join(self.rt[r], x)
+                if os.path.isfile(os.path.join(d, sign or x + ".pmx")):
                     n.add(x)
         return n
 
-    def trier(self):
+    def sort(self):
         """{name: why kept}, {name: why left out}."""
-        garder, ecarter = {}, {}
-        for n in sorted(self.modeles_presents()):
+        keep, discard = {}, {}
+        for n in sorted(self.models_present()):
             src = self.sources.get(n)
             if re.fullmatch(r"h\d+", n):
-                st = (self.statuts.get(n[1:]) or {}).get("statut")
+                st = status_of(self.statuses.get(n[1:]))
                 if st != "originale":
-                    ecarter[n] = "status %s" % (st or "unknown")
+                    discard[n] = "status %s" % (st or "unknown")
                 elif not src:
-                    ecarter[n] = "no source page recorded"
-                elif not licence_hub(src):
-                    ecarter[n] = "licence does not allow redistributing modified versions"
+                    discard[n] = "no source page recorded"
+                elif not license_hub(src):
+                    discard[n] = "licence does not allow redistributing modified versions"
                 else:
-                    garder[n] = "VRoid Hub, original, licence allows redistribution of modifications"
+                    keep[n] = "VRoid Hub, original, licence allows redistribution of modifications"
                 continue
-            if n == "Libre":
-                prov = self.C.lire_json(os.path.join(self.rac["base"], "provenance.json"), {}) or {}
-                pourquoi = licence_fichier(prov.get("meta_vrm"))
-                quoi = "base (%s, provenance.json)" % prov.get("modele")
+            if n == "Libre":   # fr-ok: "Libre" is the id of the free head and hairstyle, a folder name in installed caches
+                prov = self.C.read_json(os.path.join(self.rt["base"], "provenance.json"), {}) or {}
+                why = license_file(prov.get("vrm_meta"))
+                what = "base (%s, provenance.json)" % prov.get("model")
             else:
                 f = os.path.join(self.vrm, n + ".vrm")
-                pourquoi = licence_fichier(meta_vrm(f)) if os.path.isfile(f) else None
-                quoi = os.path.basename(f)
-            if pourquoi and src:
-                garder[n] = "%s, %s" % (quoi, pourquoi)
+                why = license_file(vrm_meta(f)) if os.path.isfile(f) else None
+                what = os.path.basename(f)
+            if why and src:
+                keep[n] = "%s, %s" % (what, why)
             else:
-                ecarter[n] = "licence not established by the file" if not pourquoi else "no source recorded"
-        return garder, ecarter
+                discard[n] = "licence not established by the file" if not why else "no source recorded"
+        return keep, discard
 
 
 # ------------------------------------------------------------------ the plan: what goes where
@@ -151,306 +157,308 @@ class Installation:
 class Plan:
     """files: [(package path, absolute source or None, bytes or None)]; units, shared, links, fingerprints."""
 
-    def __init__(self, inst, garder):
-        self.inst, self.C, self.rac, self.garder = inst, inst.C, inst.rac, set(garder)
-        self.fichiers, self.unites, self.partages, self.liens = [], [], [], []
-        self.familles = {}
-        self.retenus = {"tetes": [], "coiffures": [], "pieces": []}
-        self.refuses = {"tetes": [], "coiffures": [], "pieces": []}
+    def __init__(self, inst, keep):
+        self.inst, self.C, self.rt, self.keep = inst, inst.C, inst.rt, set(keep)
+        self.files, self.units, self.shared, self.links = [], [], [], []
+        self.families = {}
+        self.kept_points = {"heads": [], "hairstyles": [], "parts": []}
+        self.refused = {"heads": [], "hairstyles": [], "parts": []}
         self.textures = set()
-        self.empreintes = {}
+        self.fingerprints = {}
         self.inodes = {}     # (device, inode) -> package path of the first copy: the others become "doubles"
-        self.doubles = {}    # first copy -> [other package paths], linked again by the installer
+        self.duplicates = {}    # first copy -> [other package paths], linked again by the setup program
         # owner's roots in the records, longest first ({cache} before a root it would contain)
-        self.jetons = sorted(((v, "{%s}" % k) for k, v in self.rac.items()), key=lambda x: -len(x[0]))
-        self.jetons += [(os.path.realpath(v), j) for v, j in self.jetons if os.path.realpath(v) != v]
+        self.tokens = sorted(((v, "{%s}" % k) for k, v in self.rt.items()), key=lambda x: -len(x[0]))
+        self.tokens += [(os.path.realpath(v), j) for v, j in self.tokens if os.path.realpath(v) != v]
 
-    def ajouter(self, famille, rel, src=None, octets=None):
+    def add(self, family, rel, src=None, bytes_=None):
         if src is not None and not src.endswith(".json"):
             st = os.stat(src)
             if st.st_nlink > 1:       # hard links of the cache (a hairstyle's pairs: one file under every head's name)
-                premier = self.inodes.setdefault((st.st_dev, st.st_ino), rel)
-                if premier != rel:
-                    self.doubles.setdefault(premier, []).append(rel)
+                first = self.inodes.setdefault((st.st_dev, st.st_ino), rel)
+                if first != rel:
+                    self.duplicates.setdefault(first, []).append(rel)
                     return
         if src is not None and src.endswith(".json"):
             with open(src, encoding="utf-8") as f:
-                octets = self.neutre(f.read()).encode("utf-8")
+                bytes_ = self.neutral(f.read()).encode("utf-8")
             src = None
-        self.fichiers.append((rel, src, octets))
-        self.familles.setdefault(famille, []).append(len(self.fichiers) - 1)
+        self.files.append((rel, src, bytes_))
+        self.families.setdefault(family, []).append(len(self.files) - 1)
         if src and src.endswith(".pmx"):
-            self.empreintes[self.C.empreinte_fichier(src)] = rel
+            self.fingerprints[self.C.fingerprint_file(src)] = rel
 
-    def neutre(self, texte):
-        for v, j in self.jetons:
-            texte = texte.replace(json.dumps(v)[1:-1], j)
-        return texte
+    def neutral(self, text):
+        for v, j in self.tokens:
+            text = text.replace(json.dumps(v)[1:-1], j)
+        return text
 
-    def dossier(self, famille, rel, src, garde=None, sauf=()):
+    def folder(self, family, rel, src, guard=None, except_=()):
         for d, ds, fs in os.walk(src):
             ds.sort()
             for f in sorted(fs):
                 p = os.path.join(d, f)
                 r = os.path.relpath(p, src).replace(os.sep, "/")
-                if garde is not None and r not in garde or any(fnmatch.fnmatch(r, s) for s in sauf):
+                if guard is not None and r not in guard or any(fnmatch.fnmatch(r, s) for s in except_):
                     continue
                 if os.path.islink(p) or not os.path.isfile(p):
                     raise ValueError("not a regular file: %s" % p)
-                self.ajouter(famille, rel + "/" + r, p)
+                self.add(family, rel + "/" + r, p)
 
-    def json_ajoute(self, famille, rel, valeur):
-        self.ajouter(famille, rel, octets=self.neutre(json.dumps(valeur, ensure_ascii=False, indent=1)).encode("utf-8"))
+    def json_added(self, family, rel, value):
+        value = value        # records of format 2, as the workshop writes them
+        self.add(family, rel, bytes_=self.neutral(json.dumps(value, ensure_ascii=False, indent=1)).encode("utf-8"))
 
     # ------------------------------------------------------------ cache
-    def construire(self):
+    def build(self):
         C, cache = self.C, self.inst.cache
-        lire = C.lire_json
-        tetes = {}
-        for i in sorted(os.listdir(os.path.join(cache, "tetes"))):
-            m = lire(os.path.join(cache, "tetes", i, "meta.json"))
-            if m and i in self.garder:
-                tetes[i] = m
-        ret_tetes = {i for i, m in tetes.items() if m.get("retenue")}
-        for i, m in tetes.items():
-            u = "cache/tetes/" + i
-            self.unites.append(u)
-            garde = None if i in ret_tetes else REFUS_GARDE
-            self.dossier("tetes", u, os.path.join(cache, "tetes", i), garde=garde)
-            (self.retenus if i in ret_tetes else self.refuses)["tetes"].append(i)
-        for i in sorted(os.listdir(os.path.join(cache, "coiffures"))):
-            d = os.path.join(cache, "coiffures", i)
-            m = lire(os.path.join(d, "meta.json"))
-            if not m or i not in self.garder:
+        read = C.read_json
+        heads = {}
+        for i in sorted(os.listdir(os.path.join(cache, "heads"))):
+            m = read(os.path.join(cache, "heads", i, "meta.json"))
+            if m and i in self.keep:
+                heads[i] = m
+        ret_heads = {i for i, m in heads.items() if m.get("kept")}
+        for i, m in heads.items():
+            u = "cache/heads/" + i
+            self.units.append(u)
+            guard = None if i in ret_heads else REFUSALS_KEEP
+            self.folder("heads", u, os.path.join(cache, "heads", i), guard=guard)
+            (self.kept_points if i in ret_heads else self.refused)["heads"].append(i)
+        for i in sorted(os.listdir(os.path.join(cache, "hairstyles"))):
+            d = os.path.join(cache, "hairstyles", i)
+            m = read(os.path.join(d, "meta.json"))
+            if not m or i not in self.keep:
                 continue
-            m["paires"] = {t: p for t, p in (m.get("paires") or {}).items() if t in tetes}
-            ok, _ = C.coiffure_retenue(m["paires"], m.get("propre")) if "paires" in m else (m.get("retenue"), None)
-            u = "cache/coiffures/" + i
-            self.unites.append(u)
-            self.json_ajoute("coiffures", u + "/meta.json", m)
+            m["pairs"] = {t: p for t, p in (m.get("pairs") or {}).items() if t in heads}
+            ok, _ = C.hairstyle_kept(m["pairs"], m.get("own")) if "pairs" in m else (m.get("kept"), None)
+            u = "cache/hairstyles/" + i
+            self.units.append(u)
+            self.json_added("hairstyles", u + "/meta.json", m)
             if ok:
-                self.retenus["coiffures"].append(i)
-                pairs = {t + ".bin" for t in ret_tetes}
-                garde = {f for f in os.listdir(d) if f != "meta.json" and (not f.endswith(".bin") or f in pairs)}
+                self.kept_points["hairstyles"].append(i)
+                pairs = {t + ".bin" for t in ret_heads}
+                guard = {f for f in os.listdir(d) if f != "meta.json" and (not f.endswith(".bin") or f in pairs)}
             else:
-                self.refuses["coiffures"].append(i)
-                garde = set(REFUS_GARDE) - {"meta.json"}
-            self.dossier("coiffures", u, d, garde=garde)
-        pieces_gardees = []
-        for i in sorted(os.listdir(os.path.join(cache, "pieces"))):
-            d = os.path.join(cache, "pieces", i)
-            m = lire(os.path.join(d, "meta.json"))
-            if not m or m.get("perso") not in self.garder:
+                self.refused["hairstyles"].append(i)
+                guard = set(REFUSALS_KEEP) - {"meta.json"}
+            self.folder("hairstyles", u, d, guard=guard)
+        parts_kept = []
+        for i in sorted(os.listdir(os.path.join(cache, "parts"))):
+            d = os.path.join(cache, "parts", i)
+            m = read(os.path.join(d, "meta.json"))
+            if not m or m.get("character") not in self.keep:
                 continue
             note = (m.get("revue") or {}).get("note")
-            ok = m.get("retenue") and not (note is not None and note > C.NOTE_REFUS)
-            u = "cache/pieces/" + i
-            self.unites.append(u)
-            self.dossier("pieces", u, d, garde=None if ok else REFUS_GARDE)
-            (self.retenus if ok else self.refuses)["pieces"].append(i)
+            ok = m.get("kept") and not (note is not None and note > C.NOTE_REFUSALS)
+            u = "cache/parts/" + i
+            self.units.append(u)
+            self.folder("parts", u, d, guard=None if ok else REFUSALS_KEEP)
+            (self.kept_points if ok else self.refused)["parts"].append(i)
             if ok:
-                pieces_gardees.append(m)
+                parts_kept.append(m)
         # base, body, the base head's library entry, the base and the pivot head
-        for r in ("base", "corps", "biblio/Libre"):
+        for r in ("base", "body", "library/Libre"):   # fr-ok: "Libre" is the id of the free head and hairstyle, a folder name in installed caches
             if os.path.isdir(os.path.join(cache, r)):
-                self.unites.append("cache/" + r)
-                self.dossier("base", "cache/" + r, os.path.join(cache, r))
-        self.unites += ["base", "pivot"]
-        self.dossier("base", "base", self.rac["base"])
-        self.dossier("base", "pivot", self.rac["pivot"])
+                self.units.append("cache/" + r)
+                self.folder("base", "cache/" + r, os.path.join(cache, r))
+        self.units += ["base", "pivot"]
+        self.folder("base", "base", self.rt["base"])
+        self.folder("base", "pivot", self.rt["pivot"])
         # face library and source models of the kept models; the cache's biblio/<name> links to it
-        for n in sorted(self.garder):
-            if os.path.isdir(os.path.join(self.rac["visage"], n)):
-                self.unites.append("visage/" + n)
-                self.dossier("visage", "visage/" + n, os.path.join(self.rac["visage"], n))
-                if os.path.islink(os.path.join(cache, "biblio", n)):
-                    self.liens.append({"lien": "cache/biblio/" + n, "cible": "visage/" + n})
-            if os.path.isdir(os.path.join(self.rac["mmd_extrait"], n)):
-                self.unites.append("mmd_extrait/" + n)
-                self.dossier("sources", "mmd_extrait/" + n, os.path.join(self.rac["mmd_extrait"], n))
-        self.vetements(pieces_gardees)
+        for n in sorted(self.keep):
+            if os.path.isdir(os.path.join(self.rt["face"], n)):
+                self.units.append("face/" + n)
+                self.folder("face", "face/" + n, os.path.join(self.rt["face"], n))
+                if os.path.islink(os.path.join(cache, "library", n)):
+                    self.links.append({"link": "cache/library/" + n, "target": "face/" + n})
+            if os.path.isdir(os.path.join(self.rt["mmd_extracted"], n)):
+                self.units.append("mmd_extracted/" + n)
+                self.folder("sources", "mmd_extracted/" + n, os.path.join(self.rt["mmd_extracted"], n))
+        self.clothes(parts_kept)
         self.textures_cache()
         self.annexes()
         return self
 
-    def vetements(self, pieces):
+    def clothes(self, parts):
         """The garment library folders of the kept parts (porter reads them at assembly) and the textures their PMX
-        name; a library part that has no record in the cache is left out (it would be prepared at the next preparer)."""
-        sys.path.insert(0, os.path.join(OUTILS, "atlas"))
+        name; a library part that has no record in the cache is left out (it would be prepared at the next prepare)."""
+        sys.path.insert(0, os.path.join(TOOLS, "atlas"))
         import pmx as PMX
-        racine = os.path.realpath(self.rac["vetements"])
+        root = os.path.realpath(self.rt["clothes"])
         tex = set()
-        for m in pieces:
-            d = os.path.realpath(self.C.absolu(m["dossier"]))
-            if not d.startswith(racine + os.sep):
+        for m in parts:
+            d = os.path.realpath(self.C.absolute(m["folder"]))
+            if not d.startswith(root + os.sep):
                 raise ValueError("part folder outside the garment library: %s" % d)
-            rel = os.path.relpath(d, racine).replace(os.sep, "/")
-            u = "vetements/" + rel
-            self.unites.append(u)
-            self.dossier("vetements", u, d)
-            fi = self.C.lire_json(os.path.join(d, "fiche.json")) or {}
-            for k in (fi.get("pmx"), (fi.get("garnie") or {}).get("pmx")):
+            rel = os.path.relpath(d, root).replace(os.sep, "/")
+            u = "clothes/" + rel
+            self.units.append(u)
+            self.folder("clothes", u, d)
+            fi = self.C.read_json(os.path.join(d, "record.json")) or {}
+            for k in (fi.get("pmx"), (fi.get("trimmed") or {}).get("pmx")):
                 if k and os.path.isfile(os.path.join(d, k)):
-                    for t in PMX.lire(os.path.join(d, k))["textures"]:
+                    for t in PMX.read(os.path.join(d, k))["textures"]:
                         tex.add(os.path.normpath(os.path.join(d, t.replace("\\", "/"))))
         for t in sorted(tex):
-            if not os.path.isfile(t) or not t.startswith(racine + os.sep):
-                dire("  texture named by a part but absent or outside the library: %s" % t)
+            if not os.path.isfile(t) or not t.startswith(root + os.sep):
+                say("  texture named by a part but absent or outside the library: %s" % t)
                 continue
-            rel = "vetements/" + os.path.relpath(t, racine).replace(os.sep, "/")
+            rel = "clothes/" + os.path.relpath(t, root).replace(os.sep, "/")
             if rel.split("/")[2] != "tex":   # a part's own texture is already inside its folder
                 continue
-            self.unites.append(rel)
-            self.ajouter("vetements", rel, t)
+            self.units.append(rel)
+            self.add("clothes", rel, t)
 
     def textures_cache(self):
         """cache/tex: only the textures named by a kept record or model (glb, json)."""
-        for rel, src, octets in list(self.fichiers):
+        for rel, src, bytes_ in list(self.files):
             if not rel.startswith("cache/") or not (rel.endswith(".glb") or rel.endswith(".json")):
                 continue
-            if octets is None:
+            if bytes_ is None:
                 with open(src, "rb") as f:
-                    octets = f.read()
-            self.textures.update(x.decode() for x in TEX.findall(octets))
+                    bytes_ = f.read()
+            self.textures.update(x.decode() for x in TEX.findall(bytes_))
         for t in sorted(self.textures):
             p = os.path.join(self.inst.cache, "tex", t)
             if not os.path.isfile(p):
                 raise ValueError("texture named but absent: %s" % p)
-            self.unites.append("cache/tex/" + t)
-            self.ajouter("pieces", "cache/tex/" + t, p)
+            self.units.append("cache/tex/" + t)
+            self.add("parts", "cache/tex/" + t, p)
 
     def annexes(self):
         """Shared dictionaries, filtered to the kept models and items."""
         C, cache = self.C, self.inst.cache
-        items = {"tetes/" + i for i in self.retenus["tetes"] + self.refuses["tetes"]}
-        items |= {"coiffures/" + i for i in self.retenus["coiffures"] + self.refuses["coiffures"]}
-        items |= {"pieces/" + i for i in self.retenus["pieces"] + self.refuses["pieces"]}
-        etq = {k: v for k, v in (C.lire_json(os.path.join(cache, "etiquettes.json"), {}) or {}).items() if k in items}
+        items = {"heads/" + i for i in self.kept_points["heads"] + self.refused["heads"]}
+        items |= {"hairstyles/" + i for i in self.kept_points["hairstyles"] + self.refused["hairstyles"]}
+        items |= {"parts/" + i for i in self.kept_points["parts"] + self.refused["parts"]}
+        lbl = {k: v for k, v in (C.read_json(os.path.join(cache, "labels.json"), {}) or {}).items() if k in items}
         src = {}
         for n, v in sorted(self.inst.sources.items()):
-            if n in self.garder:
+            if n in self.keep:
                 v = json.loads(json.dumps(v))
-                (v.get("licence") or {}).pop("contactInformation", None)   # personal contact: not a term of use
+                (v.get("license") or {}).pop("contactInformation", None)   # personal contact: not a term of use
                 src[n] = v
         self.sources = src
-        vis = C.lire_json(os.path.join(self.rac["visage"], "index.json"), {}) or {}
-        if "parties" in vis:
-            vis["parties"] = {p: {n: x for n, x in d.items() if n in self.garder} for p, d in vis["parties"].items()}
-        ctl = {n: v for n, v in (C.lire_json(os.path.join(self.rac["vetements"], "controle.json"), {}) or {}).items()
-               if n in self.garder}
-        for rel, v in (("cache/etiquettes.json", etq), ("cache/sources.json", src), ("visage/index.json", vis),
-                       ("vetements/controle.json", ctl)):
-            self.partages.append(rel)
-            self.json_ajoute("base", rel, v)
+        vis = C.read_json(os.path.join(self.rt["face"], "index.json"), {}) or {}
+        if "regions" in vis:
+            vis["regions"] = {p: {n: x for n, x in d.items() if n in self.keep} for p, d in vis["regions"].items()}
+        ctl = {n: v for n, v in (C.read_json(os.path.join(self.rt["clothes"], "check.json"), {}) or {}).items()
+               if n in self.keep}
+        for rel, v in (("cache/labels.json", lbl), ("cache/sources.json", src), ("face/index.json", vis),
+                       ("clothes/check.json", ctl)):
+            self.shared.append(rel)
+            self.json_added("base", rel, v)
 
-    def catalogue(self):
+    def catalog(self):
         """catalogue.json of the package, made by the workshop's own code on the kept records (no file written)."""
         import catalog as K
-        cat = K.construire(ecrire=False)
-        tous = {"tetes": set(self.retenus["tetes"] + self.refuses["tetes"]),
-                "coiffures": set(self.retenus["coiffures"] + self.refuses["coiffures"]),
-                "pieces": set(self.retenus["pieces"] + self.refuses["pieces"])}
-        for k in ("tetes", "coiffures", "pieces"):
-            cat[k] = [x for x in cat[k] if x["id"] in self.retenus[k]]
-        genre = {"face": "tetes", "hairstyle": "coiffures", "part": "pieces"}
-        cat["refus"] = [r for r in cat["refus"] if r["id"] in tous[genre[r["genre"]]]]
+        cat = K.build(write=False)
+        all_ = {"heads": set(self.kept_points["heads"] + self.refused["heads"]),
+                "hairstyles": set(self.kept_points["hairstyles"] + self.refused["hairstyles"]),
+                "parts": set(self.kept_points["parts"] + self.refused["parts"])}
+        for k in ("heads", "hairstyles", "parts"):
+            cat[k] = [x for x in cat[k] if x["id"] in self.kept_points[k]]
+        kind = {"face": "heads", "hairstyle": "hairstyles", "fraction": "parts"}
+        cat["refusals"] = [r for r in cat["refusals"] if r["id"] in all_[kind[r["kind"]]]]
         cat["sources"] = {n: v for n, v in self.sources.items() if n in cat["sources"]}
-        cat["nombres"] = {"preparees": sum(len(v) for v in tous.values()),
-                          "retenues": sum(len(cat[k]) for k in tous), "refusees": len(cat["refus"]),
-                          **{k: [len(cat[k]), len(tous[k])] for k in tous}}
-        self.partages.append("cache/catalogue.json")
-        self.json_ajoute("base", "cache/catalogue.json", cat)
+        cat["counts"] = {"prepared": sum(len(v) for v in all_.values()),
+                          "kept_count": sum(len(cat[k]) for k in all_), "refused": len(cat["refusals"]),
+                          **{k: [len(cat[k]), len(all_[k])] for k in all_}}
+        self.shared.append("cache/catalog.json")
+        self.json_added("base", "cache/catalog.json", cat)
         return cat
 
 
 # ------------------------------------------------------------------ archives
 
-def _ecrire_archive(args):
-    chemin, entrees = args
-    taille = 0
-    with open(chemin + ".tmp", "wb") as brut:
-        with gzip.GzipFile(filename="", mode="wb", fileobj=brut, compresslevel=NIVEAU, mtime=0) as gz:
+def _write_archive(args):
+    path, entries = args
+    size = 0
+    with open(path + ".tmp", "wb") as raw:
+        with gzip.GzipFile(filename="", mode="wb", fileobj=raw, compresslevel=LEVEL, mtime=0) as gz:
             with tarfile.open(fileobj=gz, mode="w", format=tarfile.PAX_FORMAT) as t:
-                dossiers = set()
-                for rel, src, octets in entrees:
+                folders = set()
+                for rel, src, bytes_ in entries:
                     parts = rel.split("/")
                     for k in range(1, len(parts)):
                         d = "/".join(parts[:k])
-                        if d not in dossiers:
-                            dossiers.add(d)
+                        if d not in folders:
+                            folders.add(d)
                             ti = tarfile.TarInfo(d)
                             ti.type, ti.mode, ti.mtime = tarfile.DIRTYPE, 0o755, 0
                             t.addfile(ti)
                     ti = tarfile.TarInfo(rel)
                     ti.mode = 0o644
-                    if octets is None:
+                    if bytes_ is None:
                         st = os.stat(src)
                         ti.size, ti.mtime = st.st_size, int(st.st_mtime)
                         with open(src, "rb") as f:
                             t.addfile(ti, f)
                     else:
-                        ti.size, ti.mtime = len(octets), 0
-                        t.addfile(ti, io.BytesIO(octets))
-                    taille += ti.size
-    os.replace(chemin + ".tmp", chemin)
-    return chemin, taille, os.path.getsize(chemin), I.sha256(chemin)
+                        ti.size, ti.mtime = len(bytes_), 0
+                        t.addfile(ti, io.BytesIO(bytes_))
+                    size += ti.size
+    os.replace(path + ".tmp", path)
+    return path, size, os.path.getsize(path), I.sha256(path)
 
 
-def decouper(plan):
-    """[(name, [entries])]: one family per archive, cut at LIMITE raw bytes (an item never split)."""
+def slice_(plan):
+    """[(name, [entries])]: one family per archive, cut at LIMIT raw bytes (an item never split)."""
     res = []
-    for fam in ("base", "tetes", "coiffures", "pieces", "vetements", "visage", "sources"):
-        lots, lot, n = [], [], 0
-        for k in plan.familles.get(fam, []):
-            rel, src, octets = plan.fichiers[k]
-            t = os.path.getsize(src) if octets is None else len(octets)
-            if lot and n + t > LIMITE and _unite(rel) != _unite(lot[-1][0]):
-                lots.append(lot)
-                lot, n = [], 0
-            lot.append(plan.fichiers[k])
+    names = {"heads": "heads", "hairstyles": "hairstyles", "parts": "parts"}      # format-2 names of the archives
+    for family in ("base", "heads", "hairstyles", "parts", "clothes", "face", "sources"):
+        batches, batch, n = [], [], 0
+        for k in plan.families.get(family, []):
+            rel, src, bytes_ = plan.files[k]
+            t = os.path.getsize(src) if bytes_ is None else len(bytes_)
+            if batch and n + t > LIMIT and _unit(rel) != _unit(batch[-1][0]):
+                batches.append(batch)
+                batch, n = [], 0
+            batch.append(plan.files[k])
             n += t
-        if lot:
-            lots.append(lot)
-        for i, l in enumerate(lots, 1):
-            res.append(("%s-%02d.tar.gz" % (fam, i), l))
+        if batch:
+            batches.append(batch)
+        for i, l in enumerate(batches, 1):
+            res.append(("%s-%02d.tar.gz" % (names.get(family, family), i), l))
     return res
 
 
-def doubles(d, tetes):
-    """[{"de": first copy, "noms": names next to it | "*tetes"}]: "*tetes" = <head>.bin for every kept head but the
+def duplicates(d, heads):
+    """[{"de": first copy, "names": names next to it | "*heads"}]: "*heads" = <head>.bin for every kept head but the
     first copy's own name (a hairstyle's pairs, the same file under every head's name)."""
-    tous = {t + ".bin" for t in tetes}
+    all_ = {t + ".bin" for t in heads}
     res = []
-    for de, vers in sorted(d.items()):
-        dossier, nom = de.rsplit("/", 1)
-        if all(v.rsplit("/", 1)[0] == dossier for v in vers):
-            noms = sorted(v.rsplit("/", 1)[1] for v in vers)
-            res.append({"de": de, "noms": "*tetes" if set(noms) == tous - {nom} else noms})
+    for de, to in sorted(d.items()):
+        folder, name = de.rsplit("/", 1)
+        if all(v.rsplit("/", 1)[0] == folder for v in to):
+            names = sorted(v.rsplit("/", 1)[1] for v in to)
+            res.append({"from": de, "names": "*heads" if set(names) == all_ - {name} else names})
         else:
-            res.append({"de": de, "vers": sorted(vers)})
+            res.append({"from": de, "to": sorted(to)})
     return res
 
 
-def _unite(rel):
+def _unit(rel):
     p = rel.split("/")
-    return "/".join(p[:3] if p[0] in ("cache", "vetements") else p[:2])
+    return "/".join(p[:3] if p[0] in ("cache", "clothes") else p[:2])
 
 
 # ------------------------------------------------------------------ texts of the dataset
 
-def _cellule(s, n=90):
+def _cell(s, n=90):
     s = re.sub(r"\s+", " ", str(s or "")).strip().replace("|", "\\|")
     return s if len(s) <= n else s[:n - 1] + "…"
 
 
-def interdits(L):
-    noms = (("allowExcessivelySexualUsage", "excessively sexual"), ("allowExcessivelyViolentUsage", "excessively violent"),
+def forbidden(L):
+    names = (("allowExcessivelySexualUsage", "excessively sexual"), ("allowExcessivelyViolentUsage", "excessively violent"),
             ("allowPoliticalOrReligiousUsage", "political or religious"), ("allowAntisocialOrHateUsage", "antisocial or hateful"))
-    return ", ".join(t for k, t in noms if L.get(k) is False) or "none listed"
+    return ", ".join(t for k, t in names if L.get(k) is False) or "none listed"
 
 
 def credits(sources, usage):
-    lignes = ["# Credits", "",
+    lines = ["# Credits", "",
               "Every model below keeps its author's terms. VRoid Hub models: original characters (no existing work, "
               "real person or uncertain source), whose VRM licence, read on the model's page on the date given in "
               "`sources.json`, allows redistribution and the redistribution of modified versions. Other models: "
@@ -461,23 +469,23 @@ def credits(sources, usage):
               "", "Parts: F = face, H = hairstyle, P = clothes and accessories.", "",
               "| Id | Model | Author | Page | Parts | Credit | Commercial use | Not allowed | Other terms |",
               "|---|---|---|---|---|---|---|---|---|"]
-    for n, v in sorted(sources.items(), key=lambda x: (_cellule(x[1].get("nom")).lower(), x[0])):
-        L = v.get("licence") or {}
-        autre = "; ".join(x for x in (
-            ("licence: " + L["nom"]) if L.get("nom") else "",
-            ("other licence: " + _cellule(L["otherLicenseUrl"], 60)) if L.get("otherLicenseUrl") else "",
-            ("copyright: " + _cellule(L["copyrightInformation"], 60)) if L.get("copyrightInformation") else "",
+    for n, v in sorted(sources.items(), key=lambda x: (_cell(x[1].get("name")).lower(), x[0])):
+        L = v.get("license") or {}
+        other = "; ".join(x for x in (
+            ("licence: " + L["name"]) if L.get("name") else "",
+            ("other licence: " + _cell(L["otherLicenseUrl"], 60)) if L.get("otherLicenseUrl") else "",
+            ("copyright: " + _cell(L["copyrightInformation"], 60)) if L.get("copyrightInformation") else "",
             "additional terms in sources.json" if L.get("thirdPartyLicenses") else "") if x)
-        lien = "[%s](%s)" % (_cellule(v.get("site") or "page", 30), v["url"]) if v.get("url") else ""
-        lignes.append("| %s | %s | %s | %s | %s | %s | %s | %s | %s |" % (
-            n, _cellule(v.get("nom")), _cellule(v.get("auteur")), lien, usage.get(n, ""),
-            {"required": "**required**", "unnecessary": "not required"}.get(L.get("creditNotation"), _cellule(L.get("creditNotation")) or "?"),
-            _cellule(L.get("commercialUsage") or "?"), interdits(L), _cellule(autre, 160) or "-"))
-    return "\n".join(lignes) + "\n"
+        link = "[%s](%s)" % (_cell(v.get("site") or "page", 30), v["url"]) if v.get("url") else ""
+        lines.append("| %s | %s | %s | %s | %s | %s | %s | %s | %s |" % (
+            n, _cell(v.get("name")), _cell(v.get("author")), link, usage.get(n, ""),
+            {"required": "**required**", "unnecessary": "not required"}.get(L.get("creditNotation"), _cell(L.get("creditNotation")) or "?"),
+            _cell(L.get("commercialUsage") or "?"), forbidden(L), _cell(other, 160) or "-"))
+    return "\n".join(lines) + "\n"
 
 
-def carte(index, adresse_exemple):
-    n = index["nombres"]
+def map_(index, address_example):
+    n = index["counts"]
     return """---
 pretty_name: Chimera VRoid Library
 license: other
@@ -497,8 +505,8 @@ viewer: false
 Ready-made parts library for [Chimera 3D Avatar Maker](https://github.com/RoseAndKnight/Chimera-3D-Avatar-Maker), the character workshop that mixes
 the face, hairstyle and clothes of different 3D models on one body and exports the result as PMX and VRM.
 
-It holds **%(modeles)d free VRoid models**, already prepared: %(tetes)d faces, %(coiffures)d hairstyles and
-%(pieces)d clothes and accessories that the workshop can show and assemble at once, with their names, descriptions
+It holds **%(models)d free VRoid models**, already prepared: %(heads)d faces, %(hairstyles)d hairstyles and
+%(parts)d clothes and accessories that the workshop can show and assemble at once, with their names, descriptions
 and tags (English and French) and a link to each original model. Installing it saves the hours of Blender work the
 preparation takes.
 
@@ -511,7 +519,7 @@ python3 -I tools/library/library.py install
 bin/chimera
 ```
 
-The command downloads `index.json`, then the %(archives)d archives listed in it (%(poids).1f GB, about %(installe).1f GB
+The command downloads `index.json`, then the %(archives)d archives listed in it (%(size_gb).1f GB, about %(installed).1f GB
 once installed), checks each one against its sha256 before unpacking, and installs them into the data folder of
 your settings. Running it again resumes an interrupted download. It does not overwrite models you added yourself:
 if something of yours is in the way it stops and says so (`--replace` sets those items aside, never deletes them).
@@ -519,13 +527,17 @@ if something of yours is in the way it stops and says so (`--replace` sets those
 This repository is not meant to be read with the `datasets` library: the archives are the workshop's own data
 (PMX, glTF, textures, records). Format %(format)d, for Chimera code version %(code)d.
 
+Format 2 names every folder, file and record field in English. A copy installed from the earlier package (format 1,
+French names) is converted in place, without downloading again: `python3 -I tools/library/library.py migrate
+<data folder>`; or remove it and install again.
+
 ## Where the models come from
 
 - VRoid Hub models (ids `h<number>`): original characters published on [VRoid Hub](https://hub.vroid.com) whose VRM
   licence allows redistribution **and** the redistribution of modified versions. Models based on an existing work
   (fan art), on a real person, or whose source is uncertain were left out, with all their parts, textures and
   thumbnails.
-- VRoid Studio sample characters (`Base_Female`, `Vita`…, and the base body, `Libre`, made from `Sendagaya_Shibu`):
+- VRoid Studio sample characters (`Base_Female`, `Vita`…, and the base body, `Libre`, made from `Sendagaya_Shibu`): <!-- fr-ok: id of the free base -->
   CC0, as written in each model's own file.
 
 ## Terms of use
@@ -550,18 +562,18 @@ dataset with the model's id (first column of `CREDITS.md`). The model will be re
 - `archives/*.tar.gz`: the prepared data, by family (base, faces, hairstyles, parts, garment library, face library,
   source models).
 - `CREDITS.md`, `sources.json`: authors and terms.
-- `mettre-en-ligne.sh`: the script that uploaded this folder (for the maintainer).
-""" % dict(n, archives=len(index["archives"]), poids=sum(a["taille"] for a in index["archives"]) / 1e9,
-           installe=index["taille_installee"] / 1e9, repo=adresse_exemple, format=index["format"], code=index["code"])
+- `upload.sh`: the script that uploaded this folder (for the maintainer).
+""" % dict(n, archives=len(index["archives"]), size_gb=sum(a["size"] for a in index["archives"]) / 1e9,
+           installed=index["installed_size"] / 1e9, repo=address_example, format=index["format"], code=index["code"])
 
 
-MISE_EN_LIGNE = r"""#!/bin/bash
+SETTING_IN_LINE = r"""#!/bin/bash
 # Uploads this folder to the Hugging Face dataset repository named below. Not run by the tools: by the maintainer,
 # once logged in. Needs the `hf` command (https://huggingface.co/docs/huggingface_hub/guides/cli):
 #     curl -LsSf https://hf.co/cli/install.sh | bash        (or: pip install -U huggingface_hub)
 #     hf auth login
-# Then: bash mettre-en-ligne.sh [owner/name]
-# The address the installer reads (library.url in settings.default.json) must name the same repository:
+# Then: bash upload.sh [owner/name]
+# The address the setup program reads (library.url in settings.default.json) must name the same repository:
 #     https://huggingface.co/datasets/<owner/name>/resolve/main
 set -euo pipefail
 REPO="${1:-%(repo)s}"
@@ -569,137 +581,139 @@ ICI="$(cd "$(dirname "$0")" && pwd)"
 command -v hf >/dev/null || { echo "hf is not installed: curl -LsSf https://hf.co/cli/install.sh | bash" >&2; exit 1; }
 hf auth whoami >/dev/null || { echo "not logged in: hf auth login" >&2; exit 1; }
 hf repos create "$REPO" --repo-type dataset --exist-ok
-# archives first, index.json last: an installer never reads an index whose archives are not there yet
-hf upload "$REPO" "$ICI/archives" archives --repo-type dataset --commit-message "Archives"
+# archives first, index.json next: a setup program never reads an index whose archives are not there yet
+hf upload "$REPO" "$ICI/archives" archives --repo-type dataset --commit-message "Archives (format %(format)s)"
 hf upload "$REPO" "$ICI" . --repo-type dataset --include "README.md" --include "CREDITS.md" --include "sources.json" \
-    --include "mettre-en-ligne.sh" --commit-message "Card, credits and sources"
-hf upload "$REPO" "$ICI/index.json" index.json --repo-type dataset --commit-message "Index"
+    --include "upload.sh" --delete "mettre-en-ligne.sh" --commit-message "Card, credits and sources"   # fr-ok: script name of the format-1 package, removed from the repository
+hf upload "$REPO" "$ICI/index.json" index.json --repo-type dataset --commit-message "Index (format %(format)s)"
+# last, once the new index is in place: the archives of an earlier package (format 1, with French
+# names) that this one does not hold are deleted from the repository
+hf upload "$REPO" "$ICI/archives" archives --repo-type dataset --delete "*" --commit-message "Remove the archives of the earlier package"
 echo "Done: https://huggingface.co/datasets/$REPO"
 """
 
 
 # ------------------------------------------------------------------ build and check
 
-def construire(installation, sortie, statuts, repo="Rose-and-Knight/chimera-vroid-library", travaux=4):
+def build(installation, output, statuses, repo="Rose-and-Knight/chimera-vroid-library", tasks=4):
     t0 = time.time()
-    inst = Installation(installation, statuts)
-    garder, ecarter = inst.trier()
-    dire("models: %d kept, %d left out" % (len(garder), len(ecarter)))
-    for n, r in sorted(ecarter.items()):
-        dire("  left out %s: %s" % (n, r))
-    plan = Plan(inst, garder).construire()
-    cat = plan.catalogue()
+    inst = Installation(installation, statuses)
+    keep, discard = inst.sort()
+    say("models: %d kept, %d left out" % (len(keep), len(discard)))
+    for n, r in sorted(discard.items()):
+        say("  left out %s: %s" % (n, r))
+    plan = Plan(inst, keep).build()
+    cat = plan.catalog()
     # fingerprints the records keep and the package cannot rewrite: those items would be prepared again
-    connues = set(plan.empreintes)
-    manquent = []
-    refuses = {"cache/%s/%s" % (k, i) for k, v in plan.refuses.items() for i in v}
-    for rel, src, octets in plan.fichiers:
-        if _unite(rel) in refuses:   # a refused part's source is not shipped: nothing would prepare it again
+    known = set(plan.fingerprints)
+    missing = []
+    refused = {"cache/%s/%s" % (k, i) for k, v in plan.refused.items() for i in v}
+    for rel, src, bytes_ in plan.files:
+        if _unit(rel) in refused:   # a refused part's source is not shipped: nothing would prepare it again
             continue
-        if rel.endswith("meta.json") or rel.endswith("fiche.json"):
-            m = json.loads(octets) if octets is not None else {}
-            for k in ("empreinte", "corps"):
+        if rel.endswith("meta.json") or rel.endswith("record.json"):
+            m = json.loads(bytes_) if bytes_ is not None else {}
+            for k in ("fingerprint", "body"):
                 v = str(m.get(k) or "")
                 h = v.rsplit(":", 1)[-1]
-                if re.fullmatch(r"[0-9a-f]{16}", h) and h not in connues:
-                    manquent.append((rel, k, h))
-    if manquent:
-        dire("WARNING: %d fingerprints without their file in the package (those items would be prepared again):" % len(manquent))
-        for x in manquent[:10]:
-            dire("  %s %s %s" % x)
-    os.makedirs(os.path.join(sortie, "archives"), exist_ok=True)
-    lots = decouper(plan)
-    with ProcessPoolExecutor(travaux) as pool:
-        faits = list(pool.map(_ecrire_archive, [(os.path.join(sortie, "archives", n), l) for n, l in lots]))
-    archives = [{"chemin": "archives/" + os.path.basename(c), "taille": t, "sha256": h, "taille_extraite": brut}
-                for c, brut, t, h in faits]
+                if re.fullmatch(r"[0-9a-f]{16}", h) and h not in known:
+                    missing.append((rel, k, h))
+    if missing:
+        say("WARNING: %d fingerprints without their file in the package (those items would be prepared again):" % len(missing))
+        for x in missing[:10]:
+            say("  %s %s %s" % x)
+    os.makedirs(os.path.join(output, "archives"), exist_ok=True)
+    batches = slice_(plan)
+    with ProcessPoolExecutor(tasks) as pool:
+        done = list(pool.map(_write_archive, [(os.path.join(output, "archives", n), l) for n, l in batches]))
+    archives = [{"path": "archives/" + os.path.basename(c), "size": t, "sha256": h, "extracted_size": raw}
+                for c, raw, t, h in done]
     usage = {}
-    for k, lettre in (("tetes", "F"), ("coiffures", "H")):
-        for i in plan.retenus[k]:
-            usage.setdefault(i, set()).add(lettre)
-    for p in cat["pieces"]:
-        usage.setdefault(p["perso"], set()).add("P")
+    for k, letter in (("heads", "F"), ("hairstyles", "H")):
+        for i in plan.kept_points[k]:
+            usage.setdefault(i, set()).add(letter)
+    for p in cat["parts"]:
+        usage.setdefault(p["character"], set()).add("P")
     usage = {n: "".join(x for x in "FHP" if x in v) for n, v in usage.items()}
     index = {
         "format": I.FORMAT, "code": VERSION_CODE, "version": time.strftime("%Y-%m-%d"),
-        "nombres": {"modeles": len(garder), "tetes": len(cat["tetes"]), "coiffures": len(cat["coiffures"]),
-                    "pieces": len(cat["pieces"]), "refus": len(cat["refus"])},
-        "archives": archives, "taille_installee": sum(a["taille_extraite"] for a in archives),
-        "unites": sorted(set(plan.unites)), "partages": plan.partages, "catalogue": "cache/catalogue.json",
-        "liens": plan.liens, "empreintes": plan.empreintes, "doubles": doubles(plan.doubles, plan.retenus["tetes"]),
-        "tetes_bin": sorted(plan.retenus["tetes"]),
-        "modeles": sorted(garder), "ecartes": ecarter,
+        "counts": {"models": len(keep), "heads": len(cat["heads"]), "hairstyles": len(cat["hairstyles"]),
+                    "parts": len(cat["parts"]), "refusals": len(cat["refusals"])},
+        "archives": archives, "installed_size": sum(a["extracted_size"] for a in archives),
+        "units": sorted(set(plan.units)), "shared": plan.shared, "catalog": "cache/catalog.json",
+        "links": plan.links, "fingerprints": plan.fingerprints, "duplicates": duplicates(plan.duplicates, plan.kept_points["heads"]),
+        "heads_bin": sorted(plan.kept_points["heads"]),
+        "models": sorted(keep), "discarded": discard,
     }
-    I.ecrire_json(os.path.join(sortie, "index.json"), index)
-    I.ecrire_json(os.path.join(sortie, "sources.json"), plan.sources)
-    with open(os.path.join(sortie, "CREDITS.md"), "w", encoding="utf-8") as f:
+    I.write_json(os.path.join(output, "index.json"), index)
+    I.write_json(os.path.join(output, "sources.json"), plan.sources)
+    with open(os.path.join(output, "CREDITS.md"), "w", encoding="utf-8") as f:
         f.write(credits(plan.sources, usage))
-    with open(os.path.join(sortie, "README.md"), "w", encoding="utf-8") as f:
-        f.write(carte(index, repo))
-    with open(os.path.join(sortie, "mettre-en-ligne.sh"), "w", encoding="utf-8") as f:
-        f.write(MISE_EN_LIGNE % {"repo": repo})
-    os.chmod(os.path.join(sortie, "mettre-en-ligne.sh"), 0o755)
-    dire("package: %d models, %d faces, %d hairstyles, %d parts (%d refused records), %d archives, %.2f GB, %.2f GB installed, %.0f s" % (
-        len(garder), len(cat["tetes"]), len(cat["coiffures"]), len(cat["pieces"]), len(cat["refus"]), len(archives),
-        sum(a["taille"] for a in archives) / 1e9, index["taille_installee"] / 1e9, time.time() - t0))
+    with open(os.path.join(output, "README.md"), "w", encoding="utf-8") as f:
+        f.write(map_(index, repo))
+    with open(os.path.join(output, "upload.sh"), "w", encoding="utf-8") as f:
+        f.write(SETTING_IN_LINE % {"repo": repo, "format": I.FORMAT})
+    os.chmod(os.path.join(output, "upload.sh"), 0o755)
+    say("package: %d models, %d faces, %d hairstyles, %d parts (%d refused records), %d archives, %.2f GB, %.2f GB installed, %.0f s" % (
+        len(keep), len(cat["heads"]), len(cat["hairstyles"]), len(cat["parts"]), len(cat["refusals"]), len(archives),
+        sum(a["size"] for a in archives) / 1e9, index["installed_size"] / 1e9, time.time() - t0))
     return index
 
 
-def verifier(sortie, statuts):
+def check(output, statuses):
     """Reads every archive back: sizes and sha256 of index.json, safe members, no machine path, no id of a model
-    that is not kept (statuts.json other than "originale", or left out), no texture of cache/tex that no kept record
+    that is not kept (statuses.json other than "originale", or left out), no texture of cache/tex that no kept record
     names, every unit present. Returns the list of defects."""
-    with open(os.path.join(sortie, "index.json"), encoding="utf-8") as f:
-        index = json.load(f)
-    with open(statuts, encoding="utf-8") as f:
+    index = I.read_json(os.path.join(output, "index.json"))
+    with open(statuses, encoding="utf-8") as f:
         st = json.load(f)
-    gardes = set(index["modeles"])
-    hors = {i for i, v in st.items() if v.get("statut") != "originale"} | {
-        n[1:] if re.fullmatch(r"h\d+", n) else n for n in index["ecartes"]}
-    hors -= {n[1:] for n in gardes if n.startswith("h")}
-    motif = re.compile(rb"(?<![0-9])(" + b"|".join(re.escape(x.encode()) for x in sorted(hors)) + rb")(?![0-9])") if hors else None
-    defauts, noms, textes_tex, tex = [], set(), set(), set()
+    kept = set(index["models"])
+    out_of = {i for i, v in st.items() if status_of(v) != "originale"} | {
+        n[1:] if re.fullmatch(r"h\d+", n) else n for n in index["discarded"]}
+    out_of -= {n[1:] for n in kept if n.startswith("h")}
+    pattern = re.compile(rb"(?<![0-9])(" + b"|".join(re.escape(x.encode()) for x in sorted(out_of)) + rb")(?![0-9])") if out_of else None
+    defaults, names, texts_tex, tex = [], set(), set(), set()
     for a in index["archives"]:
-        c = os.path.join(sortie, a["chemin"])
-        if os.path.getsize(c) != a["taille"] or I.sha256(c) != a["sha256"]:
-            defauts.append("%s: size or sha256 differs from index.json" % a["chemin"])
+        c = os.path.join(output, a["path"])
+        if os.path.getsize(c) != a["size"] or I.sha256(c) != a["sha256"]:
+            defaults.append("%s: size or sha256 differs from index.json" % a["path"])
         with tarfile.open(c, "r:gz") as t:
             for m in t:
                 try:
-                    rel = I.membre_sur(m)
-                except I.Erreur as e:
-                    defauts.append(str(e))
+                    rel = I.limb_on(m)
+                except I.Error as e:
+                    defaults.append(str(e))
                     continue
                 if m.isdir():
                     continue
-                noms.add(rel)
-                if motif and motif.search(rel.encode()):
-                    defauts.append("%s: id of a model left out in the path" % rel)
+                names.add(rel)
+                if pattern and pattern.search(rel.encode()):
+                    defaults.append("%s: id of a model left out in the path" % rel)
                 b = t.extractfile(m).read()
                 if MACHINE.search(b):
-                    defauts.append("%s: machine path inside" % rel)
-                if motif and (rel.endswith(".json") or rel.endswith(".md")) and motif.search(b):
-                    defauts.append("%s: id of a model left out inside" % rel)
+                    defaults.append("%s: machine path inside" % rel)
+                if pattern and (rel.endswith(".json") or rel.endswith(".md")) and pattern.search(b):
+                    defaults.append("%s: id of a model left out inside" % rel)
                 if rel.startswith("cache/tex/"):
                     tex.add(rel[len("cache/tex/"):])
                 elif rel.startswith("cache/") and (rel.endswith(".glb") or rel.endswith(".json")):
-                    textes_tex.update(x.decode() for x in TEX.findall(b))
+                    texts_tex.update(x.decode() for x in TEX.findall(b))
     for f in ("CREDITS.md", "README.md", "sources.json"):
-        with open(os.path.join(sortie, f), "rb") as fh:
+        with open(os.path.join(output, f), "rb") as fh:
             b = fh.read()
-        if MACHINE.search(b) or (motif and motif.search(b)):
-            defauts.append("%s: machine path or id of a model left out" % f)
-    orphelines = tex - textes_tex
-    if orphelines:
-        defauts.append("%d textures of cache/tex named by no kept record, e.g. %s" % (len(orphelines), sorted(orphelines)[:3]))
-    lies = I.cibles_doubles(index)
-    for u in index["unites"] + index["partages"]:
-        if u in lies:
+        if MACHINE.search(b) or (pattern and pattern.search(b)):
+            defaults.append("%s: machine path or id of a model left out" % f)
+    orphan = tex - texts_tex
+    if orphan:
+        defaults.append("%d textures of cache/tex named by no kept record, e.g. %s" % (len(orphan), sorted(orphan)[:3]))
+    linked = I.targets_duplicates(index)
+    for u in index["units"] + index["shared"]:
+        if u in linked:
             continue
-        if u not in noms and not any(n.startswith(u + "/") for n in noms):
-            defauts.append("unit missing from the archives: %s" % u)
-    dire("checked: %d archives, %d files, %d textures, %d models left out searched; %d defects" % (
-        len(index["archives"]), len(noms), len(tex), len(hors), len(defauts)))
-    for d in defauts[:30]:
-        dire("  DEFECT " + d)
-    return defauts
+        if u not in names and not any(n.startswith(u + "/") for n in names):
+            defaults.append("unit missing from the archives: %s" % u)
+    say("checked: %d archives, %d files, %d textures, %d models left out searched; %d defects" % (
+        len(index["archives"]), len(names), len(tex), len(out_of), len(defaults)))
+    for d in defaults[:30]:
+        say("  DEFECT " + d)
+    return defaults

@@ -2,7 +2,7 @@
 external textures (files shared in the cache, relative URIs). Numpy only.
 
 Frame: MMD (x, y, z; one unit = 8 cm, the character looks towards -Z) -> glTF (x, y, -z in
-metres, character facing +Z). Flipping the sign of z reverses the winding of the faces: `vers_gltf`
+metres, character facing +Z). Flipping the sign of z reverses the winding of the faces: `to_gltf`
 checks it against the mesh normals rather than assuming it.
 """
 import json
@@ -11,11 +11,11 @@ import struct
 
 import numpy as np
 
-COMPOSANTE = {"f4": 5126, "u4": 5125, "u2": 5123}
+COMPONENT = {"f4": 5126, "u4": 5125, "u2": 5123}
 TYPE = {2: "VEC2", 3: "VEC3", 4: "VEC4"}
 
 
-def vers_gltf(pos, nor, faces):
+def to_gltf(pos, nor, faces):
     """Moves vertices and normals from the MMD frame to the glTF frame and orients the faces outwards."""
     p = np.asarray(pos, dtype=np.float32).copy() * 0.08
     n = np.asarray(nor, dtype=np.float32).copy()
@@ -28,15 +28,15 @@ def vers_gltf(pos, nor, faces):
         if (nf * n[f[:, 0]]).sum() < 0:
             f = f[:, [0, 2, 1]]
             nf = -nf
-        f = a_l_endroit(p, n, f)
+        f = a_l_upright(p, n, f)
     return p, n, f
 
 
-def a_l_endroit(pos, nor, F):
+def a_l_upright(pos, nor, F):
     """Faces drawn inside out, flipped. The page lights the back of a face with the opposite
     normal: a face drawn inside out comes out unlit, as a dark patch (under the buttocks of
     Zhu Yuan's jumpsuit, 16/11), and its outline shell passes in front of the surface (line under
-    Maëlys's lip, 09/11).
+    Maelys's lip, 09/11).
 
     The winding is first read from the neighbours: two faces sharing an edge traverse it in
     opposite directions. Each sheet is thus made consistent with itself, then turned to the side
@@ -50,136 +50,136 @@ def a_l_endroit(pos, nor, F):
     W = w[F]
     # oriented edges of each face; two consistent neighbouring faces traverse them in opposite directions
     a = np.concatenate([W[:, [0, 1]], W[:, [1, 2]], W[:, [2, 0]]])
-    qui = np.tile(np.arange(len(F)), 3)
-    sens = a[:, 0] < a[:, 1]
-    cle = np.sort(a, 1)
-    ordre = np.lexsort((cle[:, 1], cle[:, 0]))
-    cle, qui, sens = cle[ordre], qui[ordre], sens[ordre]
-    deb = np.r_[True, (cle[1:] != cle[:-1]).any(1)]
-    nb = np.diff(np.r_[np.where(deb)[0], len(cle)])
-    paire = np.where(deb)[0][nb == 2]                  # manifold edges: exactly two faces
-    f1, f2 = qui[paire], qui[paire + 1]
-    contre = sens[paire] == sens[paire + 1]            # same direction: one of the two is inside out
-    ok = (f1 != f2) & (cle[paire, 0] != cle[paire, 1])
-    f1, f2, contre = f1[ok], f2[ok], contre[ok]
-    vois = [[] for _ in range(len(F))]
-    for x, y, c in zip(f1.tolist(), f2.tolist(), contre.tolist()):
-        vois[x].append((y, c))
-        vois[y].append((x, c))
+    which = np.tile(np.arange(len(F)), 3)
+    direction = a[:, 0] < a[:, 1]
+    the_key = np.sort(a, 1)
+    order = np.lexsort((the_key[:, 1], the_key[:, 0]))
+    the_key, which, direction = the_key[order], which[order], direction[order]
+    deb = np.r_[True, (the_key[1:] != the_key[:-1]).any(1)]
+    nb = np.diff(np.r_[np.where(deb)[0], len(the_key)])
+    pair = np.where(deb)[0][nb == 2]                  # manifold edges: exactly two faces
+    f1, f2 = which[pair], which[pair + 1]
+    against = direction[pair] == direction[pair + 1]            # same direction: one of the two is inside out
+    ok = (f1 != f2) & (the_key[pair, 0] != the_key[pair, 1])
+    f1, f2, against = f1[ok], f2[ok], against[ok]
+    neigh = [[] for _ in range(len(F))]
+    for x, y, c in zip(f1.tolist(), f2.tolist(), against.tolist()):
+        neigh[x].append((y, c))
+        neigh[y].append((x, c))
     g = np.cross(pos[F[:, 1]] - pos[F[:, 0]], pos[F[:, 2]] - pos[F[:, 0]])
-    accord = (g * np.asarray(nor, float)[F].sum(1)).sum(1)      # > 0: the face looks the same way as its normals
-    retourne = np.zeros(len(F), bool)
+    match_ = (g * np.asarray(nor, float)[F].sum(1)).sum(1)      # > 0: the face looks the same way as its normals
+    flips = np.zeros(len(F), bool)
     vu = np.zeros(len(F), bool)
-    for depart in range(len(F)):
-        if vu[depart]:
+    for start in range(len(F)):
+        if vu[start]:
             continue
-        nappe, pile = [depart], [depart]
-        vu[depart] = True
+        sheet, pile = [start], [start]
+        vu[start] = True
         while pile:
             x = pile.pop()
-            for y, c in vois[x]:
+            for y, c in neigh[x]:
                 if not vu[y]:
                     vu[y] = True
-                    retourne[y] = retourne[x] ^ c
-                    nappe.append(y)
+                    flips[y] = flips[x] ^ c
+                    sheet.append(y)
                     pile.append(y)
-        nappe = np.array(nappe)
-        if np.where(retourne[nappe], -accord[nappe], accord[nappe]).sum() < 0:
-            retourne[nappe] = ~retourne[nappe]
-    F[retourne] = F[retourne][:, [0, 2, 1]]
+        sheet = np.array(sheet)
+        if np.where(flips[sheet], -match_[sheet], match_[sheet]).sum() < 0:
+            flips[sheet] = ~flips[sheet]
+    F[flips] = F[flips][:, [0, 2, 1]]
     return F
 
 
-def remettre_a_l_endroit(chemin):
-    """Applies a_l_endroit to the faces of an already written GLB, in place, and recomputes the normals
+def reset_a_l_upright(path):
+    """Applies a_l_upright to the faces of an already written GLB, in place, and recomputes the normals
     of the vertices of the flipped faces. Returns the number of flipped faces."""
-    doc, b = lire(chemin)
+    doc, b = read(path)
     b = bytearray(b)
 
-    def vue(i):
+    def view(i):
         a = doc["accessors"][i]
         return doc["bufferViews"][a["bufferView"]].get("byteOffset", 0) + a.get("byteOffset", 0), a["count"]
     pr = doc["meshes"][0]["primitives"]
     if any(doc["accessors"][x["indices"]]["componentType"] != 5125 for x in pr):
         return 0
-    o, n = vue(pr[0]["attributes"]["POSITION"])
+    o, n = view(pr[0]["attributes"]["POSITION"])
     pos = np.frombuffer(bytes(b[o:o + n * 12]), "<f4").reshape(-1, 3).astype(float)
-    on, n = vue(pr[0]["attributes"]["NORMAL"])
+    on, n = view(pr[0]["attributes"]["NORMAL"])
     nor = np.frombuffer(bytes(b[on:on + n * 12]), "<f4").reshape(-1, 3).astype(float)
-    ou = [vue(x["indices"]) for x in pr]
-    F = np.concatenate([np.frombuffer(bytes(b[o:o + n * 4]), "<u4").reshape(-1, 3) for o, n in ou]).astype(np.int64)
-    G = a_l_endroit(pos, nor, F)
+    idx = [view(x["indices"]) for x in pr]
+    F = np.concatenate([np.frombuffer(bytes(b[o:o + n * 4]), "<u4").reshape(-1, 3) for o, n in idx]).astype(np.int64)
+    G = a_l_upright(pos, nor, F)
     change = (G != F).any(1)
     if not change.any():
         return 0
     k = 0
-    for o, n in ou:
+    for o, n in idx:
         b[o:o + n * 4] = G[k:k + n // 3].astype("<u4").tobytes()
         k += n // 3
     # normals of the affected vertices: smooth, over coincident vertices
     w = np.unique(np.round(pos / 1e-5).astype(np.int64), axis=0, return_inverse=True)[1].reshape(-1)
     g = np.cross(pos[G[:, 1]] - pos[G[:, 0]], pos[G[:, 2]] - pos[G[:, 0]])
-    acc = np.zeros((int(w.max()) + 1, 3))
+    accessory = np.zeros((int(w.max()) + 1, 3))
     for c in range(3):
-        np.add.at(acc, w[G[:, c]], g)
-    touche = np.zeros(int(w.max()) + 1, bool)
-    touche[w[G[change]].ravel()] = True
-    N = acc[w]
+        np.add.at(accessory, w[G[:, c]], g)
+    touched = np.zeros(int(w.max()) + 1, bool)
+    touched[w[G[change]].ravel()] = True
+    N = accessory[w]
     l = np.linalg.norm(N, axis=1)
-    refait = touche[w] & (l > 1e-12)
+    redone = touched[w] & (l > 1e-12)
     nor = nor.copy()
-    nor[refait] = N[refait] / l[refait][:, None]
+    nor[redone] = N[redone] / l[redone][:, None]
     b[on:on + len(nor) * 12] = nor.astype("<f4").tobytes()
     j = json.dumps(doc, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
     j += b" " * (-len(j) % 4)
     b += b"\0" * (-len(b) % 4)
-    with open(chemin + ".tmp", "wb") as fh:
+    with open(path + ".tmp", "wb") as fh:
         fh.write(struct.pack("<4sII", b"glTF", 2, 28 + len(j) + len(b)) + struct.pack("<I4s", len(j), b"JSON") + j
                  + struct.pack("<I4s", len(b), b"BIN\0") + bytes(b))
-    os.replace(chemin + ".tmp", chemin)
+    os.replace(path + ".tmp", path)
     return int(change.sum())
 
 
-def ecrire(chemin, pos, nor, uv, primitives, materiaux):
-    """primitives: [{"faces": (n,3), "materiau": i}]; materiaux: dicts with
-    nom, image (URI or None), diffus (rgba), contour (rgba+size), double, alpha, role."""
+def write(path, pos, nor, uv, primitives, materials):
+    """primitives: [{"faces": (n,3), "material": i}]; materials: dicts with
+    name, image (URI or None), diffuse (rgba), contour (rgba+size), double, alpha, role."""
     pos = np.asarray(pos, np.float32)
     nor = np.asarray(nor, np.float32)
     uv = np.asarray(uv, np.float32)
-    octets, vues, accesseurs, prims = bytearray(), [], [], []
+    bytes_, views, accessors, prims = bytearray(), [], [], []
 
-    def ajoute(tab, cible=None, nb_comp=None, type_c="f4", normalise=False):
-        nonlocal octets
-        while len(octets) % 4:
-            octets.append(0)
-        deb = len(octets)
-        octets += tab.astype("<" + type_c).tobytes()
-        v = {"buffer": 0, "byteOffset": deb, "byteLength": len(octets) - deb}
-        if cible:
-            v["target"] = cible
-        vues.append(v)
-        acc = {"bufferView": len(vues) - 1, "componentType": COMPOSANTE[type_c], "count": int(len(tab)),
+    def added(tab, target=None, nb_comp=None, type_c="f4", normalized=False):
+        nonlocal bytes_
+        while len(bytes_) % 4:
+            bytes_.append(0)
+        deb = len(bytes_)
+        bytes_ += tab.astype("<" + type_c).tobytes()
+        v = {"buffer": 0, "byteOffset": deb, "byteLength": len(bytes_) - deb}
+        if target:
+            v["target"] = target
+        views.append(v)
+        accessory = {"bufferView": len(views) - 1, "componentType": COMPONENT[type_c], "count": int(len(tab)),
                "type": TYPE.get(nb_comp, "SCALAR")}
         if type_c == "f4":
-            aplati = tab.reshape(len(tab), -1)
-            acc["min"] = [float(x) for x in aplati.min(0)]
-            acc["max"] = [float(x) for x in aplati.max(0)]
-        accesseurs.append(acc)
-        return len(accesseurs) - 1
+            flattened = tab.reshape(len(tab), -1)
+            accessory["min"] = [float(x) for x in flattened.min(0)]
+            accessory["max"] = [float(x) for x in flattened.max(0)]
+        accessors.append(accessory)
+        return len(accessors) - 1
 
-    a_pos = ajoute(pos, 34962, 3)
-    a_nor = ajoute(nor, 34962, 3)
-    a_uv = ajoute(uv, 34962, 2)
+    a_pos = added(pos, 34962, 3)
+    a_nor = added(nor, 34962, 3)
+    a_uv = added(uv, 34962, 2)
     for pr in primitives:
         f = np.asarray(pr["faces"], np.uint32).ravel()
         prims.append({"attributes": {"POSITION": a_pos, "NORMAL": a_nor, "TEXCOORD_0": a_uv},
-                      "indices": ajoute(f, 34963, 1, "u4"), "material": int(pr["materiau"]), "mode": 4})
-    while len(octets) % 4:
-        octets.append(0)
+                      "indices": added(f, 34963, 1, "u4"), "material": int(pr["material"]), "mode": 4})
+    while len(bytes_) % 4:
+        bytes_.append(0)
     images, textures, mats = [], [], []
-    for m in materiaux:
-        d = list(m.get("diffus") or (1, 1, 1, 1))
-        gm = {"name": str(m.get("nom", "")), "extras": {k: m[k] for k in m if k != "image"},
+    for m in materials:
+        d = list(m.get("diffuse") or (1, 1, 1, 1))
+        gm = {"name": str(m.get("name", "")), "extras": {k: m[k] for k in m if k != "image"},
               "doubleSided": bool(m.get("double", True)),
               "pbrMetallicRoughness": {"baseColorFactor": [float(x) for x in d], "metallicFactor": 0, "roughnessFactor": 1}}
         if m.get("alpha"):
@@ -190,31 +190,31 @@ def ecrire(chemin, pos, nor, uv, primitives, materiaux):
                 textures.append({"source": len(images) - 1})
             gm["pbrMetallicRoughness"]["baseColorTexture"] = {"index": images.index(m["image"])}
         mats.append(gm)
-    doc = {"asset": {"version": "2.0", "generator": "atelier-personnage"},
+    doc = {"asset": {"version": "2.0", "generator": "chimera-workshop"},
            "scene": 0, "scenes": [{"nodes": [0]}], "nodes": [{"mesh": 0}],
            "meshes": [{"primitives": prims}], "materials": mats,
-           "accessors": accesseurs, "bufferViews": vues, "buffers": [{"byteLength": len(octets)}]}
+           "accessors": accessors, "bufferViews": views, "buffers": [{"byteLength": len(bytes_)}]}
     if images:
         doc["images"] = [{"uri": u} for u in images]
         doc["textures"] = textures
     js = json.dumps(doc, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
     js += b" " * ((4 - len(js) % 4) % 4)
-    total = 12 + 8 + len(js) + 8 + len(octets)
-    sortie = struct.pack("<III", 0x46546C67, 2, total)
-    sortie += struct.pack("<II", len(js), 0x4E4F534A) + js
-    sortie += struct.pack("<II", len(octets), 0x004E4942) + bytes(octets)
-    import common as commun
-    commun.ecrire_octets(chemin, sortie)
-    return len(sortie)
+    total = 12 + 8 + len(js) + 8 + len(bytes_)
+    output = struct.pack("<III", 0x46546C67, 2, total)
+    output += struct.pack("<II", len(js), 0x4E4F534A) + js
+    output += struct.pack("<II", len(bytes_), 0x004E4942) + bytes(bytes_)
+    import common as common
+    common.write_bytes(path, output)
+    return len(output)
 
 
-def lire(chemin):
-    """Reads back a GLB written by `ecrire` (used by: tests, server)."""
-    with open(chemin, "rb") as f:
+def read(path):
+    """Reads back a GLB written by `write` (used by: tests, server)."""
+    with open(path, "rb") as f:
         b = f.read()
     magic, version, total = struct.unpack_from("<III", b, 0)
     if magic != 0x46546C67 or version != 2 or total != len(b):
-        raise ValueError("invalid GLB: %s" % chemin)
+        raise ValueError("invalid GLB: %s" % path)
     off, js, bin_ = 12, None, None
     while off < len(b):
         n, ty = struct.unpack_from("<II", b, off)

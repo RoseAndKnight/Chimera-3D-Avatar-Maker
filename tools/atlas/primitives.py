@@ -4,10 +4,10 @@ Interfaces: every function takes numpy arrays (Blender frame,
 metres) and returns arrays or plain dicts. Only P-07 and D4/D5 of P-09
 need `mathutils` (Blender); the rest runs with numpy alone.
 
-Usual input data (see donnees.py):
-  pos (n, 3)         positions of `soude` (or of `brut`)
+Usual input data (see data.py):
+  pos (n, 3)         positions of `welded` (or of `brut`)
   faces (m, 3)       triangles
-  aretes (e, 2)      unique edges of `soude`
+  edges (e, 2)      unique edges of `welded`
   sq                 Skeleton (names, heads, parents, additions)
 """
 import json
@@ -18,54 +18,54 @@ import unicodedata
 
 import numpy as np
 
-import kinematics as cin
+import kinematics as kin
 
-ICI = os.path.dirname(os.path.abspath(__file__))
+HERE = os.path.dirname(os.path.abspath(__file__))
 
 # ======================================================================= P-01
 
-def nfkc(nom):
-    return unicodedata.normalize("NFKC", nom)
+def nfkc(name):
+    return unicodedata.normalize("NFKC", name)
 
 
-_COTE = [
+_SIDE = [
     (re.compile(r"^左(.+)$"), "L"), (re.compile(r"^右(.+)$"), "R"),
     (re.compile(r"^(.+)左$"), "L"), (re.compile(r"^(.+)右$"), "R"),
     (re.compile(r"^(.+)[._]L$"), "L"), (re.compile(r"^(.+)[._]R$"), "R"),
     (re.compile(r"^L[._](.+)$"), "L"), (re.compile(r"^R[._](.+)$"), "R"),
 ]
 
-_COTE_MILIEU = re.compile(r"^(.+?)_([LR])_(.+)$")
+_SIDE_MIDDLE = re.compile(r"^(.+?)_([LR])_(.+)$")
 
 
-def separer_cote(nom):
+def separer_side(name):
     """'左腕' -> ('腕', 'L') ; '腰キャンセル右' -> ('腰キャンセル', 'R') ; '頭' -> ('頭', None)."""
-    n = nfkc(nom)
-    for rx, c in _COTE:
+    n = nfkc(name)
+    for rx, c in _SIDE:
         m = rx.match(n)
         if m:
             return m.group(1), c
     # side in the middle (Ctr_/Skn_ bones of Unity ports: Ctr_L_Hair_01 -> Ctr_Hair_01, L)
-    m = _COTE_MILIEU.match(n)
+    m = _SIDE_MIDDLE.match(n)
     if m:
         return m.group(1) + "_" + m.group(3), m.group(2)
     return n, None
 
 
-def identifiant(nom):
+def identifier(name):
     """Normalized identifier of §6.1: _L / _R instead of 左 / 右, NFKC digits."""
-    base, c = separer_cote(nom)
+    base, c = separer_side(name)
     return base + ("_" + c if c else "")
 
 
-def nom_miroir(nom):
+def name_mirror(name):
     """PMX name of the symmetric element (左 <-> 右, _L_ <-> _R_), or None."""
-    if "左" in nom:
-        return nom.replace("左", "右")
-    if "右" in nom:
-        return nom.replace("右", "左")
-    m = _COTE_MILIEU.match(nfkc(nom))
-    if m and separer_cote(nom)[1] is not None and not any(rx.match(nfkc(nom)) for rx, _ in _COTE):
+    if "左" in name:
+        return name.replace("左", "右")
+    if "右" in name:
+        return name.replace("右", "左")
+    m = _SIDE_MIDDLE.match(nfkc(name))
+    if m and separer_side(name)[1] is not None and not any(rx.match(nfkc(name)) for rx, _ in _SIDE):
         return "%s_%s_%s" % (m.group(1), "R" if m.group(2) == "L" else "L", m.group(3))
     return None
 
@@ -79,197 +79,197 @@ SEMI_STANDARD_MMD = {"操作中心", "足IK親", "肩P", "肩C", "腕捩", "腕�
                      "足首D", "足先EX", "上半身1", "上半身3"}
 
 
-def classe_os(nom, feuille=False):
-    """SQ-01: standard_mmd, semi_standard_mmd or propre. The "先" end bones
+def class__os(name, sheet=False):
+    """SQ-01: standard_mmd, semi_standard_mmd or own. The "先" end bones
     (leaves whose name ends with 先) are semi-standard."""
-    base, _ = separer_cote(nom)
+    base, _ = separer_side(name)
     if base in STANDARD_MMD:
         return "standard_mmd"
     if base in SEMI_STANDARD_MMD:
         return "semi_standard_mmd"
-    if feuille and base.endswith("先"):
+    if sheet and base.endswith("先"):
         return "semi_standard_mmd"
-    return "propre"
+    return "own"
 
 
 # Order matters: the first pattern that matches wins.
-FAMILLES = [
-    ("racine", r"^(全ての親|操作中心|センター|グルーブ)$"),
-    ("accessoire", r"坠|珠|刀|扣|结|穗|发带|武器|錘?鞘"),
-    ("vetement", r"外套|衣|スカート|裙|领带|腰环|袖"),
-    ("cheveux", r"髪|发|刘海|发髻"),
-    ("visage", r"目|眉|齿|舌|口|あご|顎"),
-    ("fesses", r"臀|尻"),
-    ("poitrine", r"胸"),
-    ("main", r"指"),
-    ("bras", r"肩|腕|ひじ|手首|捩|手先|ダミー"),
-    ("jambe", r"足|ひざ|膝|つま先"),
-    ("tronc", r"上半身|下半身|腰|首|頭"),
+FAMILIES = [
+    ("root", r"^(全ての親|操作中心|センター|グルーブ)$"),
+    ("accessory", r"坠|珠|刀|扣|结|穗|发带|武器|錘?鞘"),
+    ("garment", r"外套|衣|スカート|裙|领带|腰环|袖"),
+    ("hair", r"髪|发|刘海|发髻"),
+    ("face", r"目|眉|齿|舌|口|あご|顎"),
+    ("buttocks", r"臀|尻"),
+    ("chest", r"胸"),
+    ("hand", r"指"),
+    ("arm", r"肩|腕|ひじ|手首|捩|手先|ダミー"),
+    ("leg", r"足|ひざ|膝|つま先"),
+    ("trunk", r"上半身|下半身|腰|首|頭"),
 ]
-_FAMILLES = [(f, re.compile(rx)) for f, rx in FAMILLES]
+_FAMILIES = [(f, re.compile(rx)) for f, rx in FAMILIES]
 
 # Body sub-region given by the bone with the largest weight (P-02). The pattern that covers the
 # most characters of the name wins (足首 over 首 and 足, 手首 over 首); at equal length,
 # the order of the list (足指: 指 before 足).
 REGIONS_OS = [
-    ("doigt", r"指"),
-    ("main", r"手首|手先|ダミー"),
-    ("avant_bras", r"ひじ|手捩"),
-    ("bras", r"腕"),
-    ("tronc_haut", r"肩|上半身2|上半身3"),
-    ("poitrine", r"胸"),
-    ("fesses", r"臀|尻"),
-    ("ventre", r"上半身1?$"),
-    ("bassin", r"下半身|腰|^(全ての親|操作中心|センター|グルーブ)$"),
-    ("cou", r"首"),
-    ("tete", r"頭"),
-    ("pied", r"足首|つま先|足先"),
-    ("jambe", r"ひざ|膝"),
-    ("cuisse", r"足"),
+    ("finger", r"指"),
+    ("hand", r"手首|手先|ダミー"),
+    ("forearm", r"ひじ|手捩"),
+    ("arm", r"腕"),
+    ("trunk_top", r"肩|上半身2|上半身3"),
+    ("chest", r"胸"),
+    ("buttocks", r"臀|尻"),
+    ("belly", r"上半身1?$"),
+    ("pelvis", r"下半身|腰|^(全ての親|操作中心|センター|グルーブ)$"),
+    ("neck", r"首"),
+    ("head", r"頭"),
+    ("foot", r"足首|つま先|足先"),
+    ("leg", r"ひざ|膝"),
+    ("thigh", r"足"),
 ]
 _REGIONS_OS = [(r, re.compile(rx)) for r, rx in REGIONS_OS]
 
 
-_FAMILLES_JSON = {}
+_FAMILIES_JSON = {}
 
 
-def _jeux():
-    outils = os.path.dirname(ICI)
-    if outils not in sys.path:
-        sys.path.append(outils)
-    import games as jeux
-    return jeux
+def _games():
+    tools = os.path.dirname(HERE)
+    if tools not in sys.path:
+        sys.path.append(tools)
+    import games as games
+    return games
 
 
-def charger_familles():
+def load_families():
     """Hand-kept classifications for the models of the active game: families.json of its description
     (tools/games/<game>/families.json); no classification if the game has none."""
-    p = _jeux().actif().fichier("families.json")
+    p = _games().active().file("families.json")
     if p is None:
-        _FAMILLES_JSON.update({"d": {}, "mtime": None, "motifs": []})
-        return _FAMILLES_JSON["d"]
+        _FAMILIES_JSON.update({"d": {}, "mtime": None, "patterns": []})
+        return _FAMILIES_JSON["d"]
     m = os.path.getmtime(p)
-    if _FAMILLES_JSON.get("mtime") != m:
+    if _FAMILIES_JSON.get("mtime") != m:
         with open(p, encoding="utf-8") as f:
-            _FAMILLES_JSON["d"] = json.load(f)
-        _FAMILLES_JSON["mtime"] = m
-        _FAMILLES_JSON["motifs"] = [(re.compile(e["motif"]), e)
-                                    for e in _FAMILLES_JSON["d"].get("motifs_os", [])]
-    return _FAMILLES_JSON["d"]
+            _FAMILIES_JSON["d"] = json.load(f)
+        _FAMILIES_JSON["mtime"] = m
+        _FAMILIES_JSON["patterns"] = [(re.compile(e["pattern"]), e)
+                                    for e in _FAMILIES_JSON["d"].get("patterns_os", [])]
+    return _FAMILIES_JSON["d"]
 
 
-def _entree(e):
-    return {"famille": e} if isinstance(e, str) else e
+def _input(e):
+    return {"family": e} if isinstance(e, str) else e
 
 
-def entree_os(nom, manuel=None):
-    """Hand-written classification (families.json) of a bone: dict {famille, region?} or None.
+def input_os(name, manual=None):
+    """Hand-written classification (families.json) of a bone: dict {family, region?} or None.
     `manuel`: "os" dict instead of families.json (the patterns are then ignored if
     manuel is not None and does not come from the file)."""
-    d = charger_familles()
-    fichier = manuel is None
-    manuel = d.get("os", {}) if manuel is None else manuel
-    for cle in (nom, identifiant(nom)):
-        if cle in manuel:
-            return _entree(manuel[cle])
-    if fichier or manuel is d.get("os"):
-        n = nfkc(nom)
-        for rx, e in _FAMILLES_JSON["motifs"]:
+    d = load_families()
+    file = manual is None
+    manual = d.get("bones", {}) if manual is None else manual
+    for the_key in (name, identifier(name)):
+        if the_key in manual:
+            return _input(manual[the_key])
+    if file or manual is d.get("bones"):
+        n = nfkc(name)
+        for rx, e in _FAMILIES_JSON["patterns"]:
             if rx.search(n):
                 return e
     return None
 
 
-def famille_os(nom, manuel=None):
+def family_os(name, manual=None):
     """P-01: family of a bone: written classification (families.json: "os" then "motifs_os"),
-    otherwise patterns of FAMILLES, otherwise None (to be classified in families.json)."""
-    e = entree_os(nom, manuel)
+    otherwise patterns of FAMILIES, otherwise None (to be classified in families.json)."""
+    e = input_os(name, manual)
     if e is not None:
-        return e["famille"]
-    base, _ = separer_cote(nom)
-    for f, rx in _FAMILLES:
+        return e["family"]
+    base, _ = separer_side(name)
+    for f, rx in _FAMILIES:
         if rx.search(base):
             return f
     return None
 
 
-def region_os(nom, famille):
+def region_os(name, family):
     """Body region of a bone (for P-02), or the family if the bone is not part of the body."""
-    if famille in ("cheveux", "vetement", "accessoire"):
-        return {"vetement": "vetement_libre"}.get(famille, famille)
-    if famille == "visage":
-        return "tete"
-    e = entree_os(nom)
+    if family in ("hair", "garment", "accessory"):
+        return {"garment": "garment_free"}.get(family, family)
+    if family == "face":
+        return "head"
+    e = input_os(name)
     if e is not None and e.get("region"):
         return e["region"]
-    base, _ = separer_cote(nom)
-    meilleur, n = None, 0
+    base, _ = separer_side(name)
+    best, n = None, 0
     for r, rx in _REGIONS_OS:
         t = rx.search(base)
         if t and t.end() - t.start() > n:
-            meilleur, n = r, t.end() - t.start()
-    return meilleur
+            best, n = r, t.end() - t.start()
+    return best
 
 
 # ======================================================================= P-02
 
-GROUPES_MATERIAU = {
-    "yeux": [r"^白目$", r"^目$", r"^目光", r"^睫$", r"^眉睫影$", r"^目影$"],
-    "visage": [r"^颜$", r"^痣$", r"^眉$", r"^口$", r"^舌$", r"^齿$"],
-    "cheveux": [r"^发$", r"^侧发$", r"^前发$"],
-    "peau": [r"^肌$"],
+GROUPS_MATERIAL = {
+    "eyes": [r"^白目$", r"^目$", r"^目光", r"^睫$", r"^眉睫影$", r"^目影$"],
+    "face": [r"^颜$", r"^痣$", r"^眉$", r"^口$", r"^舌$", r"^齿$"],
+    "hair": [r"^发$", r"^侧发$", r"^前发$"],
+    "skin": [r"^肌$"],
 }
 
 
-def groupe_materiau(nom, accessoires=None):
-    accessoires = accessoires if accessoires is not None else charger_familles().get("materiaux_accessoire", [])
-    for g, motifs in GROUPES_MATERIAU.items():
-        if any(re.search(m, nom) for m in motifs):
+def group_material(name, accessories=None):
+    accessories = accessories if accessories is not None else load_families().get("materials_accessory", [])
+    for g, patterns in GROUPS_MATERIAL.items():
+        if any(re.search(m, name) for m in patterns):
             return g
-    if nom in accessoires:
-        return "accessoire"
-    return "tenue"
+    if name in accessories:
+        return "accessory"
+    return "outfit"
 
 
-def table_materiaux(modele):
-    """ZZ-04 table of a model (families.json "materiaux/par_modele"), or None."""
-    pm = charger_familles().get("materiaux", {}).get("par_modele", {})
-    t = pm.get(modele)
+def table_materials(model):
+    """ZZ-04 table of a model (families.json "materials/per_model"), or None."""
+    pm = load_families().get("materials", {}).get("per_model", {})
+    t = pm.get(model)
     for _ in range(5):
         if isinstance(t, str) and t.startswith("="):
             t = pm.get(t[1:])
     return t if isinstance(t, dict) else None
 
 
-def classes_materiaux(modele, noms):
-    """ZZ-04 then P-02: for each material, dict {classe, groupe, de?, defaut?}.
-    classe None = unclassified (reported, group "non_classe"). Without a table for this
-    model: old classification by Evelyn's names (classe None, source "noms")."""
-    d = charger_familles().get("materiaux", {})
-    vers_groupe = d.get("groupes", {})
-    t = table_materiaux(modele)
+def classes_materials(model, names):
+    """ZZ-04 then P-02: for each material, dict {class_, group, de?, default?}.
+    class_ None = unclassified (reported, group "non_class"). Without a table for this
+    model: old classification by Evelyn's names (class_ None, source "names")."""
+    d = load_families().get("materials", {})
+    to_group = d.get("groups", {})
+    t = table_materials(model)
     if t is None:
-        acc = charger_familles().get("materiaux_accessoire", [])
-        return [{"classe": None, "groupe": groupe_materiau(n, acc), "source": "noms"} for n in noms]
+        accessory = load_families().get("materials_accessory", [])
+        return [{"class": None, "group": group_material(n, accessory), "source": "names"} for n in names]
     out = []
-    for n in noms:
+    for n in names:
         e = t.get(n)
-        e = {"classe": e} if isinstance(e, str) else dict(e or {"classe": None})
-        c = e["classe"]
+        e = {"class": e} if isinstance(e, str) else dict(e or {"class": None})
+        c = e["class"]
         if c == "doublet":
-            b = t.get(e.get("de"))
-            b = b if isinstance(b, str) else (b or {}).get("classe")
-            e["groupe"] = vers_groupe.get(b, "non_classe")
-        elif c == "mixte":
-            e["groupe"] = "mixte"
+            b = t.get(e.get("from"))
+            b = b if isinstance(b, str) else (b or {}).get("class")
+            e["group"] = to_group.get(b, "non_class")
+        elif c == "mixed":
+            e["group"] = "mixed"
         else:
-            e["groupe"] = vers_groupe.get(c, "non_classe")
+            e["group"] = to_group.get(c, "non_class")
         e["source"] = "table"
         out.append(e)
     return out
 
 
-def mat_sommet(faces, mat_face, n):
+def mat_vertex(faces, mat_face, n):
     """Material of each vertex (that of its first face)."""
     m = np.full(n, -1, dtype=np.int64)
     f = np.asarray(faces)
@@ -278,100 +278,100 @@ def mat_sommet(faces, mat_face, n):
     return m
 
 
-_FAMILLE_VERS_GROUPE = {"cheveux": "cheveux", "accessoire": "accessoire", "vetement": "tenue"}
-SANS_FACE = "sans_face"
+_FAMILY_TO_GROUP = {"hair": "hair", "accessory": "accessory", "garment": "outfit"}
+WITHOUT_FACE = "without_face"
 
 
-def groupes_soude(classes, mat_face, faces, n, idx, poids, familles_os):
-    """P-02: group of each face and each vertex of `soude`. "mixte" materials
+def groups_welded(classes, mat_face, faces, n, idx, weight, families_os):
+    """P-02: group of each face and each vertex of `welded`. "mixed" materials
     are resolved per geometric island (P-05): majority of the dominant bone families
-    (cheveux, accessoire, vetement) of the material's vertices in the island,
-    otherwise the material's "defaut" group."""
-    gm = np.array([c["groupe"] for c in classes], dtype=object)
+    (hair, accessory, garment) of the material's vertices in the island,
+    otherwise the material's "default" group."""
+    gm = np.array([c["group"] for c in classes], dtype=object)
     gf = gm[mat_face]
-    ms = mat_sommet(faces, mat_face, n)
+    ms = mat_vertex(faces, mat_face, n)
     gs = gm[ms]
-    gs[ms < 0] = SANS_FACE  # vertex used by no face: neither material nor group
-    mixtes = [i for i, c in enumerate(classes) if c.get("classe") == "mixte"]
-    if not mixtes:
+    gs[ms < 0] = WITHOUT_FACE  # vertex used by no face: neither material nor group
+    mixed = [i for i, c in enumerate(classes) if c.get("class") == "mixed"]
+    if not mixed:
         return gf, gs
-    ar, _ = aretes_de(faces)
-    il = ilots_geometriques(n, ar)
-    dom = os_dominant(idx, poids)
-    gdom = np.array([_FAMILLE_VERS_GROUPE.get(familles_os[b]) if b >= 0 else None for b in dom],
+    ar, _ = edges_of(faces)
+    il = islands_geometric(n, ar)
+    dom = os_dominant(idx, weight)
+    gdom = np.array([_FAMILY_TO_GROUP.get(families_os[b]) if b >= 0 else None for b in dom],
                     dtype=object)
-    for i in mixtes:
-        defaut = classes[i].get("defaut", "tenue")
+    for i in mixed:
+        default = classes[i].get("default", "outfit")
         # group of an island dominated by clothing bones when the material is not part of the outfit
-        # (ZhuYuan: 髮 also carries a brooch and an armband, under bones classified vetement)
-        vers = {"tenue": classes[i].get("vetement", "tenue")}
+        # (ZhuYuan: 髮 also carries a brooch and an armband, under bones classified garment)
+        to = {"outfit": classes[i].get("garment", "outfit")}
         fm = np.where(mat_face == i)[0]
         vm = np.unique(faces[fm])
-        choix = {}
+        choice = {}
         for k in np.unique(il[vm]):
             v = vm[il[vm] == k]
             g = [x for x in gdom[v] if x is not None]
             if g:
                 u, c = np.unique(np.array(g, dtype=object), return_counts=True)
-                choix[k] = vers.get(u[np.argmax(c)], u[np.argmax(c)])
+                choice[k] = to.get(u[np.argmax(c)], u[np.argmax(c)])
             else:
-                choix[k] = defaut
-        gf[fm] = [choix[k] for k in il[faces[fm, 0]]]
+                choice[k] = default
+        gf[fm] = [choice[k] for k in il[faces[fm, 0]]]
         sv = np.where(ms == i)[0]
-        gs[sv] = [choix[k] for k in il[sv]]
+        gs[sv] = [choice[k] for k in il[sv]]
     return gf, gs
 
 
-GROUPES = ["peau", "tenue", "accessoire", "visage", "yeux", "cheveux", SANS_FACE]
-REGIONS = ["tronc_haut", "poitrine", "ventre", "bassin", "fesses", "cou", "tete", "bras",
-           "avant_bras", "main", "doigt", "cuisse", "jambe", "pied", "visage", "yeux",
-           "cheveux", "vetement_libre", "accessoire", "sans", SANS_FACE]
+GROUPS = ["skin", "outfit", "accessory", "face", "eyes", "hair", WITHOUT_FACE]
+REGIONS = ["trunk_top", "chest", "belly", "pelvis", "buttocks", "neck", "head", "arm",
+           "forearm", "hand", "finger", "thigh", "leg", "foot", "face", "eyes",
+           "hair", "garment_free", "accessory", "without", WITHOUT_FACE]
 
-# "poitrine" (chest) region of P-02: rigs with shared weights (NangongYu, Qingyi, Trigger) leave
+# "chest" region of P-02: rigs with shared weights (NangongYu, Qingyi, Trigger) leave
 # almost no vertex dominated by a chest bone (胸上2 tops out at 0.51-0.68).
 # So the sum of the chest bone weights is read, at half of its maximum on the
 # model (the full width at half maximum assumes no absolute weight value).
-REGIONS_VERS_POITRINE = ("tronc_haut", "ventre", "poitrine")
+REGIONS_TO_CHEST = ("trunk_top", "belly", "chest")
 
 
-def os_dominant(idx, poids):
+def os_dominant(idx, weight):
     """Bone with the largest weight for each vertex (-1 if none)."""
-    w = np.where(idx >= 0, poids, -1.0)
+    w = np.where(idx >= 0, weight, -1.0)
     k = np.argmax(w, axis=1)
     b = idx[np.arange(len(idx)), k]
     b[w[np.arange(len(idx)), k] <= 0] = -1
     return b
 
 
-def regions(groupe_sommet, idx, poids, noms_os, familles_os):
-    """P-02: region of each vertex. groupe_sommet: array of group names
+def regions(group_vertex, idx, weight, names_os, families_os):
+    """P-02: region of each vertex. group_vertex: array of group names
     (material first). Returns an array of region names (REGIONS).
 
     A vertex without a face belongs to no body region (SANS_FACE). The chest
-    is taken from the sum of weights (REGIONS_VERS_POITRINE), not from the dominant bone."""
-    dom = os_dominant(idx, poids)
-    reg_os = [region_os(n, f) for n, f in zip(noms_os, familles_os)]
-    out = np.empty(len(groupe_sommet), dtype=object)
-    for i, (g, b) in enumerate(zip(groupe_sommet, dom)):
-        if g in ("yeux", "visage", "cheveux", SANS_FACE):
+    is taken from the sum of weights (REGIONS_TO_CHEST), not from the dominant bone."""
+    dom = os_dominant(idx, weight)
+    reg_os = [region_os(n, f) for n, f in zip(names_os, families_os)]
+    out = np.empty(len(group_vertex), dtype=object)
+    for i, (g, b) in enumerate(zip(group_vertex, dom)):
+        if g in ("eyes", "face", "hair", WITHOUT_FACE):
             out[i] = g
         elif b < 0 or reg_os[b] is None:
-            out[i] = "sans"
+            out[i] = "without"
         else:
             out[i] = reg_os[b]
-    est_p = np.array([r == "poitrine" for r in reg_os], dtype=bool)
-    if est_p.any():
+    is_p = np.array([r == "chest" for r in reg_os], dtype=bool)
+    if is_p.any():
         ok = idx >= 0
-        s = (np.where(ok, poids, 0.0) * est_p[np.maximum(idx, 0)]).sum(axis=1)
-        vus = np.isin(out, REGIONS_VERS_POITRINE)
-        if vus.any() and s[vus].max() > 0:
-            out[vus & (s >= 0.5 * s[vus].max())] = "poitrine"
+        s = (np.where(ok, weight, 0.0) * is_p[np.maximum(idx, 0)]).sum(axis=1)
+        seen = np.isin(out, REGIONS_TO_CHEST)
+        if seen.any() and s[seen].max() > 0:
+            out[seen & (s >= 0.5 * s[seen].max())] = "chest"
     return out
 
 
 # ======================================================================= utilities
 
-def aretes_de(faces):
+def edges_of(faces):
     """Unique sorted edges (e, 2), and for each face its 3 edge indices."""
     f = np.asarray(faces)
     e = np.concatenate([f[:, [0, 1]], f[:, [1, 2]], f[:, [2, 0]]])
@@ -381,16 +381,16 @@ def aretes_de(faces):
     return uniq, inv
 
 
-def faces_par_arete(face_aretes, n_aretes):
+def faces_per_edge(face_edges, n_edges):
     """Number of faces per edge."""
-    return np.bincount(face_aretes.ravel(), minlength=n_aretes)
+    return np.bincount(face_edges.ravel(), minlength=n_edges)
 
 
 class UnionFind:
     def __init__(self, n):
         self.p = np.arange(n)
 
-    def trouve(self, i):
+    def found(self, i):
         p = self.p
         r = i
         while p[r] != r:
@@ -399,41 +399,41 @@ class UnionFind:
             p[i], i = r, p[i]
         return r
 
-    def unir(self, a, b):
-        ra, rb = self.trouve(a), self.trouve(b)
+    def join(self, a, b):
+        ra, rb = self.found(a), self.found(b)
         if ra != rb:
             self.p[max(ra, rb)] = min(ra, rb)
 
-    def etiquettes(self):
-        lab = np.array([self.trouve(i) for i in range(len(self.p))])
+    def labels(self):
+        lab = np.array([self.found(i) for i in range(len(self.p))])
         _, lab = np.unique(lab, return_inverse=True)
         return lab
 
 
-def composantes(n, aretes):
+def components(n, edges):
     """Connected components through the edges (labels 0..k-1), in numpy."""
     lab = np.arange(n)
-    a, b = np.asarray(aretes).T
+    a, b = np.asarray(edges).T
     while True:
         m = np.minimum(lab[a], lab[b])
-        nouv = lab.copy()
-        np.minimum.at(nouv, a, m)
-        np.minimum.at(nouv, b, m)
-        nouv = nouv[nouv]
-        if np.array_equal(nouv, lab):
+        new = lab.copy()
+        np.minimum.at(new, a, m)
+        np.minimum.at(new, b, m)
+        new = new[new]
+        if np.array_equal(new, lab):
             break
-        lab = nouv
+        lab = new
     _, lab = np.unique(lab, return_inverse=True)
     return lab
 
 
-def normales_faces(pos, faces):
+def normals_faces(pos, faces):
     v = pos[faces]
     n = np.cross(v[:, 1] - v[:, 0], v[:, 2] - v[:, 0])
-    aire = np.linalg.norm(n, axis=1) / 2
+    area = np.linalg.norm(n, axis=1) / 2
     with np.errstate(invalid="ignore", divide="ignore"):
-        nn = n / (2 * aire[:, None])
-    return np.nan_to_num(nn), aire
+        nn = n / (2 * area[:, None])
+    return np.nan_to_num(nn), area
 
 
 def plan_svd(points):
@@ -453,7 +453,7 @@ def spearman(a, b):
     if len(a) < 3:
         return None
 
-    def rang(x):
+    def rank(x):
         o = np.argsort(x, kind="mergesort")
         r = np.empty(len(x))
         r[o] = np.arange(len(x))
@@ -466,7 +466,7 @@ def spearman(a, b):
                 deb = i
         return r
 
-    ra, rb = rang(a), rang(b)
+    ra, rb = rank(a), rank(b)
     if ra.std() == 0 or rb.std() == 0:
         return None
     return float(np.corrcoef(ra, rb)[0, 1])
@@ -474,7 +474,7 @@ def spearman(a, b):
 
 # ======================================================================= P-03
 
-def miroir(pos, H, tol=1e-3):
+def mirror(pos, H, tol=1e-3):
     """P-03: m(v) = nearest neighbour of (-x, y, z) within tol·H, otherwise -1."""
     from mathutils.kdtree import KDTree
     kd = KDTree(len(pos))
@@ -490,36 +490,36 @@ def miroir(pos, H, tol=1e-3):
     return out
 
 
-def miroir_os(sq, tol=None):
+def mirror_os(sq, tol=None):
     """Mirror of a bone (σ): symmetric bone of each bone, by name (左/右, _L_/_R_), otherwise
     by position (mirrored head within `tol`, bone off the median plane, name without a side:
     numbered skirt bones); the bone itself if it has none."""
     out = np.arange(len(sq))
-    par_nom = np.zeros(len(sq), dtype=bool)
-    for i, n in enumerate(sq.noms_pmx):
-        mn = nom_miroir(n)
+    per_name = np.zeros(len(sq), dtype=bool)
+    for i, n in enumerate(sq.names_pmx):
+        mn = name_mirror(n)
         if mn:
             j = sq.index(mn, -1)
             if j >= 0:
                 out[i] = j
-                par_nom[i] = True
+                per_name[i] = True
     if tol is not None:
-        t = sq.tetes
-        libres = np.where(~par_nom & (np.abs(t[:, 0]) > tol))[0]
-        if len(libres):
-            mt = t[libres] * np.array([-1.0, 1, 1])
-            for k, i in enumerate(libres):
-                d = np.linalg.norm(t[libres] - mt[k], axis=1)
+        t = sq.heads
+        free = np.where(~per_name & (np.abs(t[:, 0]) > tol))[0]
+        if len(free):
+            mt = t[free] * np.array([-1.0, 1, 1])
+            for k, i in enumerate(free):
+                d = np.linalg.norm(t[free] - mt[k], axis=1)
                 j = int(np.argmin(d))
-                if d[j] <= tol and libres[j] != i:
-                    out[i] = libres[j]
+                if d[j] <= tol and free[j] != i:
+                    out[i] = free[j]
     return out
 
 
-def paires_miroir(miroir_sommets):
+def pairs_mirror(mirror_vertices):
     """Pairs (a, b) a < b of P-03 from m(v); vertices of the median plane (m(v) = v)
     and those without a counterpart (−1) are not included; nor is a pair that is not reciprocal."""
-    m = np.asarray(miroir_sommets)
+    m = np.asarray(mirror_vertices)
     a = np.where((m >= 0) & (m != np.arange(len(m))))[0]
     a = a[m[m[a]] == a]
     a = a[a < m[a]]
@@ -528,7 +528,7 @@ def paires_miroir(miroir_sommets):
 
 # ======================================================================= alignment
 
-def procrustes(a, b, echelle=False):
+def procrustes(a, b, scale=False):
     """Rotation R (proper), translation t and scale s that bring `a` onto `b` (paired
     points, Kabsch-Umeyama): b ≈ s·R·a + t. Returns (s, R, t)."""
     a, b = np.asarray(a, float), np.asarray(b, float)
@@ -538,35 +538,35 @@ def procrustes(a, b, echelle=False):
     D = np.eye(3)
     D[2, 2] = np.sign(np.linalg.det(Vt.T @ U.T)) or 1.0
     R = Vt.T @ D @ U.T
-    s = float((S * np.diag(D)).sum() / max((A * A).sum(), 1e-30)) if echelle else 1.0
+    s = float((S * np.diag(D)).sum() / max((A * A).sum(), 1e-30)) if scale else 1.0
     return s, R, cb - s * R @ ca
 
 
-def plus_proches(a, b, bloc=2048):
+def plus_near(a, b, block=2048):
     """Nearest neighbour of each point of a among b (blockwise brute force, numpy only):
     (indices, distances)."""
     a, b = np.asarray(a, float), np.asarray(b, float)
     idx = np.empty(len(a), dtype=np.int64)
     dist = np.empty(len(a))
     bb = (b * b).sum(1)
-    for i in range(0, len(a), bloc):
-        x = a[i:i + bloc]
+    for i in range(0, len(a), block):
+        x = a[i:i + block]
         d2 = (x * x).sum(1)[:, None] - 2 * x @ b.T + bb[None, :]
         k = np.argmin(d2, axis=1)
-        idx[i:i + bloc] = k
-        dist[i:i + bloc] = np.sqrt(np.maximum(d2[np.arange(len(x)), k], 0))
+        idx[i:i + block] = k
+        dist[i:i + block] = np.sqrt(np.maximum(d2[np.arange(len(x)), k], 0))
     return idx, dist
 
 
-def icp_point_plan(a, b, normales_b, iterations=20, R0=None, t0=None):
+def icp_point_plan(a, b, normals_b, iterations=20, R0=None, t0=None):
     """Point-to-plane ICP: brings `a` onto `b` (normals of `b` given) by small linearized
     rotations, without scale. Returns (R, t, final distances to the nearest point)."""
-    a, b, nb = np.asarray(a, float), np.asarray(b, float), np.asarray(normales_b, float)
+    a, b, nb = np.asarray(a, float), np.asarray(b, float), np.asarray(normals_b, float)
     R = np.eye(3) if R0 is None else np.asarray(R0, float)
     t = np.zeros(3) if t0 is None else np.asarray(t0, float)
     for _ in range(iterations):
         q = a @ R.T + t
-        j, _d = plus_proches(q, b)
+        j, _d = plus_near(q, b)
         n = nb[j]
         M = np.c_[np.cross(q, n), n]
         y = ((b[j] - q) * n).sum(1)
@@ -577,67 +577,67 @@ def icp_point_plan(a, b, normales_b, iterations=20, R0=None, t0=None):
         dR = U @ Vt
         R = dR @ R
         t = dR @ t + dt
-    return R, t, plus_proches(a @ R.T + t, b)[1]
+    return R, t, plus_near(a @ R.T + t, b)[1]
 
 
 # ======================================================================= P-04
 
-def _anneau_vide(n_boucles):
-    return {"n_sommets": 0, "rayon": None, "centre": None, "normale": None, "rms_plan": None,
-            "angle_axe": None, "n_boucles": n_boucles, "n_fermees": 0, "dist_axe": None,
-            "points": np.zeros((0, 3)), "aretes": [], "fermee": False}
+def _loop_empty(n_loops):
+    return {"n_vertices": 0, "radius": None, "center": None, "normal": None, "rms_plan": None,
+            "angle_axe": None, "n_loops": n_loops, "n_closed": 0, "dist_axe": None,
+            "points": np.zeros((0, 3)), "edges": [], "closed": False}
 
 
-def anneau(pos, faces, origine, direction, longueur=1.0, t=0.0, masque_faces=None, choix="proche"):
+def loop(pos, faces, origin, direction, length=1.0, t=0.0, mask_faces=None, choice="nearest"):
     """P-04: cut of the mesh by the plane perpendicular to `direction` going
-    through origine + t·longueur·direction. Returns the closed loop closest to
-    the axis: {fermee, n_sommets, rayon, centre, normale, rms_plan, angle_axe, n_boucles,
-    n_fermees, dist_axe, points, aretes (cut edge of each point, (a, b) with a < b)}.
-    The shape is always the same: without a closed loop, fermee is False, n_sommets 0,
-    aretes and points are empty, the geometric quantities are None.
+    through origin + t·longueur·direction. Returns the closed loop closest to
+    the axis: {closed, n_vertices, rayon, centre, normale, rms_plan, angle_axe, n_loops,
+    n_closed, dist_axe, points, edges (cut edge of each point, (a, b) with a < b)}.
+    The shape is always the same: without a closed loop, closed is False, n_vertices 0,
+    edges and points are empty, the geometric quantities are None.
 
-    Computed in numpy (same cut as bmesh.ops.bisect_plane); n_sommets is the
+    Computed in numpy (same cut as bmesh.ops.bisect_plane); n_vertices is the
     number of mesh edges crossed by the loop.
     """
     d = np.asarray(direction, dtype=float)
     d = d / np.linalg.norm(d)
-    c = np.asarray(origine, dtype=float) + t * longueur * d
+    c = np.asarray(origin, dtype=float) + t * length * d
     f = np.asarray(faces)
-    if masque_faces is not None:
-        f = f[masque_faces]
+    if mask_faces is not None:
+        f = f[mask_faces]
     s = (pos - c) @ d
     s = np.where(s == 0, 1e-12, s)
     sf = s[f] > 0
-    croise = sf.any(axis=1) & ~sf.all(axis=1)
-    f = f[croise]
+    crossed = sf.any(axis=1) & ~sf.all(axis=1)
+    f = f[crossed]
     if len(f) == 0:
-        return _anneau_vide(0)
+        return _loop_empty(0)
     # each crossed face gives a segment between two cut edges
-    noeuds = {}
+    nodes = {}
     pts = []
     segs = []
     for tri in f:
-        cles = []
+        keys = []
         for a, b in ((tri[0], tri[1]), (tri[1], tri[2]), (tri[2], tri[0])):
             if (s[a] > 0) != (s[b] > 0):
                 k = (min(a, b), max(a, b))
-                if k not in noeuds:
-                    noeuds[k] = len(pts)
+                if k not in nodes:
+                    nodes[k] = len(pts)
                     u = s[a] / (s[a] - s[b])
                     pts.append(pos[a] + u * (pos[b] - pos[a]))
-                cles.append(noeuds[k])
-        if len(cles) == 2:
-            segs.append(cles)
+                keys.append(nodes[k])
+        if len(keys) == 2:
+            segs.append(keys)
     pts = np.array(pts)
-    cles_pts = [None] * len(pts)
-    for k, i in noeuds.items():
-        cles_pts[i] = k
-    voisins = [[] for _ in range(len(pts))]
+    keys_pts = [None] * len(pts)
+    for k, i in nodes.items():
+        keys_pts[i] = k
+    neighbors = [[] for _ in range(len(pts))]
     for a, b in segs:
-        voisins[a].append(b)
-        voisins[b].append(a)
+        neighbors[a].append(b)
+        neighbors[b].append(a)
     vu = np.zeros(len(pts), dtype=bool)
-    boucles = []
+    loops = []
     for i in range(len(pts)):
         if vu[i]:
             continue
@@ -646,29 +646,29 @@ def anneau(pos, faces, origine, direction, longueur=1.0, t=0.0, masque_faces=Non
         while pile:
             k = pile.pop()
             comp.append(k)
-            for v in voisins[k]:
+            for v in neighbors[k]:
                 if not vu[v]:
                     vu[v] = True
                     pile.append(v)
-        fermee = all(len(voisins[k]) == 2 for k in comp) and len(comp) >= 3
-        boucles.append((comp, fermee))
-    fermees = [b for b, ok in boucles if ok]
-    if not fermees:
-        return _anneau_vide(len(boucles))
+        closed = all(len(neighbors[k]) == 2 for k in comp) and len(comp) >= 3
+        loops.append((comp, closed))
+    closed_ones = [b for b, ok in loops if ok]
+    if not closed_ones:
+        return _loop_empty(len(loops))
     infos = []
-    for comp in fermees:
+    for comp in closed_ones:
         P = pts[comp]
         cen, nor, rms = plan_svd(P)
         r = np.linalg.norm(P - cen, axis=1).mean()
         dist_axe = np.linalg.norm(cen - c)
         infos.append((dist_axe, comp, cen, nor, rms, r))
-    infos.sort(key=lambda x: x[0] if choix == "proche" else -len(x[1]))
+    infos.sort(key=lambda x: x[0] if choice == "nearest" else -len(x[1]))
     dist_axe, comp, cen, nor, rms, r = infos[0]
     ang = np.degrees(np.arccos(min(1.0, abs(float(nor @ d)))))
-    return {"n_sommets": len(comp), "rayon": float(r), "centre": cen, "normale": nor,
-            "rms_plan": float(rms), "angle_axe": float(ang), "n_boucles": len(boucles),
-            "n_fermees": len(fermees), "dist_axe": float(dist_axe), "points": pts[comp],
-            "aretes": [cles_pts[i] for i in comp], "fermee": True}
+    return {"n_vertices": len(comp), "radius": float(r), "center": cen, "normal": nor,
+            "rms_plan": float(rms), "angle_axe": float(ang), "n_loops": len(loops),
+            "n_closed": len(closed_ones), "dist_axe": float(dist_axe), "points": pts[comp],
+            "edges": [keys_pts[i] for i in comp], "closed": True}
 
 
 # ======================================================================= UV channels (NO-08, IN-05)
@@ -690,12 +690,12 @@ def r2_lineaire(X, Y):
     return float(min(r2))
 
 
-def couverture_carre(triangles_uv, n=64):
+def coverage_square(triangles_uv, n=64):
     """Share of the centres of an n × n grid of the square [0, 1]² covered by at least one triangle
     (triangles_uv: (t, 3, 2)). Used by NO-08 and IN-05: an SDF channel fills its square."""
     gx, gy = np.meshgrid((np.arange(n) + 0.5) / n, (np.arange(n) + 0.5) / n)
     pts = np.c_[gx.ravel(), gy.ravel()]
-    couvert = np.zeros(len(pts), bool)
+    covered = np.zeros(len(pts), bool)
     T = np.asarray(triangles_uv)
     for i0 in range(0, len(T), 512):
         tt = T[i0:i0 + 512]
@@ -709,24 +709,24 @@ def couverture_carre(triangles_uv, n=64):
         w = pts[None, :, :] - a0[:, None, :]
         l1 = (w[..., 0] * v1[:, None, 1] - w[..., 1] * v1[:, None, 0]) / den[:, None]
         l2 = (v0[:, None, 0] * w[..., 1] - v0[:, None, 1] * w[..., 0]) / den[:, None]
-        couvert |= ((l1 >= 0) & (l2 >= 0) & (l1 + l2 <= 1)).any(0)
-    return float(couvert.mean())
+        covered |= ((l1 >= 0) & (l2 >= 0) & (l1 + l2 <= 1)).any(0)
+    return float(covered.mean())
 
 
 # ======================================================================= P-05
 
-def ilots_geometriques(n_sommets, aretes):
-    """P-05: union-find on the edges of `soude`."""
-    return composantes(n_sommets, aretes)
+def islands_geometric(n_vertices, edges):
+    """P-05: union-find on the edges of `welded`."""
+    return components(n_vertices, edges)
 
 
-def ilots_uv(faces_brut, b2s, uv, tol=1e-6):
+def islands_uv(faces_raw, b2s, uv, tol=1e-6):
     """P-05: UV islands on `brut`; two triangles are linked if they share an
     edge (welded vertices) at the same UV coordinates. Returns one label per face."""
-    f = np.asarray(faces_brut)
+    f = np.asarray(faces_raw)
     m = len(f)
     q = np.round(uv / tol).astype(np.int64)
-    cles = {}
+    keys = {}
     uf = UnionFind(m)
     for fi in range(m):
         for a, b in ((f[fi, 0], f[fi, 1]), (f[fi, 1], f[fi, 2]), (f[fi, 2], f[fi, 0])):
@@ -734,40 +734,40 @@ def ilots_uv(faces_brut, b2s, uv, tol=1e-6):
             if sa > sb:
                 sa, sb, a, b = sb, sa, b, a
             k = (sa, sb, q[a, 0], q[a, 1], q[b, 0], q[b, 1])
-            if k in cles:
-                uf.unir(fi, cles[k])
+            if k in keys:
+                uf.join(fi, keys[k])
             else:
-                cles[k] = fi
-    return uf.etiquettes()
+                keys[k] = fi
+    return uf.labels()
 
 
-def etiquette_ilots(lab_sommets, mat_sommet, pos):
+def label_islands(lab_vertices, mat_vertex, pos):
     """Label of an island: majority material, box, number of vertices."""
     out = []
-    for k in range(lab_sommets.max() + 1):
-        sel = np.where(lab_sommets == k)[0]
-        mats, cnt = np.unique(mat_sommet[sel], return_counts=True)
+    for k in range(lab_vertices.max() + 1):
+        sel = np.where(lab_vertices == k)[0]
+        mats, cnt = np.unique(mat_vertex[sel], return_counts=True)
         P = pos[sel]
-        out.append({"ilot": int(k), "n_sommets": int(len(sel)), "materiau": int(mats[np.argmax(cnt)]),
-                    "boite_min": P.min(0).tolist(), "boite_max": P.max(0).tolist()})
+        out.append({"island": int(k), "n_vertices": int(len(sel)), "material": int(mats[np.argmax(cnt)]),
+                    "box_min": P.min(0).tolist(), "box_max": P.max(0).tolist()})
     return out
 
 
 # ======================================================================= P-06
 
-def densite(pos, aretes, masque_sommets, H):
-    """P-06: mean length (in H) of the edges of `soude` touching the zone, and
-    density = 1 / length. Returns (longueur_H, densite, n_aretes)."""
-    m = masque_sommets[aretes[:, 0]] | masque_sommets[aretes[:, 1]]
+def density(pos, edges, mask_vertices, H):
+    """P-06: mean length (in H) of the edges of `welded` touching the zone, and
+    density = 1 / length. Returns (longueur_H, density, n_edges)."""
+    m = mask_vertices[edges[:, 0]] | mask_vertices[edges[:, 1]]
     if not m.any():
         return None, None, 0
-    L = np.linalg.norm(pos[aretes[m, 0]] - pos[aretes[m, 1]], axis=1).mean() / H
+    L = np.linalg.norm(pos[edges[m, 0]] - pos[edges[m, 1]], axis=1).mean() / H
     return float(L), float(1.0 / L), int(m.sum())
 
 
 # ======================================================================= P-07
 
-def icosphere(niveau=2):
+def icosphere(level=2):
     """Vertices of a unit icosphere (12, 42, 162… vertices)."""
     t = (1 + 5 ** 0.5) / 2
     v = [(-1, t, 0), (1, t, 0), (-1, -t, 0), (1, -t, 0), (0, -1, t), (0, 1, t), (0, -1, -t),
@@ -776,11 +776,11 @@ def icosphere(niveau=2):
          (11, 10, 2), (10, 7, 6), (7, 1, 8), (3, 9, 4), (3, 4, 2), (3, 2, 6), (3, 6, 8),
          (3, 8, 9), (4, 9, 5), (2, 4, 11), (6, 2, 10), (8, 6, 7), (9, 8, 1)]
     v = [np.array(p, dtype=float) / np.linalg.norm(p) for p in v]
-    for _ in range(niveau):
+    for _ in range(level):
         cache = {}
         nf = []
 
-        def milieu(a, b):
+        def middle(a, b):
             k = (min(a, b), max(a, b))
             if k not in cache:
                 m = v[a] + v[b]
@@ -789,19 +789,19 @@ def icosphere(niveau=2):
             return cache[k]
 
         for a, b, c in f:
-            ab, bc, ca = milieu(a, b), milieu(b, c), milieu(c, a)
+            ab, bc, ca = middle(a, b), middle(b, c), middle(c, a)
             nf += [(a, ab, ca), (b, bc, ab), (c, ca, bc), (ab, bc, ca)]
         f = nf
     return np.array(v)
 
 
-def cameras(pos, distance=3.0, niveau=2):
+def cameras(pos, distance=3.0, level=2):
     """P-07: 162 camera positions at `distance` m from the centre of the box."""
-    centre = (pos.min(0) + pos.max(0)) / 2
-    return centre + distance * icosphere(niveau)
+    center = (pos.min(0) + pos.max(0)) / 2
+    return center + distance * icosphere(level)
 
 
-def faces_vues(pos, faces, cams=None, masque_faces=None):
+def faces_views(pos, faces, cams=None, mask_faces=None):
     """P-07: a face is seen if a ray from a camera reaches its centre
     unobstructed. Returns a boolean array (m,). Needs mathutils."""
     from mathutils import Vector
@@ -811,78 +811,78 @@ def faces_vues(pos, faces, cams=None, masque_faces=None):
     if cams is None:
         cams = cameras(pos)
     bvh = BVHTree.FromPolygons(pos.tolist(), faces.tolist(), all_triangles=True, epsilon=0.0)
-    centres = pos[faces].mean(axis=1)
-    vue = np.zeros(len(faces), dtype=bool)
-    a_tester = np.arange(len(faces)) if masque_faces is None else np.where(masque_faces)[0]
+    centers = pos[faces].mean(axis=1)
+    view = np.zeros(len(faces), dtype=bool)
+    a_tester = np.arange(len(faces)) if mask_faces is None else np.where(mask_faces)[0]
     for cam in cams:
         o = Vector(cam)
-        reste = a_tester[~vue[a_tester]]
-        if len(reste) == 0:
+        rest = a_tester[~view[a_tester]]
+        if len(rest) == 0:
             break
-        dirs = centres[reste] - cam
+        dirs = centers[rest] - cam
         dist = np.linalg.norm(dirs, axis=1)
         dirs /= dist[:, None]
-        for fi, dv, di in zip(reste, dirs, dist):
+        for fi, dv, di in zip(rest, dirs, dist):
             loc, nor, idx, d = bvh.ray_cast(o, Vector(dv), di + 1e-4)
             if idx is not None and (idx == fi or d >= di - 1e-5):
-                vue[fi] = True
-    return vue
+                view[fi] = True
+    return view
 
 
 # ======================================================================= P-08
 
-class Squelette:
+class Skeleton:
     """Bones of the PMX in the Blender frame. Heads are in metres."""
 
-    def __init__(self, noms_pmx, tetes, queues, parents, ajout_source, ajout_facteur,
-                 ajout_rot, ajout_dep):
-        self.noms_pmx = list(noms_pmx)
-        self.ids = [identifiant(n) for n in self.noms_pmx]
-        self.tetes = np.asarray(tetes, dtype=float)
-        self.queues = np.asarray(queues, dtype=float)
+    def __init__(self, names_pmx, heads, tails, parents, addition_source, addition_factor,
+                 addition_rot, addition_disp):
+        self.names_pmx = list(names_pmx)
+        self.ids = [identifier(n) for n in self.names_pmx]
+        self.heads = np.asarray(heads, dtype=float)
+        self.tails = np.asarray(tails, dtype=float)
         self.parents = np.asarray(parents, dtype=np.int64)
-        self.ajout_source = np.asarray(ajout_source, dtype=np.int64)
-        self.ajout_facteur = np.asarray(ajout_facteur, dtype=float)
-        self.ajout_rot = np.asarray(ajout_rot, dtype=bool)
-        self.ajout_dep = np.asarray(ajout_dep, dtype=bool)
+        self.addition_source = np.asarray(addition_source, dtype=np.int64)
+        self.addition_factor = np.asarray(addition_factor, dtype=float)
+        self.addition_rot = np.asarray(addition_rot, dtype=bool)
+        self.addition_disp = np.asarray(addition_disp, dtype=bool)
         self._index = {}
-        for i, (n, k) in enumerate(zip(self.noms_pmx, self.ids)):
+        for i, (n, k) in enumerate(zip(self.names_pmx, self.ids)):
             self._index.setdefault(n, i)
             self._index.setdefault(k, i)
             self._index.setdefault(nfkc(n), i)
 
     def __len__(self):
-        return len(self.noms_pmx)
+        return len(self.names_pmx)
 
-    def index(self, nom, defaut=None):
-        i = self._index.get(nom, self._index.get(nfkc(nom)))
+    def index(self, name, default=None):
+        i = self._index.get(name, self._index.get(nfkc(name)))
         if i is None:
-            if defaut is not None:
-                return defaut
-            raise KeyError(nom)
+            if default is not None:
+                return default
+            raise KeyError(name)
         return i
 
-    def a(self, nom):
-        return self.index(nom, -1) >= 0
+    def a(self, name):
+        return self.index(name, -1) >= 0
 
-    def enfants(self, b):
+    def children(self, b):
         return np.where(self.parents == b)[0]
 
-    def direction(self, b, vers=None):
-        """Direction of the bone: towards the head of `vers` if given, otherwise towards its tail."""
-        cible = self.tetes[self.index(vers)] if vers is not None else self.queues[b]
-        v = cible - self.tetes[b]
+    def direction(self, b, to=None):
+        """Direction of the bone: towards the head of `to` if given, otherwise towards its tail."""
+        target = self.heads[self.index(to)] if to is not None else self.tails[b]
+        v = target - self.heads[b]
         n = np.linalg.norm(v)
         return v / n if n > 0 else np.array([0.0, 0.0, 1.0]), n
 
-    def cinematique(self, rotations=None, ajouts_actifs=None):
-        return cin.cinematique(self.tetes, self.parents, self.ajout_source, self.ajout_facteur,
-                               self.ajout_rot, self.ajout_dep, rotations, None, ajouts_actifs)
+    def kinematics(self, rotations=None, additions_actives=None):
+        return kin.kinematics(self.heads, self.parents, self.addition_source, self.addition_factor,
+                               self.addition_rot, self.addition_disp, rotations, None, additions_actives)
 
 
-AVANT = np.array([0.0, -1.0, 0.0])
-HAUT = np.array([0.0, 0.0, 1.0])
-BAS = -HAUT
+FRONT = np.array([0.0, -1.0, 0.0])
+TOP = np.array([0.0, 0.0, 1.0])
+BOTTOM = -TOP
 
 # Segment of each limb bone: bone -> bone whose head ends the segment
 SEGMENTS = {"腕": "ひじ", "ひじ": "手首", "手首": "中指１", "足": "ひざ", "ひざ": "足首",
@@ -890,123 +890,123 @@ SEGMENTS = {"腕": "ひじ", "ひじ": "手首", "手首": "中指１", "足": "
 POSES = ["P0", "P1", "P2", "P3", "P4", "P5", "P6", "P7", "P8", "P9", "P10", "P11", "P12"]
 
 
-def _flechir(sq, os_, vers, cible, degres):
-    """Rotation that brings the direction of bone `os_` towards `cible` by `degres`."""
-    d, _ = sq.direction(sq.index(os_), vers)
-    axe = np.cross(d, cible)
-    if np.linalg.norm(axe) < 1e-9:
-        axe = np.cross(d, AVANT)
-    return cin.q_axe_angle(axe, degres)
+def _bend(sq, os_, to, target, degrees):
+    """Rotation that brings the direction of bone `os_` towards `target` by `degrees`."""
+    d, _ = sq.direction(sq.index(os_), to)
+    axis = np.cross(d, target)
+    if np.linalg.norm(axis) < 1e-9:
+        axis = np.cross(d, FRONT)
+    return kin.q_axe_angle(axis, degrees)
 
 
-def pose(numero, sq, cotes=("L", "R")):
+def pose(number, sq, sides=("L", "R")):
     """P-08: local rotations (dict bone index -> quaternion) of the test pose.
 
     Angles counted from the rest pose (the delivered A-pose). The rotations
     apply to the standard bones; the D bones, twist bones and 腰キャンセル follow through
-    their additions (cinematique). Right side = mirror of the left side."""
+    their additions (kinematics). Right side = mirror of the left side."""
     r = {}
 
-    def mettre(nom, q, cote):
-        n = ("左" if cote == "L" else "右") + nom
+    def put(name, q, side):
+        n = ("左" if side == "L" else "右") + name
         b = sq.index(n, -1)
         if b < 0:
             return
-        r[b] = cin.q_mul(r.get(b, cin.IDENTITE), q)
+        r[b] = kin.q_mul(r.get(b, kin.IDENTITY), q)
 
-    def symetrique(nom, fabrique, quels=cotes):
-        for c in quels:
-            mettre(nom, fabrique(c), c)
+    def symmetric(name, built, which=sides):
+        for c in which:
+            put(name, built(c), c)
 
-    def pour(c, os_, vers, cible, deg):
-        nom = ("左" if c == "L" else "右") + os_
-        v = ("左" if c == "L" else "右") + vers
-        if not sq.a(nom) or not sq.a(v):
-            return cin.IDENTITE
-        return _flechir(sq, nom, v, cible, deg)
+    def for_(c, os_, to, target, deg):
+        name = ("左" if c == "L" else "右") + os_
+        v = ("左" if c == "L" else "右") + to
+        if not sq.a(name) or not sq.a(v):
+            return kin.IDENTITY
+        return _bend(sq, name, v, target, deg)
 
-    def autour(c, os_, vers, deg):
-        nom = ("左" if c == "L" else "右") + os_
-        v = ("左" if c == "L" else "右") + vers
-        if not sq.a(nom) or not sq.a(v):
-            return cin.IDENTITE
-        d, _ = sq.direction(sq.index(nom), v)
-        return cin.q_axe_angle(d, deg if c == "L" else -deg)
+    def around(c, os_, to, deg):
+        name = ("左" if c == "L" else "右") + os_
+        v = ("左" if c == "L" else "右") + to
+        if not sq.a(name) or not sq.a(v):
+            return kin.IDENTITY
+        d, _ = sq.direction(sq.index(name), v)
+        return kin.q_axe_angle(d, deg if c == "L" else -deg)
 
-    n = numero.upper()
+    n = number.upper()
     if n == "P0":
         pass
     elif n == "P1":  # arms raised by 150°
-        symetrique("腕", lambda c: pour(c, "腕", "ひじ", HAUT, 150))
+        symmetric("腕", lambda c: for_(c, "腕", "ひじ", TOP, 150))
     elif n == "P2":  # arms in front at 90°
-        symetrique("腕", lambda c: pour(c, "腕", "ひじ", AVANT, 90))
+        symmetric("腕", lambda c: for_(c, "腕", "ひじ", FRONT, 90))
     elif n == "P3":  # forearm in pronation of 90° (wrist twist bone)
         os_ = "手捩" if sq.a("左手捩") else "手首"
-        symetrique(os_, lambda c: autour(c, "ひじ", "手首", 90))
+        symmetric(os_, lambda c: around(c, "ひじ", "手首", 90))
     elif n == "P4":  # elbow bent by 130°
-        symetrique("ひじ", lambda c: pour(c, "ひじ", "手首", AVANT, 130))
+        symmetric("ひじ", lambda c: for_(c, "ひじ", "手首", FRONT, 130))
     elif n == "P5":  # left thigh raised by 90°
-        symetrique("足", lambda c: pour(c, "足", "ひざ", AVANT, 90), ("L",))
+        symmetric("足", lambda c: for_(c, "足", "ひざ", FRONT, 90), ("L",))
     elif n == "P6":  # left knee bent by 120°
-        symetrique("ひざ", lambda c: pour(c, "ひざ", "足首", -AVANT, 120), ("L",))
+        symmetric("ひざ", lambda c: for_(c, "ひざ", "足首", -FRONT, 120), ("L",))
     elif n == "P7":  # crouch: hips 110°, knees 130°
-        symetrique("足", lambda c: pour(c, "足", "ひざ", AVANT, 110))
-        symetrique("ひざ", lambda c: pour(c, "ひざ", "足首", -AVANT, 130))
+        symmetric("足", lambda c: for_(c, "足", "ひざ", FRONT, 110))
+        symmetric("ひざ", lambda c: for_(c, "ひざ", "足首", -FRONT, 130))
     elif n == "P8":  # torso turned by 45°
         b = sq.index("上半身", -1)
         if b >= 0:
-            r[b] = cin.q_axe_angle(HAUT, 45)
+            r[b] = kin.q_axe_angle(TOP, 45)
     elif n == "P9":  # head turned by 60° and raised by 30°
         b = sq.index("頭", -1)
         if b >= 0:
-            r[b] = cin.q_mul(cin.q_axe_angle(HAUT, 60), cin.q_axe_angle([-1, 0, 0], 30))
+            r[b] = kin.q_mul(kin.q_axe_angle(TOP, 60), kin.q_axe_angle([-1, 0, 0], 30))
     elif n == "P10":  # wrist bent by 70° (towards the palm, grip downwards)
-        symetrique("手首", lambda c: pour(c, "手首", "中指１", BAS, 70))
+        symmetric("手首", lambda c: for_(c, "手首", "中指１", BOTTOM, 70))
     elif n == "P11":  # fingers closed
-        for doigt in ("人指", "中指", "薬指", "小指"):
+        for finger in ("人指", "中指", "薬指", "小指"):
             for k, deg in (("１", 70), ("２", 90), ("３", 60)):
                 suite = {"１": "２", "２": "３", "３": None}[k]
-                for c in cotes:
-                    nom = ("左" if c == "L" else "右") + doigt + k
-                    if not sq.a(nom):
+                for c in sides:
+                    name = ("左" if c == "L" else "右") + finger + k
+                    if not sq.a(name):
                         continue
-                    b = sq.index(nom)
-                    v = (("左" if c == "L" else "右") + doigt + suite) if suite else None
+                    b = sq.index(name)
+                    v = (("左" if c == "L" else "右") + finger + suite) if suite else None
                     d, _ = sq.direction(b, v) if v and sq.a(v) else sq.direction(b)
-                    axe = np.cross(d, BAS)
-                    r[b] = cin.q_axe_angle(axe, deg)
+                    axis = np.cross(d, BOTTOM)
+                    r[b] = kin.q_axe_angle(axis, deg)
         for k, suite, deg in (("１", "２", 30), ("２", None, 45)):
-            for c in cotes:
-                nom = ("左" if c == "L" else "右") + "親指" + k
-                if not sq.a(nom):
+            for c in sides:
+                name = ("左" if c == "L" else "右") + "親指" + k
+                if not sq.a(name):
                     continue
-                b = sq.index(nom)
+                b = sq.index(name)
                 v = (("左" if c == "L" else "右") + "親指" + suite) if suite else None
                 d, _ = sq.direction(b, v) if v and sq.a(v) else sq.direction(b)
-                r[b] = cin.q_axe_angle(np.cross(d, BAS), deg)
+                r[b] = kin.q_axe_angle(np.cross(d, BOTTOM), deg)
     elif n == "P12":  # walking step: left thigh +30° in front, right 30° behind
-        symetrique("足", lambda c: pour(c, "足", "ひざ", AVANT, 30), ("L",))
-        symetrique("足", lambda c: pour(c, "足", "ひざ", -AVANT, 30), ("R",))
+        symmetric("足", lambda c: for_(c, "足", "ひざ", FRONT, 30), ("L",))
+        symmetric("足", lambda c: for_(c, "足", "ひざ", -FRONT, 30), ("R",))
     else:
-        raise ValueError("unknown pose: %s" % numero)
+        raise ValueError("unknown pose: %s" % number)
     return r
 
 
-def deformer(pos, idx, poids, sq, numero=None, rotations=None, ajouts_actifs=None,
-             normaliser=True):
+def deform(pos, idx, weight, sq, number=None, rotations=None, additions_actives=None,
+             normalize=True):
     """Positions deformed by the pose (numpy linear skinning, checked against
     Blender in §2.1). Returns (positions, R, t)."""
     if rotations is None:
-        rotations = pose(numero, sq) if numero else {}
-    R, t = sq.cinematique(rotations, ajouts_actifs)
-    return cin.skinning(pos, idx, poids, sq.tetes, R, t, normaliser), R, t
+        rotations = pose(number, sq) if number else {}
+    R, t = sq.kinematics(rotations, additions_actives)
+    return kin.skinning(pos, idx, weight, sq.heads, R, t, normalize), R, t
 
 
 # ======================================================================= P-09
 
-def d1_longueurs(pos0, pos1, aretes, masque_aretes=None):
+def d1_lengths(pos0, pos1, edges, mask_edges=None):
     """D1: ratio of edge lengths, percentiles 1 and 99."""
-    e = aretes if masque_aretes is None else aretes[masque_aretes]
+    e = edges if mask_edges is None else edges[mask_edges]
     l0 = np.linalg.norm(pos0[e[:, 0]] - pos0[e[:, 1]], axis=1)
     l1 = np.linalg.norm(pos1[e[:, 0]] - pos1[e[:, 1]], axis=1)
     ok = l0 > 1e-9
@@ -1017,22 +1017,22 @@ def d1_longueurs(pos0, pos1, aretes, masque_aretes=None):
             "n": int(len(r))}
 
 
-def d2_retournees(pos0, pos1, faces, R_dominant, masque_faces=None):
+def d2_flipped(pos0, pos1, faces, R_dominant, mask_faces=None):
     """D2: flipped faces. The deformed normal is compared to the rest normal
     rotated by the dominant bone of the face (otherwise every face of a limb
     rotated by more than 90° would count). R_dominant: (m, 3, 3)."""
-    f = faces if masque_faces is None else faces[masque_faces]
-    Rd = R_dominant if masque_faces is None else R_dominant[masque_faces]
-    n0, a0 = normales_faces(pos0, f)
-    n1, a1 = normales_faces(pos1, f)
-    attendu = np.einsum("mij,mj->mi", Rd, n0)
+    f = faces if mask_faces is None else faces[mask_faces]
+    Rd = R_dominant if mask_faces is None else R_dominant[mask_faces]
+    n0, a0 = normals_faces(pos0, f)
+    n1, a1 = normals_faces(pos1, f)
+    expected = np.einsum("mij,mj->mi", Rd, n0)
     ok = (a0 > 1e-12) & (a1 > 1e-12)
-    return int(((np.einsum("mi,mi->m", attendu, n1) < 0) & ok).sum())
+    return int(((np.einsum("mi,mi->m", expected, n1) < 0) & ok).sum())
 
 
-def rotation_dominante_faces(faces, idx, poids, R):
+def rotation_dominant_faces(faces, idx, weight, R):
     """Rotation of the bone with the largest total weight on each face (for D2)."""
-    dom = os_dominant(idx, poids)
+    dom = os_dominant(idx, weight)
     fd = dom[faces]
     # most frequent bone of the three vertices, otherwise that of the first
     b = np.where(fd[:, 1] == fd[:, 2], fd[:, 1], fd[:, 0])
@@ -1040,48 +1040,48 @@ def rotation_dominante_faces(faces, idx, poids, R):
     return R[b]
 
 
-def d3_profil(pos0, pos1, faces, sq, os_, vers, R, t, fractions=(0.1, 0.3, 0.5, 0.7, 0.9),
-              masque_faces=None):
+def d3_profile(pos0, pos1, faces, sq, os_, to, R, t, fractions=(0.1, 0.3, 0.5, 0.7, 0.9),
+              mask_faces=None):
     """D3: radius profile r(t) along the bone, posed / rest (P-04 on both)."""
     b = sq.index(os_)
-    d0, L = sq.direction(b, vers)
+    d0, L = sq.direction(b, to)
     h1 = t[b]
     d1 = R[b] @ d0
     out = []
     for f in fractions:
-        a0 = anneau(pos0, faces, sq.tetes[b], d0, L, f, masque_faces)
-        a1 = anneau(pos1, faces, h1, d1, L, f, masque_faces)
-        if a0 and a1 and a0.get("fermee") and a1.get("fermee"):
-            out.append({"t": f, "r0": a0["rayon"], "r1": a1["rayon"],
-                        "rapport": a1["rayon"] / a0["rayon"]})
+        a0 = loop(pos0, faces, sq.heads[b], d0, L, f, mask_faces)
+        a1 = loop(pos1, faces, h1, d1, L, f, mask_faces)
+        if a0 and a1 and a0.get("closed") and a1.get("closed"):
+            out.append({"t": f, "r0": a0["radius"], "r1": a1["radius"],
+                        "report": a1["radius"] / a0["radius"]})
         else:
-            out.append({"t": f, "r0": None, "r1": None, "rapport": None})
+            out.append({"t": f, "r0": None, "r1": None, "report": None})
     return out
 
 
-def d4_interpenetrations(pos, faces, masque_a, masque_b):
+def d4_interpenetrations(pos, faces, mask_a, mask_b):
     """D4: pairs of intersecting faces between two non-neighbouring sets of faces
     (BVHTree.overlap). Needs mathutils."""
     from mathutils.bvhtree import BVHTree
-    fa = faces[masque_a]
-    fb = faces[masque_b]
+    fa = faces[mask_a]
+    fb = faces[mask_b]
     if len(fa) == 0 or len(fb) == 0:
         return 0
     ta = BVHTree.FromPolygons(pos.tolist(), fa.tolist(), all_triangles=True)
     tb = BVHTree.FromPolygons(pos.tolist(), fb.tolist(), all_triangles=True)
-    paires = ta.overlap(tb)
+    pairs = ta.overlap(tb)
     # discard the pairs that share a vertex (neighbours)
     n = 0
-    for i, j in paires:
+    for i, j in pairs:
         if not set(fa[i]) & set(fb[j]):
             n += 1
     return n
 
 
-def d5_hausdorff(pos_a, pos_b, faces_b=None, masque_sommets=None):
+def d5_hausdorff(pos_a, pos_b, faces_b=None, mask_vertices=None):
     """D5: one-sided Hausdorff distance from A to B. Without faces_b (same
     topology), the largest vertex-to-vertex displacement (upper bound)."""
-    sel = slice(None) if masque_sommets is None else masque_sommets
+    sel = slice(None) if mask_vertices is None else mask_vertices
     if faces_b is None:
         d = np.linalg.norm(pos_a[sel] - pos_b[sel], axis=1)
         return float(d.max()) if len(d) else 0.0
@@ -1096,37 +1096,37 @@ def d5_hausdorff(pos_a, pos_b, faces_b=None, masque_sommets=None):
     return float(m)
 
 
-def indicateurs(pos0, pos1, faces, aretes, idx, poids, R, masque_sommets):
+def indicators(pos0, pos1, faces, edges, idx, weight, R, mask_vertices):
     """P-09 combined for a region (D1, D2, D5; D3 and D4 are requested separately
     because they need a bone or two regions)."""
-    ma = masque_sommets[aretes[:, 0]] & masque_sommets[aretes[:, 1]]
-    mf = masque_sommets[faces].all(axis=1)
-    Rd = rotation_dominante_faces(faces, idx, poids, R)
-    return {"D1": d1_longueurs(pos0, pos1, aretes, ma),
-            "D2": d2_retournees(pos0, pos1, faces, Rd, mf),
-            "D5_sommets": d5_hausdorff(pos1, pos0, None, masque_sommets)}
+    ma = mask_vertices[edges[:, 0]] & mask_vertices[edges[:, 1]]
+    mf = mask_vertices[faces].all(axis=1)
+    Rd = rotation_dominant_faces(faces, idx, weight, R)
+    return {"D1": d1_lengths(pos0, pos1, edges, ma),
+            "D2": d2_flipped(pos0, pos1, faces, Rd, mf),
+            "D5_vertices": d5_hausdorff(pos1, pos0, None, mask_vertices)}
 
 
 # ======================================================================= P-10
 
-def sommets_morphe(decalages, H, eps=1e-4):
-    """P-10: vertices whose displacement exceeds ε = 1e-4 H. decalages: (n, 3)."""
-    return np.where(np.linalg.norm(decalages, axis=1) > eps * H)[0]
+def vertices_morph(offsets, H, eps=1e-4):
+    """P-10: vertices whose displacement exceeds ε = 1e-4 H. offsets: (n, 3)."""
+    return np.where(np.linalg.norm(offsets, axis=1) > eps * H)[0]
 
 
 # ======================================================================= P-11
 
-def _boucles_bord(faces_sel):
+def _border_loops(faces_sel):
     """Boundary loops of a set of faces (edges used only once)."""
-    e, fa = aretes_de(faces_sel)
-    cnt = faces_par_arete(fa, len(e))
-    bord = e[cnt == 1]
-    vois = {}
-    for a, b in bord:
-        vois.setdefault(a, []).append(b)
-        vois.setdefault(b, []).append(a)
-    vu, boucles = set(), []
-    for s in vois:
+    e, fa = edges_of(faces_sel)
+    cnt = faces_per_edge(fa, len(e))
+    border = e[cnt == 1]
+    neigh = {}
+    for a, b in border:
+        neigh.setdefault(a, []).append(b)
+        neigh.setdefault(b, []).append(a)
+    vu, loops = set(), []
+    for s in neigh:
         if s in vu:
             continue
         pile, comp = [s], []
@@ -1134,124 +1134,124 @@ def _boucles_bord(faces_sel):
         while pile:
             k = pile.pop()
             comp.append(k)
-            for v in vois[k]:
+            for v in neigh[k]:
                 if v not in vu:
                     vu.add(v)
                     pile.append(v)
-        boucles.append(np.array(comp))
-    return boucles
+        loops.append(np.array(comp))
+    return loops
 
 
-def reperes_visage(pos, faces, groupe_face, nom_mat_face, poids_tete, H_tol=0.002,
-                   mats_iris=("目",), mat_visage="颜"):
-    """P-11: face landmarks on `soude`.
+def landmarks_face(pos, faces, group_face, name_mat_face, weight_head, H_tol=0.002,
+                   mats_iris=("目",), mat_face="颜"):
+    """P-11: face landmarks on `welded`.
 
-    pos, faces       : `soude`
-    groupe_face      : group of each face (P-02, material)
-    nom_mat_face     : material name of each face
-    poids_tete       : weight of 頭 per vertex
+    pos, faces       : `welded`
+    group_face      : group of each face (P-02, material)
+    name_mat_face     : material name of each face
+    weight_head       : weight of 頭 per vertex
     mats_iris        : materials of class "iris" (ZZ-04); empty = model without eyes
     mat_visage       : largest material of class "visage" (ZZ-04)
-    Returns a dict of points (Blender frame) and H, d_yeux. Without iris, the points that
-    depend on them (iris, d_yeux, eye sockets, symmetry) are None and the bounds that relied
+    Returns a dict of points (Blender frame) and H, d_eyes. Without iris, the points that
+    depend on them (iris, d_eyes, eye sockets, symmetry) are None and the bounds that relied
     on the eyes switch to the skull (nose) and to 0.5 H (mouth width).
     """
     out = {}
-    nom_mat_face = np.asarray(nom_mat_face)
-    # iris: barycentre of the vertices of the iris materials, split by the sign of x
-    fi = faces[np.isin(nom_mat_face, list(mats_iris))] if len(mats_iris) else faces[:0]
+    name_mat_face = np.asarray(name_mat_face)
+    # iris: barycenter of the vertices of the iris materials, split by the sign of x
+    fi = faces[np.isin(name_mat_face, list(mats_iris))] if len(mats_iris) else faces[:0]
     vi = np.unique(fi)
     P = pos[vi]
-    gauche = P[P[:, 0] > 0]
-    droite = P[P[:, 0] < 0]
-    a_iris = len(gauche) > 0 and len(droite) > 0
+    left = P[P[:, 0] > 0]
+    right = P[P[:, 0] < 0]
+    a_iris = len(left) > 0 and len(right) > 0
     if len(mats_iris) and not a_iris:
         raise ValueError("iris not found (materials %s)" % ", ".join(mats_iris))
     if a_iris:
-        out["iris_L"] = gauche.mean(0)
-        out["iris_R"] = droite.mean(0)
-        out["d_yeux"] = float(np.linalg.norm(out["iris_L"] - out["iris_R"]))
-        out["rayon_iris"] = float(np.abs(gauche[:, 0] - out["iris_L"][0]).max())
+        out["iris_L"] = left.mean(0)
+        out["iris_R"] = right.mean(0)
+        out["d_eyes"] = float(np.linalg.norm(out["iris_L"] - out["iris_R"]))
+        out["radius_iris"] = float(np.abs(left[:, 0] - out["iris_L"][0]).max())
     else:
-        out["iris_L"] = out["iris_R"] = out["d_yeux"] = out["rayon_iris"] = None
+        out["iris_L"] = out["iris_R"] = out["d_eyes"] = out["radius_iris"] = None
     # top of the skull: max z of the vertices with weight > 0.5 on 頭, hair and accessories excluded
-    exclus = np.zeros(len(pos), dtype=bool)
-    for g in ("cheveux", "accessoire"):
-        exclus[np.unique(faces[groupe_face == g])] = True
-    garde = (poids_tete > 0.5) & ~exclus
-    if not garde.any():
+    excluded = np.zeros(len(pos), dtype=bool)
+    for g in ("hair", "accessory"):
+        excluded[np.unique(faces[group_face == g])] = True
+    guard = (weight_head > 0.5) & ~excluded
+    if not guard.any():
         raise ValueError("no skull vertex")
-    k = np.where(garde)[0]
-    tol = max(H_tol, 0.01 * out["d_yeux"]) if a_iris else H_tol
+    k = np.where(guard)[0]
+    tol = max(H_tol, 0.01 * out["d_eyes"]) if a_iris else H_tol
     # the landmark lives on the median plane (Trigger: the highest point is an isolated vertex
     # of the face material, with no mirror counterpart, at x = −0.319 H); without a median vertex, the highest
     k_med = k[np.abs(pos[k, 0]) < tol]
     k_cr = k_med if len(k_med) else k
-    crane = pos[k_cr[np.argmax(pos[k_cr, 2])]]
+    skull = pos[k_cr[np.argmax(pos[k_cr, 2])]]
     # face material
-    fv = faces[nom_mat_face == mat_visage]
+    fv = faces[name_mat_face == mat_face]
     vv = np.unique(fv)
     Pv = pos[vv]
     med = vv[np.abs(Pv[:, 0]) < tol]
     if len(med) == 0:
         raise ValueError("no face vertex on the median plane")
-    z_iris = (out["iris_L"][2] + out["iris_R"][2]) / 2 if a_iris else crane[2]
+    z_iris = (out["iris_L"][2] + out["iris_R"][2]) / 2 if a_iris else skull[2]
     # chin: lowest point of the face material on the median plane
-    out["menton"] = pos[med[np.argmin(pos[med, 2])]]
-    larg_max = 1.5 * out["d_yeux"] if a_iris else 0.5 * float(crane[2] - out["menton"][2])
+    out["chin"] = pos[med[np.argmin(pos[med, 2])]]
+    width_max = 1.5 * out["d_eyes"] if a_iris else 0.5 * float(skull[2] - out["chin"][2])
     # edge of the face: boundary loops of the face material
-    boucles = _boucles_bord(fv)
+    loops = _border_loops(fv)
     # eye sockets: boundary loop whose centre is closest to each iris
     for c in ("L", "R"):
         iris = out["iris_" + c]
         if iris is None:
-            out["orbite_" + c] = None
+            out["orbit_" + c] = None
             continue
-        best = min(boucles, key=lambda b: np.linalg.norm(pos[b].mean(0) - iris))
+        best = min(loops, key=lambda b: np.linalg.norm(pos[b].mean(0) - iris))
         Pb = pos[best]
-        out["orbite_" + c] = {"n_sommets": int(len(best)),
-                              "coin_int": Pb[np.argmin(np.abs(Pb[:, 0]))],
-                              "coin_ext": Pb[np.argmax(np.abs(Pb[:, 0]))]}
+        out["orbit_" + c] = {"n_vertices": int(len(best)),
+                              "corner_int": Pb[np.argmin(np.abs(Pb[:, 0]))],
+                              "corner_ext": Pb[np.argmax(np.abs(Pb[:, 0]))]}
     # mouth: boundary loop centred on the median plane, below the eyes, above the chin
-    cand = []
-    for b in boucles:
+    candidate = []
+    for b in loops:
         Pb = pos[b]
         cen = Pb.mean(0)
-        larg = Pb[:, 0].max() - Pb[:, 0].min()
-        if abs(cen[0]) < tol * 3 and out["menton"][2] < cen[2] < z_iris and \
-                larg < larg_max and (Pb[:, 0].max() > 0 > Pb[:, 0].min()):
-            cand.append((larg, b))
-    if cand:
-        larg, b = max(cand, key=lambda x: x[0])
+        wid = Pb[:, 0].max() - Pb[:, 0].min()
+        if abs(cen[0]) < tol * 3 and out["chin"][2] < cen[2] < z_iris and \
+                wid < width_max and (Pb[:, 0].max() > 0 > Pb[:, 0].min()):
+            candidate.append((wid, b))
+    if candidate:
+        wid, b = max(candidate, key=lambda x: x[0])
         Pb = pos[b]
         out["commissure_L"] = Pb[np.argmax(Pb[:, 0])]
         out["commissure_R"] = Pb[np.argmin(Pb[:, 0])]
-        out["bouche"] = Pb.mean(0)
-        out["bouche_n_sommets"] = int(len(b))
+        out["mouth"] = Pb.mean(0)
+        out["mouth_n_vertices"] = int(len(b))
     else:
-        out["bouche"] = None
+        out["mouth"] = None
     # nose: smallest y on the median plane, above the mouth and below the eyes
-    zb = out["bouche"][2] if out["bouche"] is not None else out["menton"][2]
+    zb = out["mouth"][2] if out["mouth"] is not None else out["chin"][2]
     sel = med[(pos[med, 2] > zb) & (pos[med, 2] < z_iris)]
     if len(sel) == 0:
         raise ValueError("nose not found")
-    out["nez"] = pos[sel[np.argmin(pos[sel, 1])]]
-    out["crane"] = crane
-    out["H"] = float(out["crane"][2] - out["menton"][2])
+    out["nose"] = pos[sel[np.argmin(pos[sel, 1])]]
+    out["skull"] = skull
+    out["H"] = float(out["skull"][2] - out["chin"][2])
     out["symetrie_iris_H"] = (float(np.linalg.norm(out["iris_L"] * [-1, 1, 1] - out["iris_R"]) / out["H"])
                               if a_iris else None)
     return out
 
 
-def mats_reperes(classes, noms, mat_face):
+def mats_landmarks(classes, names, mat_face):
     """Reference materials of P-11 taken from ZZ-04: (iris, visage). Visage = the material
     of class "visage" that has the most faces; falls back on Evelyn's names."""
-    noms = list(noms)
-    iris = tuple(n for n, c in zip(noms, classes) if c.get("classe") == "iris")
-    vis = [i for i, c in enumerate(classes) if c.get("classe") == "visage"]
-    if not any(c.get("classe") for c in classes):
+    names = list(names)
+    iris = tuple(n for n, c in zip(names, classes) if c.get("class") == "iris")
+    vis = [i for i, c in enumerate(classes) if c.get("class") == "face"]
+    if not any(c.get("class") for c in classes):
         return ("目",), "颜"
     if not vis:
         raise ValueError("no material of class visage")
-    nf = np.bincount(np.asarray(mat_face), minlength=len(noms))
-    return iris, noms[max(vis, key=lambda i: nf[i])]
+    nf = np.bincount(np.asarray(mat_face), minlength=len(names))
+    return iris, names[max(vis, key=lambda i: nf[i])]

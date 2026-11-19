@@ -30,7 +30,7 @@ to every model assembled on it.
 
 Without a .vrm file, the free base (MakeHuman, CC0) is the fallback: `python3 -I tools/free_base/build.py`
 (it downloads a few MB of MakeHuman from GitHub, once). As long as the VRoid base is not built, Chimera
-uses the free base if that one is built, with its own cache (`atelier-base-libre`).
+uses the free base if that one is built, with its own cache (`workshop-free-base`).
 
     bin/chimera 8780       # on another port
 
@@ -54,9 +54,22 @@ once installed. You need neither Blender nor `catalog.py prepare` for it; you st
 The address is `library.url` in the settings. A folder or another URL can be given instead:
 `install <folder or URL>`. An interrupted download resumes when the same command is run again. Models of your
 own that are already there are never overwritten: the command stops, and `--replace` sets them aside in
-`<data>/.chimera-bibliotheque/`. You can add your own models afterwards, as below; `prepare` then
+`<data>/.chimera-library/`. You can add your own models afterwards, as below; `prepare` then
 prepares only those. Each model keeps its author's terms (see `CREDITS.md` of the library). Details:
 `tools/library/README.md`.
+
+### Installed before format 2?
+
+Since format 2 every data name is in English (folders, files, JSON keys; table: [FORMAT-2.md](FORMAT-2.md)). The code
+reads only format 2: on a folder installed or prepared earlier (format 1) it stops and gives the command. Either
+convert that folder once, in place (a few minutes; nothing is downloaded or prepared again; running it again
+does no harm):
+
+    python3 -I tools/library/library.py migrate <your data folder> --settings <your settings.json>
+    python3 -I tools/library/library.py migrate <your data folder> --check      # 0 left: done
+
+or install the library again into an empty folder (`paths.data`). A format-1 package is refused by the installation step
+of this code (and the other way round): update the code (`git pull`) or the library.
 
 ## Settings
 
@@ -96,15 +109,15 @@ No model. The page needs three things to open: a **base body**, at least one **f
 `tools/vroid_base/build.py` (see "First run" and `tools/vroid_base/README.md`), or, without a
 .vrm file, from MakeHuman (CC0) by `tools/free_base/build.py`.
 
-- **The base body** (`workshop.body`, default `{data}/base-vroid/corps.pmx`; free base:
-  `{data}/base-libre/corps.pmx`). The character's bare skin, bones with MMD names, arms-down pose: parts
+- **The base body** (`workshop.body`, default `{data}/vroid-base/body.pmx`; free base:
+  `{data}/free-base/body.pmx`). The character's bare skin, bones with MMD names, arms-down pose: parts
   from MMD models are worn on it through their bone names. To start from another reference body:
-  `tools/rebuilt_body` (mesh), `tools/forme_maison` (shape and skin), `tools/custom_body` (skeleton),
+  `tools/rebuilt_body` (mesh), `tools/custom_body` (skeleton) (the shape and skin tool is not published),
   each with its README. Another body needs a cache of its own (`workshop.cache`).
-- **The face and hairstyle of the base** (`tete.pmx`, `coiffure.pmx`, next to the body). They are used as long
+- **The face and hairstyle of the base** (`head.pmx`, `hairstyle.pmx`, next to the body). They are used as long
   as the base head is not in the face catalogue.
-- **The base head of a game.** Each game names its own (`tete_base` in `tools/games/<game>/game.json`).
-  VRoid's is the head of the built base (`base-vroid/base.json`). Once its entry is in the face
+- **The base head of a game.** Each game names its own (`base_head` in `tools/games/<game>/game.json`).
+  VRoid's is the head of the built base (`vroid-base/base.json`). Once its entry is in the face
   catalogue, the other faces of the game are stitched onto it (separate cache: change `workshop.cache`).
 - **Faces, hairstyles, clothes.** They come from your models, laid out as `COMPATIBILITY.md` says.
 
@@ -113,7 +126,7 @@ The shortest path to characters of your own is **VRoid Studio**: a character exp
 
     python3 -I tools/vroid/importer.py <file.vrm>... --output <folder>
 
-Then, in `settings.json`, set `games.active` = `vroid` (the default) and `jeux.vroid.mmd_extrait` = that folder.
+Then, in `settings.json`, set `games.active` = `vroid` (the default) and `games.vroid.mmd_extracted` = that folder.
 The base head is the one of the base character. Next steps and limits: `COMPATIBILITY.md`,
 VRoid section.
 

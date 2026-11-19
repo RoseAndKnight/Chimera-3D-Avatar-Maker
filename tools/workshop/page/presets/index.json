@@ -1,22 +1,22 @@
 [
  {
   "id": "home",
-  "nom": "Studio"
+  "name": "Studio"
  },
  {
   "id": "day",
-  "nom": "Day"
+  "name": "Day"
  },
  {
   "id": "sunset",
-  "nom": "Sunset"
+  "name": "Sunset"
  },
  {
   "id": "night",
-  "nom": "Night"
+  "name": "Night"
  },
  {
   "id": "simple",
-  "nom": "Plain"
+  "name": "Plain"
  }
 ]

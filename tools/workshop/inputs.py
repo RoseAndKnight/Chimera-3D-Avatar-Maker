@@ -6,7 +6,7 @@ the page:
   - inputs: a VRoid VRM (0.x from VRoid Studio, 1.0 from VRoid Hub) goes through the VRoid importer (tools/vroid/importer.py); a PMX must already speak the common
     language (face skin "颜", bone "頭"…);
   - importing is only possible if the active game takes its models from a folder where everyone brings their own
-    ("modeles": "*" in its description): a game with a declared list (ZZZ) only sees the models of its list;
+    ("models": "*" in its description): a game with a declared list (ZZZ) only sees the models of its list;
   - extraction follows the chain of COMPATIBILITY.md: pivot head (if missing), faces, hairstyles, clothes, then
     catalog.py prepare (Blender through the bin/blender-queue queue, settings calcul.*).
 
@@ -34,24 +34,24 @@ import zipfile
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import common as C  # noqa: E402
 
-J = C.JEU
-DONNEES = C.ATLAS
-PIVOT = os.path.join(DONNEES, "tete-pivot")      # where tools/head/library.py looks for it
+J = C.GAME
+DATA = C.ATLAS
+PIVOT = os.path.join(DATA, "pivot-head")      # where tools/head/library.py looks for it
 EXTRACTIONS = os.path.join(C.CACHE, "extractions")
-ASSEMBLAGES = os.path.join(C.CACHE, "assemblages")
-ATTENTE = os.path.join(C.CACHE, "imports-en-cours")
+ASSEMBLIES = os.path.join(C.CACHE, "assemblies")
+WAITING = os.path.join(C.CACHE, "imports-in-progress")
 
 IMPORT_MAX = 4 << 30             # most bytes received (a VRM is 10 to 100 MB; an archive of several models, GBs)
-ZIP_DEPLIE_MAX = 12 << 30        # most bytes once unpacked
-ZIP_FICHIERS_MAX = 20000
-ZIP_RAPPORT_MAX = 200            # unpacked / compressed size beyond which a large file is a bomb
-NOM_MAX = 60
+ZIP_UNFOLDED_MAX = 12 << 30        # most bytes once unpacked
+ZIP_FILES_MAX = 20000
+ZIP_REPORT_MAX = 200            # unpacked / compressed size beyond which a large file is a bomb
+NAME_MAX = 60
 # the VRM importer is written for one game (its bone, material and morph tables live there): tools/vroid
-IMPORTEUR_VRM = ("vroid", os.path.join(C.OUTILS, "vroid", "importer.py"))
-QUOI = ("visages", "coiffures", "vetements")
+INGESTER_VRM = ("vroid", os.path.join(C.TOOLS, "vroid", "importer.py"))
+WHAT = ("faces", "hairstyles", "clothes")
 
 
-class Refus(Exception):
+class Refusals(Exception):
     """Rejection the user can read; `code`: HTTP status."""
 
     def __init__(self, message, code=400):
@@ -61,535 +61,535 @@ class Refus(Exception):
 
 # ===================================================================== formats
 
-def _compat(jeu):
-    return jeu.d.get("compatibilite", {})
+def _compat(game):
+    return game.d.get("compatibility", {})
 
 
-def _va_au_bout(jeu):
+def _va_to_tip(game):
     """Can the game's models go all the way to the catalogue? It needs a list of models and a base head
     (pivot.py and catalog.py read them); without them the game cannot be the active game."""
-    return "modeles" in jeu.d and "tete_base" in jeu.d
+    return "models" in game.d and "base_head" in game.d
 
 
 def import_possible():
-    """(possible, reason): importing writes into the active game's mmd_extrait source, which only a "*" game reads."""
-    if J.valeur("modeles", {}) != "*":
-        return False, ("The active game \"%s\" reads a declared list of models (\"modeles\" in its description): an "
+    """(possible, reason): importing writes into the active game's mmd_extracted source, which only a "*" game reads."""
+    if J.value("models", {}) != "*":
+        return False, ("The active game \"%s\" reads a declared list of models (\"models\" in its description): an "
                        "imported model would never be picked up. Place its files as COMPATIBILITY.md says, or make "
-                       "active a game where everyone brings their own models (setting games.active)." % J.titre)
+                       "active a game where everyone brings their own models (setting games.active)." % J.title)
     try:
-        J.chemin("mmd_extrait")
+        J.path("mmd_extracted")
     except KeyError:
-        return False, "The active game \"%s\" has no mmd_extrait folder." % J.titre
+        return False, "The active game \"%s\" has no mmd_extracted folder." % J.title
     return True, None
 
 
 def formats():
-    import games as jeux
-    ok, raison = import_possible()
-    vroid = jeux.charger(IMPORTEUR_VRM[0])
+    import games as games
+    ok, reason = import_possible()
+    vroid = games.load(INGESTER_VRM[0])
     cv = _compat(vroid)
-    lim = cv.get("limites", [])
-    entree = [
-        {"id": "vrm", "nom": "VRM 0.x or 1.0 (VRoid Studio, VRoid Hub)", "extensions": [".vrm"], "etat": cv.get("niveau", "partiel"),
+    lim = cv.get("limits", [])
+    input_ = [
+        {"id": "vrm", "name": "VRM 0.x or 1.0 (VRoid Studio, VRoid Hub)", "extensions": [".vrm"], "state": cv.get("level", "partial"),
          "importable": ok,
-         "note": " ".join(lim[:3]) or cv.get("resume", "")},
-        {"id": "pmx", "nom": "PMX (MikuMikuDance), in a .zip with its textures (one or more models per archive)", "extensions": [".zip"], "etat": "partiel",
+         "note": " ".join(lim[:3]) or cv.get("summary", "")},
+        {"id": "pmx", "name": "PMX (MikuMikuDance), in a .zip with its textures (one or more models per archive)", "extensions": [".zip"], "state": "partial",
          "importable": ok,
          "note": "Names must follow the common language of ZZZ's official MMD models (face skin \"颜\", "
                  "hair \"髮\", skin \"肌\", MMD bone \"頭\"): a PMX without them is rejected at import. "
                  "An archive may hold several models: each PMX that follows the common language is imported, the others "
                  "(a weapon, a prop) are set aside."},
     ]
-    sortie = [
-        {"id": "pmx", "nom": "PMX (MikuMikuDance)",
+    output = [
+        {"id": "pmx", "name": "PMX (MikuMikuDance)",
          "note": "The assembled model and its textures, as a .zip. No physics (no rigid bodies for the hair, no springs)."},
-        {"id": "vrm", "nom": "VRM 1.0",
+        {"id": "vrm", "name": "VRM 1.0",
          "note": "Humanoid bones, 13 expressions, MToon materials, in T-pose. A VRM is a binary glTF file: renamed "
                  "to .glb, a glTF viewer opens it (without the VRM extensions). Missing if writing it failed."},
     ]
     # Only the skeletons the workshop reads are listed (games that can go all the way to the catalogue).
-    squelettes = []
-    for nom in jeux.tous():
-        if nom == "homemade":
+    skeletons = []
+    for name in games.all_():
+        if name == "homemade":
             continue
-        jeu = jeux.charger(nom)
-        c = _compat(jeu)
-        if _va_au_bout(jeu):
-            vrm = "os_mmd" in jeu.d
-            squelettes.append({
-                "id": nom, "nom": "%s: %s" % (jeu.titre, "VRM humanoid" if vrm else "standard MMD bones"),
-                "etat": c.get("niveau", "partiel"),
+        game = games.load(name)
+        c = _compat(game)
+        if _va_to_tip(game):
+            vrm = "os_mmd" in game.d
+            skeletons.append({
+                "id": name, "name": "%s: %s" % (game.title, "VRM humanoid" if vrm else "standard MMD bones"),
+                "state": c.get("level", "partial"),
                 "note": ("Humanoid bones renamed to MMD bones at import, breast bones merged into their parent, springs "
                          "not kept." if vrm else
                          "Bones of the MMD standard (センター, 上半身, 頭…) and materials of the common language, no conversion.")})
-    sq = C.R.valeur("workshop.skeleton", "custom")
-    return {"entree": entree, "sortie": sortie, "squelettes": squelettes,
-            "squelette_sortie": {"id": sq, "note": "Bones with readable names (house skeleton) when its data exists, "
-                                                   "otherwise the bones of the base body." if sq in ("custom", "maison") else
+    sq = C.R.value("workshop.skeleton", "custom")
+    return {"input": input_, "output": output, "skeletons": skeletons,
+            "output_skeleton": {"id": sq, "note": "Bones with readable names (house skeleton) when its data exists, "
+                                                   "otherwise the bones of the base body." if sq in ("custom", "own_rig") else
                                                    "The bones of the base body, kept as they are."},
-            "jeu_actif": {"id": J.nom, "nom": J.titre, "import": ok, "raison": raison}}
+            "active_game": {"id": J.name, "name": J.title, "import": ok, "reason": reason}}
 
 
-# ===================================================================== noms
+# ===================================================================== names
 
-def nettoyer_nom(texte, maxi=NOM_MAX):
+def clean_name(text, max_=NAME_MAX):
     """Name given by the user, kept readable (letters of any language, digits, space, - _ . ') and bounded."""
-    if not isinstance(texte, str):
+    if not isinstance(text, str):
         return ""
-    t = unicodedata.normalize("NFC", texte)
+    t = unicodedata.normalize("NFC", text)
     t = "".join(c if (c.isalnum() or c in " -_.'") else " " for c in t)
-    return re.sub(r"\s+", " ", t).strip(" .")[:maxi].strip()
+    return re.sub(r"\s+", " ", t).strip(" .")[:max_].strip()
 
 
-def identifiant(nom_fichier):
+def identifier(name_file):
     """Identifier of a model taken from its file name: ASCII, safe for a folder and a URL."""
-    base = os.path.basename(str(nom_fichier).replace("\\", "/"))
-    tige = os.path.splitext(base)[0]
-    a = unicodedata.normalize("NFKD", tige).encode("ascii", "ignore").decode()
+    base = os.path.basename(str(name_file).replace("\\", "/"))
+    stem = os.path.splitext(base)[0]
+    a = unicodedata.normalize("NFKD", stem).encode("ascii", "ignore").decode()
     a = re.sub(r"[^A-Za-z0-9_-]+", "_", a).strip("_-")[:48]
     if not a or not a[0].isalnum():
-        raise Refus("Unreadable file name: rename the file with Latin letters or digits.")
+        raise Refusals("Unreadable file name: rename the file with Latin letters or digits.")
     return a
 
 
-def nom_telechargement(nom, defaut):
+def name_download(name, default):
     """(ASCII name, UTF-8 name) for Content-Disposition."""
-    n = nettoyer_nom(nom) or defaut
+    n = clean_name(name) or default
     a = unicodedata.normalize("NFKD", n).encode("ascii", "ignore").decode()
-    a = re.sub(r"[^A-Za-z0-9_.-]+", "_", a).strip("_.") or defaut
+    a = re.sub(r"[^A-Za-z0-9_.-]+", "_", a).strip("_.") or default
     return a, n
 
 
 # ===================================================================== import
 
-def recevoir(flux, longueur, maxi=IMPORT_MAX):
+def receive(flux, length, max_=IMPORT_MAX):
     """Writes the received body into a waiting file (never whole in memory). Returns its path."""
-    if longueur <= 0:
-        raise Refus("Empty file.")
-    if longueur > maxi:
-        raise Refus("File too large (%d MB at most)." % (maxi >> 20), 413)
-    os.makedirs(ATTENTE, exist_ok=True)
-    chemin = os.path.join(ATTENTE, "recu-%s" % secrets.token_hex(8))
-    reste = longueur
-    with open(chemin, "wb") as f:
-        while reste:
-            b = flux.read(min(reste, 1 << 20))
+    if length <= 0:
+        raise Refusals("Empty file.")
+    if length > max_:
+        raise Refusals("File too large (%d MB at most)." % (max_ >> 20), 413)
+    os.makedirs(WAITING, exist_ok=True)
+    path = os.path.join(WAITING, "received-%s" % secrets.token_hex(8))
+    rest = length
+    with open(path, "wb") as f:
+        while rest:
+            b = flux.read(min(rest, 1 << 20))
             if not b:
                 break
             f.write(b)
-            reste -= len(b)
-    if reste:
-        os.remove(chemin)
-        raise Refus("Upload interrupted.")
-    return chemin
+            rest -= len(b)
+    if rest:
+        os.remove(path)
+        raise Refusals("Upload interrupted.")
+    return path
 
 
-def entete_vrm(chemin):
+def header_vrm(path):
     """Checks, without converting anything, that the file is a VRM 0.x or 1.x. Returns the declared title (or None).
     Whether it is a VRoid character is said by the importer, which reads its materials."""
     import struct
-    with open(chemin, "rb") as f:
-        tete = f.read(20)
-        if len(tete) < 20 or tete[:4] != b"glTF":
-            raise Refus("This file is not a VRM (nor a binary glTF).")
-        version, _, n, genre = struct.unpack_from("<III4s", tete, 4)
-        if version != 2 or genre != b"JSON" or n > 64 << 20:
-            raise Refus("This file is not a readable VRM (glTF 2.0 expected).")
+    with open(path, "rb") as f:
+        head = f.read(20)
+        if len(head) < 20 or head[:4] != b"glTF":
+            raise Refusals("This file is not a VRM (nor a binary glTF).")
+        version, _, n, kind = struct.unpack_from("<III4s", head, 4)
+        if version != 2 or kind != b"JSON" or n > 64 << 20:
+            raise Refusals("This file is not a readable VRM (glTF 2.0 expected).")
         try:
             j = json.loads(f.read(n))
         except ValueError:
-            raise Refus("This file is not a readable VRM: damaged header.")
+            raise Refusals("This file is not a readable VRM: damaged header.")
     ext = j.get("extensions") or {}
     if "VRM" in ext:
         return ((ext["VRM"].get("meta") or {}).get("title")) or None
     if "VRMC_vrm" in ext:
         v = ext["VRMC_vrm"] if isinstance(ext["VRMC_vrm"], dict) else {}
         if not str(v.get("specVersion", "")).startswith("1."):
-            raise Refus("This file declares a VRM version other than 0.x and 1.x: it is not read.")
+            raise Refusals("This file declares a VRM version other than 0.x and 1.x: it is not read.")
         return ((v.get("meta") or {}).get("name")) or None
-    raise Refus("This file is a glTF without the VRM extension: only a VRM from VRoid (Studio or Hub) is read.")
+    raise Refusals("This file is a glTF without the VRM extension: only a VRM from VRoid (Studio or Hub) is read.")
 
 
-def _sous(racine, rel):
-    c = os.path.realpath(os.path.join(racine, rel))
-    if not c.startswith(os.path.realpath(racine) + os.sep):
-        raise Refus("Archive rejected: a file escapes its folder (%s)." % rel[:80])
+def _under(root, rel):
+    c = os.path.realpath(os.path.join(root, rel))
+    if not c.startswith(os.path.realpath(root) + os.sep):
+        raise Refusals("Archive rejected: a file escapes its folder (%s)." % rel[:80])
     return c
 
 
-def _noms_zip(infos):
+def _names_zip(infos):
     """The real name of each file of an archive. An archive that does not declare UTF-8 is read as cp437 by
     zipfile, which damages the Chinese or Japanese texture names (the PMX no longer finds them): the bytes are taken
     back and the first encoding that reads them all is kept (UTF-8, then Shift-JIS, then GB18030)."""
-    bruts = [None if i.flag_bits & 0x800 else i.filename.encode("cp437", "replace") for i in infos]
-    if all(b is None or b.isascii() for b in bruts):
+    raw = [None if i.flag_bits & 0x800 else i.filename.encode("cp437", "replace") for i in infos]
+    if all(b is None or b.isascii() for b in raw):
         return [i.filename for i in infos]
-    for codage in ("utf-8", "cp932", "gb18030"):
+    for encoding in ("utf-8", "cp932", "gb18030"):
         try:
-            return [i.filename if b is None else b.decode(codage) for i, b in zip(infos, bruts)]
+            return [i.filename if b is None else b.decode(encoding) for i, b in zip(infos, raw)]
         except UnicodeDecodeError:
             continue
     return [i.filename for i in infos]
 
 
-def deplier_zip(chemin, dossier):
+def unfold_zip(path, folder):
     """Unpacks a received archive into `dossier` (new), with its guards: paths that escape, links, encrypted
     archive, too many files, too large, compression ratio of a bomb. Returns the relative paths of its PMX files
     (an archive may carry several models, or a character and its weapon)."""
     try:
-        z = zipfile.ZipFile(chemin)
+        z = zipfile.ZipFile(path)
     except (zipfile.BadZipFile, OSError):
-        raise Refus("This file is not a readable .zip archive.")
+        raise Refusals("This file is not a readable .zip archive.")
     with z:
         infos = [i for i in z.infolist() if not i.is_dir()]
-        if len(infos) > ZIP_FICHIERS_MAX:
-            raise Refus("Archive rejected: more than %d files." % ZIP_FICHIERS_MAX)
+        if len(infos) > ZIP_FILES_MAX:
+            raise Refusals("Archive rejected: more than %d files." % ZIP_FILES_MAX)
         total = 0
-        noms = _noms_zip(infos)
-        for i, n in zip(infos, noms):
+        names = _names_zip(infos)
+        for i, n in zip(infos, names):
             if i.flag_bits & 0x1:
-                raise Refus("Encrypted archive: unpack it yourself and make a .zip again without a password.")
+                raise Refusals("Encrypted archive: unpack it yourself and make a .zip again without a password.")
             if stat.S_ISLNK(i.external_attr >> 16):
-                raise Refus("Archive rejected: it contains a link (%s)." % n[:80])
+                raise Refusals("Archive rejected: it contains a link (%s)." % n[:80])
             if n.startswith(("/", "\\")) or re.match(r"^[A-Za-z]:", n) or ".." in re.split(r"[\\/]", n) or "\0" in n:
-                raise Refus("Archive rejected: a file escapes its folder (%s)." % n[:80])
+                raise Refusals("Archive rejected: a file escapes its folder (%s)." % n[:80])
             total += i.file_size
-            if i.file_size > (1 << 20) and i.file_size > ZIP_RAPPORT_MAX * max(1, i.compress_size):
-                raise Refus("Archive rejected: abnormal compression (%s)." % n[:80])
-        if total > ZIP_DEPLIE_MAX:
-            raise Refus("Archive rejected: more than %d GB once unpacked." % (ZIP_DEPLIE_MAX >> 30))
-        pmx = [n for n in noms if n.lower().endswith(".pmx")]
+            if i.file_size > (1 << 20) and i.file_size > ZIP_REPORT_MAX * max(1, i.compress_size):
+                raise Refusals("Archive rejected: abnormal compression (%s)." % n[:80])
+        if total > ZIP_UNFOLDED_MAX:
+            raise Refusals("Archive rejected: more than %d GB once unpacked." % (ZIP_UNFOLDED_MAX >> 30))
+        pmx = [n for n in names if n.lower().endswith(".pmx")]
         if not pmx:
-            raise Refus("The archive contains no .pmx file.")
-        os.makedirs(dossier)
-        ecrit = 0
-        for i, n in zip(infos, noms):
-            cible = _sous(dossier, n)
-            os.makedirs(os.path.dirname(cible), exist_ok=True)
-            with z.open(i) as src, open(cible, "wb") as dst:
+            raise Refusals("The archive contains no .pmx file.")
+        os.makedirs(folder)
+        written = 0
+        for i, n in zip(infos, names):
+            target = _under(folder, n)
+            os.makedirs(os.path.dirname(target), exist_ok=True)
+            with z.open(i) as src, open(target, "wb") as dst:
                 lu = 0
                 while True:
                     b = src.read(1 << 20)
                     if not b:
                         break
                     lu += len(b)
-                    ecrit += len(b)
-                    if lu > i.file_size or ecrit > ZIP_DEPLIE_MAX:      # declared size is a lie
-                        raise Refus("Archive rejected: a file is larger than it declares.")
+                    written += len(b)
+                    if lu > i.file_size or written > ZIP_UNFOLDED_MAX:      # declared size is a lie
+                        raise Refusals("Archive rejected: a file is larger than it declares.")
                     dst.write(b)
     return sorted(pmx)
 
 
-def lire_pmx_isole(chemin):
+def read_pmx_isolated(path):
     """Materials, bones and textures of a PMX, read by an isolated Python: a booby-trapped file does not touch the server."""
-    r = subprocess.run([C.PYTHON, "-I", os.path.abspath(__file__), "lire-pmx", chemin], cwd=C.DEPOT,
+    r = subprocess.run([C.PYTHON, "-I", os.path.abspath(__file__), "lire-pmx", path], cwd=C.REPO,
                        capture_output=True, text=True, timeout=300)
     if r.returncode:
-        raise Refus("This .pmx file is not readable: %s" % ((r.stderr.strip().splitlines() or ["?"])[-1][:200]))
+        raise Refusals("This .pmx file is not readable: %s" % ((r.stderr.strip().splitlines() or ["?"])[-1][:200]))
     return json.loads(r.stdout)
 
 
-def verifier_langue_commune(info):
-    """What the core requires of a PMX (tools/games/README.md, "common language"): the face skin 颜 (tete.Tete
+def check_language_common(info):
+    """What the core requires of a PMX (tools/games/README.md, "common language"): the face skin 颜 (head.Head
     measures the head on it) and the head bone 頭."""
-    manque = []
-    if "颜" not in info["materiaux"]:
-        manque.append("no material \"颜\" (face skin)")
-    if "頭" not in info["os"]:
-        manque.append("no bone \"頭\" (head)")
-    if manque:
-        raise Refus("This PMX does not follow the workshop's common language: %s. See tools/games/README.md." % ", ".join(manque))
+    missing = []
+    if "颜" not in info["materials"]:
+        missing.append("no material \"颜\" (face skin)")
+    if "頭" not in info["bones"]:
+        missing.append("no bone \"頭\" (head)")
+    if missing:
+        raise Refusals("This PMX does not follow the workshop's common language: %s. See tools/games/README.md." % ", ".join(missing))
 
 
-def importer(chemin_recu, nom_fichier):
-    """Stores a received file as a model of the active game: <mmd_extrait>/<id>/<id>.pmx and its textures. Returns
+def importer(path_received, name_file):
+    """Stores a received file as a model of the active game: <mmd_extracted>/<id>/<id>.pmx and its textures. Returns
     the record of the first model stored. The received file is deleted in every case."""
-    return importer_lot(chemin_recu, nom_fichier)[0][0]
+    return importer_lot(path_received, name_file)[0][0]
 
 
-def importer_lot(chemin_recu, nom_fichier):
+def importer_lot(path_received, name_file):
     """Like importer, for an archive that may carry several models: returns (records, set aside). A set-aside file is
-    {"fichier", "raison"}: a .pmx of the archive that is not a readable character (a weapon), or already imported."""
+    {"file", "reason"}: a .pmx of the archive that is not a readable character (a weapon), or already imported."""
     try:
-        return _importer(chemin_recu, nom_fichier)
+        return _importer(path_received, name_file)
     finally:
-        if os.path.exists(chemin_recu):
-            os.remove(chemin_recu)
+        if os.path.exists(path_received):
+            os.remove(path_received)
 
 
-def _fiche(dest, ident, titre, fmt, info, manquantes):
-    fiche = {"id": ident, "nom": titre or ident, "format": fmt, "materiaux": info["materiaux"], "os": len(info["os"]),
-             "textures": len(info["textures"]), "sommets": info["sommets"]}
-    if manquantes:
-        fiche["textures_manquantes"] = manquantes[:20]
-    C.ecrire_json(os.path.join(dest, "import.json"), {k: fiche[k] for k in ("id", "nom", "format")} | {"date": time.time()})
-    return fiche
+def _card(dest, ident, title, fmt, info, missing):
+    card = {"id": ident, "name": title or ident, "format": fmt, "materials": info["materials"], "bones": len(info["bones"]),
+             "textures": len(info["textures"]), "vertices": info["vertices"]}
+    if missing:
+        card["textures_missing"] = missing[:20]
+    C.write_json(os.path.join(dest, "import.json"), {k: card[k] for k in ("id", "name", "format")} | {"date": time.time()})
+    return card
 
 
-def _idents_du_lot(ident, bons):
+def _ids_of_lot(ident, good):
     """One identifier per model of an archive that carries several: the name of its folder if it is alone there,
     otherwise the name of its file, otherwise the archive's followed by a number. No duplicate within the batch."""
-    par_dossier = {}
-    for rel, _, _ in bons:
-        par_dossier[os.path.dirname(rel)] = par_dossier.get(os.path.dirname(rel), 0) + 1
-    pris, noms = set(), []
-    for k, (rel, _, _) in enumerate(bons):
+    per_folder = {}
+    for rel, _, _ in good:
+        per_folder[os.path.dirname(rel)] = per_folder.get(os.path.dirname(rel), 0) + 1
+    taken, names = set(), []
+    for k, (rel, _, _) in enumerate(good):
         d = os.path.dirname(rel)
-        candidats = ([os.path.basename(d)] if d and par_dossier[d] == 1 else []) + [os.path.basename(rel)]
-        if d and par_dossier[d] > 1:
-            candidats.insert(0, "%s-%s" % (os.path.basename(d), os.path.splitext(os.path.basename(rel))[0]))
-        nom = None
-        for c in candidats:
+        candidates = ([os.path.basename(d)] if d and per_folder[d] == 1 else []) + [os.path.basename(rel)]
+        if d and per_folder[d] > 1:
+            candidates.insert(0, "%s-%s" % (os.path.basename(d), os.path.splitext(os.path.basename(rel))[0]))
+        name = None
+        for c in candidates:
             try:
-                nom = identifiant(c + ".x") if not c.lower().endswith(".pmx") else identifiant(c)
-            except Refus:
+                name = identifier(c + ".x") if not c.lower().endswith(".pmx") else identifier(c)
+            except Refusals:
                 continue
-            if nom not in pris:
+            if name not in taken:
                 break
-            nom = None
-        if nom is None:
+            name = None
+        if name is None:
             n = k + 1
-            while "%s_%d" % (ident, n) in pris:
+            while "%s_%d" % (ident, n) in taken:
                 n += 1
-            nom = "%s_%d" % (ident, n)
-        pris.add(nom)
-        noms.append(nom)
-    return noms
+            name = "%s_%d" % (ident, n)
+        taken.add(name)
+        names.append(name)
+    return names
 
 
-def _importer(chemin_recu, nom_fichier):
-    ok, raison = import_possible()
+def _importer(path_received, name_file):
+    ok, reason = import_possible()
     if not ok:
-        raise Refus(raison, 409)
-    ident = identifiant(nom_fichier)
-    ext = os.path.splitext(str(nom_fichier))[1].lower()
+        raise Refusals(reason, 409)
+    ident = identifier(name_file)
+    ext = os.path.splitext(str(name_file))[1].lower()
     if ext not in (".vrm", ".zip"):
-        raise Refus("Unsupported format (%s): a .vrm (VRoid Studio or VRoid Hub) or a .zip containing a .pmx."
+        raise Refusals("Unsupported format (%s): a .vrm (VRoid Studio or VRoid Hub) or a .zip containing a .pmx."
                     % (ext or "no extension"), 415)
-    dest_racine = J.chemin("mmd_extrait")
-    dest = os.path.join(dest_racine, ident)
-    deja = "A model \"%s\" is already imported: rename the file to make another one."
+    dest_root = J.path("mmd_extracted")
+    dest = os.path.join(dest_root, ident)
+    already = "A model \"%s\" is already imported: rename the file to make another one."
     if ext == ".vrm" and os.path.exists(dest):
-        raise Refus(deja % ident, 409)
-    os.makedirs(dest_racine, exist_ok=True)
-    travail = os.path.join(ATTENTE, "import-%s" % secrets.token_hex(8))
-    fiches, ecartes = [], []
+        raise Refusals(already % ident, 409)
+    os.makedirs(dest_root, exist_ok=True)
+    work = os.path.join(WAITING, "import-%s" % secrets.token_hex(8))
+    cards, discarded = [], []
     try:
         if ext == ".vrm":
-            titre = entete_vrm(chemin_recu)
-            os.makedirs(travail)
-            vrm = os.path.join(travail, ident + ".vrm")
-            shutil.move(chemin_recu, vrm)
-            sortie = os.path.join(travail, "modele")
-            r = subprocess.run([C.PYTHON, "-I", IMPORTEUR_VRM[1], vrm, "--output", sortie], cwd=C.DEPOT,
+            title = header_vrm(path_received)
+            os.makedirs(work)
+            vrm = os.path.join(work, ident + ".vrm")
+            shutil.move(path_received, vrm)
+            output = os.path.join(work, "model")
+            r = subprocess.run([C.PYTHON, "-I", INGESTER_VRM[1], vrm, "--output", output], cwd=C.REPO,
                                capture_output=True, text=True, timeout=900)
-            if r.returncode or not os.path.isfile(os.path.join(sortie, ident, ident + ".pmx")):
+            if r.returncode or not os.path.isfile(os.path.join(output, ident, ident + ".pmx")):
                 d = (r.stderr.strip().splitlines() or r.stdout.strip().splitlines() or ["no message"])[-1]
                 if r.returncode == 2 and d.startswith("refused: "):     # a VRM the importer does not read, with its reason
-                    raise Refus("This VRM is not read: %s." % d[len("refused: "):].rstrip(".")[:300], 422)
+                    raise Refusals("This VRM is not read: %s." % d[len("refused: "):].rstrip(".")[:300], 422)
                 d = re.sub(r"^\w+Error: ", "", d).replace(vrm, "the file")
-                raise Refus("The VRM conversion failed: %s" % d[:240], 422)
-            info = lire_pmx_isole(os.path.join(sortie, ident, ident + ".pmx"))
-            shutil.move(os.path.join(sortie, ident), dest)
+                raise Refusals("The VRM conversion failed: %s" % d[:240], 422)
+            info = read_pmx_isolated(os.path.join(output, ident, ident + ".pmx"))
+            shutil.move(os.path.join(output, ident), dest)
             try:            # the original .vrm stored in the game's "vrm" source, if it has one
-                rang = J.chemin("vrm")
-                os.makedirs(rang, exist_ok=True)
-                if not os.path.exists(os.path.join(rang, ident + ".vrm")):
-                    shutil.move(vrm, os.path.join(rang, ident + ".vrm"))
+                rank = J.path("vrm")
+                os.makedirs(rank, exist_ok=True)
+                if not os.path.exists(os.path.join(rank, ident + ".vrm")):
+                    shutil.move(vrm, os.path.join(rank, ident + ".vrm"))
             except KeyError:
                 pass
-            fiches.append(_fiche(dest, ident, titre, "vrm", info, []))
+            cards.append(_card(dest, ident, title, "vrm", info, []))
         else:
-            deplie = os.path.join(travail, "deplie")
-            os.makedirs(travail)
-            bons = []
-            for rel in deplier_zip(chemin_recu, deplie):
-                pmx = os.path.join(deplie, rel)
+            unfolded = os.path.join(work, "unfolded")
+            os.makedirs(work)
+            good = []
+            for rel in unfold_zip(path_received, unfolded):
+                pmx = os.path.join(unfolded, rel)
                 try:
-                    info = lire_pmx_isole(pmx)
-                    verifier_langue_commune(info)
-                except Refus as e:
-                    ecartes.append({"fichier": rel, "raison": str(e)})
+                    info = read_pmx_isolated(pmx)
+                    check_language_common(info)
+                except Refusals as e:
+                    discarded.append({"file": rel, "reason": str(e)})
                     continue
-                bons.append((rel, pmx, info))
-            if not bons:        # nothing readable: the reason of the first file (an archive of a single PMX gives its own)
-                raise Refus(ecartes[0]["raison"] if len(ecartes) == 1 else
+                good.append((rel, pmx, info))
+            if not good:        # nothing readable: the reason of the first file (an archive of a single PMX gives its own)
+                raise Refusals(discarded[0]["reason"] if len(discarded) == 1 else
                             "None of the %d .pmx files of the archive is a readable character. The first one: %s"
-                            % (len(ecartes), ecartes[0]["raison"]))
-            noms = [ident] if len(bons) == 1 else _idents_du_lot(ident, bons)
-            dossiers = {os.path.dirname(p) for _, p, _ in bons}
-            for nom, (rel, pmx, info) in zip(noms, bons):
-                cible = os.path.join(dest_racine, nom)
-                if os.path.exists(cible):
-                    if len(bons) == 1:
-                        raise Refus(deja % nom, 409)
-                    ecartes.append({"fichier": rel, "raison": "A model \"%s\" is already imported." % nom})
+                            % (len(discarded), discarded[0]["reason"]))
+            names = [ident] if len(good) == 1 else _ids_of_lot(ident, good)
+            folders = {os.path.dirname(p) for _, p, _ in good}
+            for name, (rel, pmx, info) in zip(names, good):
+                target = os.path.join(dest_root, name)
+                if os.path.exists(target):
+                    if len(good) == 1:
+                        raise Refusals(already % name, 409)
+                    discarded.append({"file": rel, "reason": "A model \"%s\" is already imported." % name})
                     continue
                 # the PMX's folder becomes the model's (textures are named relative to it); the other PMX files
                 # and the folders of the archive's other models are not copied into it
-                racine = os.path.dirname(pmx)
+                root = os.path.dirname(pmx)
 
-                def hors(d, noms_, racine=racine, pmx=pmx):
-                    return [n for n in noms_ if (n.lower().endswith(".pmx") and os.path.join(d, n) != pmx)
-                            or (os.path.join(d, n) in dossiers and os.path.join(d, n) != racine)]
-                shutil.copytree(racine, cible, ignore=hors)
-                os.replace(os.path.join(cible, os.path.basename(pmx)), os.path.join(cible, nom + ".pmx"))
-                manquantes = [t for t in info["textures"] if t and not os.path.isfile(
-                    os.path.join(cible, t.replace("\\", "/")))]
-                fiches.append(_fiche(cible, nom, None, "pmx", info, manquantes))
-            if not fiches:
-                raise Refus("Every model of this archive is already imported.", 409)
+                def out_of(d, names_, root=root, pmx=pmx):
+                    return [n for n in names_ if (n.lower().endswith(".pmx") and os.path.join(d, n) != pmx)
+                            or (os.path.join(d, n) in folders and os.path.join(d, n) != root)]
+                shutil.copytree(root, target, ignore=out_of)
+                os.replace(os.path.join(target, os.path.basename(pmx)), os.path.join(target, name + ".pmx"))
+                missing = [t for t in info["textures"] if t and not os.path.isfile(
+                    os.path.join(target, t.replace("\\", "/")))]
+                cards.append(_card(target, name, None, "pmx", info, missing))
+            if not cards:
+                raise Refusals("Every model of this archive is already imported.", 409)
     finally:
-        shutil.rmtree(travail, ignore_errors=True)
-    return fiches, ecartes
+        shutil.rmtree(work, ignore_errors=True)
+    return cards, discarded
 
 
 # ===================================================================== state of the models
 
-def _index_visages():
-    return C.lire_json(os.path.join(C.BIBLIO_VIS, "index.json"), {}) or {}
+def _index_faces():
+    return C.read_json(os.path.join(C.LIBRARY_VIS, "index.json"), {}) or {}
 
 
-def etat_modeles(cat=None):
+def state_models(cat=None):
     """Each model of the active game: what was extracted from it (libraries), kept in the catalogue, and rejected."""
     import catalog as K
-    cat = cat if cat is not None else K.construire(ecrire=False)
-    idx = _index_visages()
-    non_fournies = idx.get("non_fournies", {})
-    controle = C.lire_json(os.path.join(C.BIBLIO_VET, "controle.json"), {}) or {}
-    tetes = {t["id"] for t in cat.get("tetes", [])}
-    coiffures = {c["id"] for c in cat.get("coiffures", [])}
-    retenues = {}
-    for p in cat.get("pieces", []):
-        retenues[p.get("perso")] = retenues.get(p.get("perso"), 0) + 1
-    refus_cat = cat.get("refus", [])
-    places = K.fiches_bibliotheque()      # parts whose kind has a place in the workshop
+    cat = cat if cat is not None else K.build(write=False)
+    idx = _index_faces()
+    not_provided = idx.get("not_provided", {})
+    check = C.read_json(os.path.join(C.LIBRARY_GARMENT, "check.json"), {}) or {}
+    heads = {t["id"] for t in cat.get("heads", [])}
+    hairstyles = {c["id"] for c in cat.get("hairstyles", [])}
+    kept_count = {}
+    for p in cat.get("parts", []):
+        kept_count[p.get("character")] = kept_count.get(p.get("character"), 0) + 1
+    refusals_cat = cat.get("refusals", [])
+    places = K.cards_library()      # parts whose kind has a place in the workshop
     try:
-        racine = J.chemin("mmd_extrait")
+        root = J.path("mmd_extracted")
     except KeyError:
-        racine = None
+        root = None
     res = []
-    for n, rel in sorted(J.modeles().items()):
-        imp = C.lire_json(os.path.join(racine, n, "import.json"), {}) if racine else {}
-        vet = os.path.join(C.BIBLIO_VET, n)
-        refus = []
-        if n in non_fournies:
-            refus.append({"nom": "face", "raison": str(non_fournies[n].get("raison", ""))[:300]})
-        if isinstance(controle.get(n), dict) and controle[n].get("erreur"):
-            refus.append({"nom": "clothes", "raison": "cutting failed: %s" % controle[n]["erreur"][:250]})
-        prises = {os.path.realpath(d) for d, _ in places}
-        for f in sorted(glob.glob(os.path.join(vet, "*", "fiche.json"))):
-            if os.path.realpath(os.path.dirname(f)) not in prises:
-                fi = C.lire_json(f, {}) or {}
-                refus.append({"nom": "part %s" % os.path.basename(os.path.dirname(f)),
-                              "raison": "the workshop does not offer this kind of part on its own (%s)"
-                                        % (fi.get("type") or fi.get("sorte") or fi.get("classe") or "no kind")})
-        pref = C.cle(n) + "__"
-        for r in refus_cat:
+    for n, rel in sorted(J.models().items()):
+        imp = C.read_json(os.path.join(root, n, "import.json"), {}) if root else {}
+        garment = os.path.join(C.LIBRARY_GARMENT, n)
+        refusals = []
+        if n in not_provided:
+            refusals.append({"name": "face", "reason": str(not_provided[n].get("reason", ""))[:300]})
+        if isinstance(check.get(n), dict) and check[n].get("error"):
+            refusals.append({"name": "clothes", "reason": "cutting failed: %s" % check[n]["error"][:250]})
+        taken = {os.path.realpath(d) for d, _ in places}
+        for f in sorted(glob.glob(os.path.join(garment, "*", "record.json"))):
+            if os.path.realpath(os.path.dirname(f)) not in taken:
+                fi = C.read_json(f, {}) or {}
+                refusals.append({"name": "part %s" % os.path.basename(os.path.dirname(f)),
+                              "reason": "the workshop does not offer this kind of part on its own (%s)"
+                                        % (fi.get("type") or fi.get("sort") or fi.get("class") or "no kind")})
+        pref = C.the_key(n) + "__"
+        for r in refusals_cat:
             if r["id"] == n or r["id"].startswith(pref):
-                refus.append({"nom": "%s %s" % (r["genre"], r["nom"]), "raison": r["raison"]})
+                refusals.append({"name": "%s %s" % (r["kind"], r["name"]), "reason": r["reason"]})
         res.append({
-            "id": n, "nom": (imp or {}).get("nom") or n, "format": (imp or {}).get("format") or J.d.get("format", "pmx"),
-            "present": bool(racine) and os.path.isfile(os.path.join(racine, rel)),
-            "extrait": {"visage": os.path.isfile(os.path.join(C.BIBLIO_VIS, n, "partie.npz")),
-                        "coiffure": os.path.isfile(os.path.join(C.BIBLIO_VIS, n, "coiffure.json")),
-                        "pieces": len(glob.glob(os.path.join(vet, "*", "fiche.json")))},
-            "catalogue": {"visage": n in tetes, "coiffure": n in coiffures, "pieces": retenues.get(n, 0)},
-            "refus": refus})
+            "id": n, "name": (imp or {}).get("name") or n, "format": (imp or {}).get("format") or J.d.get("format", "pmx"),
+            "present": bool(root) and os.path.isfile(os.path.join(root, rel)),
+            "extracted": {"face": os.path.isfile(os.path.join(C.LIBRARY_VIS, n, "part.npz")),
+                        "hairstyle": os.path.isfile(os.path.join(C.LIBRARY_VIS, n, "hairstyle.json")),
+                        "parts": len(glob.glob(os.path.join(garment, "*", "record.json")))},
+            "catalog": {"face": n in heads, "hairstyle": n in hairstyles, "parts": kept_count.get(n, 0)},
+            "refusals": refusals})
     return res
 
 
 # ===================================================================== extraction
 
 _extraction = threading.Lock()
-EN_COURS = {"id": None, "travail": None}     # the running extraction (id, Extraction object), None when idle
+IN_PROGRESS = {"id": None, "work": None}     # the running extraction (id, Extraction object), None when idle
 
 
-class Annulee(Exception):
-    """The extraction was cancelled from the page (POST /api/extraction/annuler)."""
+class Cancelled(Exception):
+    """The extraction was cancelled from the page (POST /api/extraction/cancel)."""
 
 
-def _nouvel_id(dossier, prefixe=""):
-    base, k = prefixe + time.strftime("%Y%m%d-%H%M%S"), 1
+def _new_id(folder, prefix=""):
+    base, k = prefix + time.strftime("%Y%m%d-%H%M%S"), 1
     ident = base
-    while os.path.exists(os.path.join(dossier, ident)):
+    while os.path.exists(os.path.join(folder, ident)):
         k += 1
         ident = "%s-%d" % (base, k)
-    os.makedirs(os.path.join(dossier, ident))
+    os.makedirs(os.path.join(folder, ident))
     return ident
 
 
-def demande_extraction(v):
-    """Validated body of POST /api/extraire: (model names, what, redo)."""
+def request_extraction(v):
+    """Validated body of POST /api/extract: (model names, what, redo)."""
     if not isinstance(v, dict):
-        raise Refus("Unreadable request.")
-    connus = J.modeles()
-    if v.get("tous") is True:
-        noms = sorted(connus)
+        raise Refusals("Unreadable request.")
+    known = J.models()
+    if v.get("all") is True:
+        names = sorted(known)
     else:
-        noms = v.get("modeles")
-        if not isinstance(noms, list) or not noms or not all(isinstance(n, str) for n in noms):
-            raise Refus("Choose at least one model (\"modeles\") or all of them (\"tous\": true).")
-        inconnus = [n for n in noms if n not in connus]
-        if inconnus:
-            raise Refus("Model unknown to the active game: %s." % ", ".join(n[:40] for n in inconnus[:5]))
-        noms = sorted(set(noms))
-    if not noms:
-        raise Refus("No model in the active game: import one first.")
-    quoi = v.get("quoi", list(QUOI))
-    if not isinstance(quoi, list) or not quoi or any(q not in QUOI for q in quoi):
-        raise Refus("\"quoi\": a list among %s." % ", ".join(QUOI))
-    return noms, [q for q in QUOI if q in quoi], v.get("refaire") is True
+        names = v.get("models")
+        if not isinstance(names, list) or not names or not all(isinstance(n, str) for n in names):
+            raise Refusals("Choose at least one model (\"models\") or all of them (\"all\": true).")
+        unknown = [n for n in names if n not in known]
+        if unknown:
+            raise Refusals("Model unknown to the active game: %s." % ", ".join(n[:40] for n in unknown[:5]))
+        names = sorted(set(names))
+    if not names:
+        raise Refusals("No model in the active game: import one first.")
+    what = v.get("what", list(WHAT))
+    if not isinstance(what, list) or not what or any(q not in WHAT for q in what):
+        raise Refusals("\"what\": a list among %s." % ", ".join(WHAT))
+    return names, [q for q in WHAT if q in what], v.get("redo") is True
 
 
-def lancer_extraction(noms, quoi, refaire=False, executer=True):
+def launch_extraction(names, what, redo=False, run=True):
     """Starts the chain in the background; one at a time. Returns the job's identifier.
     The extraction runs in the server process, not in the page: closing the tab does not stop it."""
     if not _extraction.acquire(blocking=False):
-        raise Refus("An extraction is already running (%s): wait for it to finish." % EN_COURS["id"], 409)
+        raise Refusals("An extraction is already running (%s): wait for it to finish." % IN_PROGRESS["id"], 409)
     try:
         os.makedirs(EXTRACTIONS, exist_ok=True)
-        ident = _nouvel_id(EXTRACTIONS, "x")
+        ident = _new_id(EXTRACTIONS, "x")
         d = os.path.join(EXTRACTIONS, ident)
-        C.ecrire_json(os.path.join(d, "demande.json"), {"modeles": noms, "quoi": quoi, "refaire": refaire})
-        C.ecrire_json(os.path.join(d, "etat.json"), {"etape": "attente", "part": 0.0, "message": "Waiting…", "fini": False})
-        travail = Extraction(d, noms, quoi, refaire)
-        EN_COURS.update(id=ident, travail=travail)
+        C.write_json(os.path.join(d, "request.json"), {"models": names, "what": what, "redo": redo})
+        C.write_json(os.path.join(d, "state.json"), {"step": "waiting", "fraction": 0.0, "message": "Waiting…", "done": False})
+        work = Extraction(d, names, what, redo)
+        IN_PROGRESS.update(id=ident, work=work)
     except BaseException:
         _extraction.release()
         raise
-    if not executer:          # tests: nothing is started
-        EN_COURS.update(id=None, travail=None)
+    if not run:          # tests: nothing is started
+        IN_PROGRESS.update(id=None, work=None)
         _extraction.release()
         return ident
 
-    def fil():
+    def thread():
         try:
-            travail.mener()
+            work.lead()
         finally:
-            EN_COURS.update(id=None, travail=None)
+            IN_PROGRESS.update(id=None, work=None)
             _extraction.release()
-    threading.Thread(target=fil, daemon=True).start()
+    threading.Thread(target=thread, daemon=True).start()
     return ident
 
 
-def extraction_en_cours():
+def extraction_in_progress():
     """GET /api/extraction: the running extraction, if any, with its state ({"id": None} when idle)."""
-    ident = EN_COURS["id"]
+    ident = IN_PROGRESS["id"]
     if ident is None:
         return {"id": None}
-    e = lire_travail(ident) or {"etape": "attente", "fini": False}
+    e = read_work(ident) or {"step": "waiting", "done": False}
     return dict(e, id=ident)
 
 
-def annuler_extraction():
-    """POST /api/extraction/annuler: stop the running extraction and the programs it launched. Returns its
-    identifier; the state becomes "annulee" once its programs have stopped (Extraction.mener)."""
-    travail, ident = EN_COURS["travail"], EN_COURS["id"]
-    if travail is None:
-        raise Refus("No extraction is running.", 409)
-    travail.annuler()
+def cancel_extraction():
+    """POST /api/extraction/cancel: stop the running extraction and the programs it launched. Returns its
+    identifier; the state becomes "cancelled" once its programs have stopped."""
+    work, ident = IN_PROGRESS["work"], IN_PROGRESS["id"]
+    if work is None:
+        raise Refusals("No extraction is running.", 409)
+    work.cancel()
     return ident
 
 
@@ -598,103 +598,103 @@ class Extraction:
     # clothes, catalogue) before the next one starts, and inside a lot the catalogue makes the models usable one
     # after the other. A lot of `places` models keeps every place busy in the long parallel steps (face
     # sampling, face transfer, pieces); fixed costs per lot are small (Blender starts in under a second).
-    ARRET = 8            # seconds between SIGTERM and SIGKILL when cancelling
+    STOP = 8            # seconds between SIGTERM and SIGKILL when cancelling
 
-    def __init__(self, dossier, noms, quoi, refaire):
-        self.d, self.noms, self.quoi, self.refaire = dossier, noms, quoi, refaire
-        self.etat = {"etape": "attente", "part": 0.0, "fini": False, "debut": time.time(), "modeles": noms, "quoi": quoi,
-                     "finis": [], "version": 0}
-        self.journal = os.path.join(dossier, "journal.txt")
-        self.verrou = threading.Lock()
+    def __init__(self, folder, names, what, redo):
+        self.d, self.names, self.what, self.redo = folder, names, what, redo
+        self.state = {"step": "waiting", "fraction": 0.0, "done": False, "start": time.time(), "models": names, "what": what,
+                     "finished": [], "version": 0}
+        self.log = os.path.join(folder, "log.txt")
+        self.lock = threading.Lock()
         self.proc = None
-        self.arret = threading.Event()
+        self.stop = threading.Event()
 
     # ------------------------------------------------------------ state
-    def poser(self, **kw):
-        with self.verrou:
-            self.etat.update(kw)
-            C.ecrire_json(os.path.join(self.d, "etat.json"), self.etat)
+    def place(self, **kw):
+        with self.lock:
+            self.state.update(kw)
+            C.write_json(os.path.join(self.d, "state.json"), self.state)
 
-    def note(self, texte):
-        with open(self.journal, "a", encoding="utf-8") as j:
-            j.write(time.strftime("%H:%M:%S ") + texte + "\n")
+    def note(self, text):
+        with open(self.log, "a", encoding="utf-8") as j:
+            j.write(time.strftime("%H:%M:%S ") + text + "\n")
 
-    def part(self, lot, dans):
-        """Bar position: the pivot takes the first 5 %, then each lot an equal share; `dans` in [0, 1]."""
-        n = max(1, len(self.lots))
-        return round(0.05 + 0.95 * (lot + min(1.0, max(0.0, dans))) / n, 3)
+    def part(self, batch, in_):
+        """Bar position: the pivot takes the first 5 %, then each lot an equal share; `in_` in [0, 1]."""
+        n = max(1, len(self.batches))
+        return round(0.05 + 0.95 * (batch + min(1.0, max(0.0, in_))) / n, 3)
 
     # ------------------------------------------------------------ programs
-    def annuler(self):
+    def cancel(self):
         """Ask the running chain to stop (from the server's request thread): SIGTERM to the process group of the
-        running tool, SIGKILL to what is left of it ARRET seconds later."""
-        if self.arret.is_set():
+        running tool, SIGKILL to what is left of it STOP seconds later."""
+        if self.stop.is_set():
             return
-        self.arret.set()
+        self.stop.set()
         self.note("cancellation requested")
-        self.poser(message="Cancelling…", annulation=True)
+        self.place(message="Cancelling…", cancellation=True)
         p = self.proc
         if p is not None:
             self._signal(p.pid, signal.SIGTERM)
-            threading.Timer(self.ARRET, self._signal, (p.pid, signal.SIGKILL)).start()
+            threading.Timer(self.STOP, self._signal, (p.pid, signal.SIGKILL)).start()
 
     @staticmethod
-    def _signal(groupe, sig):
+    def _signal(group, sig):
         try:
-            os.killpg(groupe, sig)
+            os.killpg(group, sig)
             return True
         except (ProcessLookupError, PermissionError):
             return False
 
-    def _attendre_groupe(self, groupe):
+    def _wait_group(self, group):
         """After the leader exits, its group may still hold programs (Blender under systemd-run, process pools):
         wait for them to go, then kill what is left."""
-        fin = time.time() + self.ARRET
-        while self._signal(groupe, 0):
-            if time.time() > fin:
-                self._signal(groupe, signal.SIGKILL)
+        end = time.time() + self.STOP
+        while self._signal(group, 0):
+            if time.time() > end:
+                self._signal(group, signal.SIGKILL)
                 time.sleep(0.2)
-                if time.time() > fin + 5:
+                if time.time() > end + 5:
                     break
             time.sleep(0.2)
 
-    def commande(self, args, ligne=None):
+    def command(self, args, line=None):
         """Run a tool of the repository in its own process group (all the programs it starts, Blender included,
         stay in that group, systemd-run --scope too): cancelling stops the whole group. Lines starting with
-        Suivi.MARQUE go to `ligne`, the others to the journal."""
-        if self.arret.is_set():
-            raise Annulee()
+        Track.MARK go to `line`, the others to the journal."""
+        if self.stop.is_set():
+            raise Cancelled()
         env = dict(os.environ, OPENBLAS_NUM_THREADS="1", OMP_NUM_THREADS="1", PYTHONUNBUFFERED="1")
-        with open(self.journal, "ab") as j:
+        with open(self.log, "ab") as j:
             j.write(("$ " + " ".join(os.path.basename(a) if a.endswith(".py") else a for a in args[2:]) + "\n").encode())
             j.flush()
-            p = subprocess.Popen([C.PYTHON, "-I"] + args, cwd=C.DEPOT, env=env, stdin=subprocess.DEVNULL,
+            p = subprocess.Popen([C.PYTHON, "-I"] + args, cwd=C.REPO, env=env, stdin=subprocess.DEVNULL,
                                  stdout=subprocess.PIPE, stderr=subprocess.STDOUT, start_new_session=True)
             self.proc = p
-            if self.arret.is_set():          # cancelled between the check above and the start
+            if self.stop.is_set():          # cancelled between the check above and the start
                 self._signal(p.pid, signal.SIGTERM)
             try:
-                for brut in p.stdout:
-                    if brut.startswith(b"@@ "):
-                        if ligne and not self.arret.is_set():
+                for raw in p.stdout:
+                    if raw.startswith(b"@@ "):
+                        if line and not self.stop.is_set():
                             try:
-                                ligne(json.loads(brut[3:].decode("utf-8")))
+                                line(json.loads(raw[3:].decode("utf-8")))
                             except ValueError:
                                 pass
                         continue
-                    j.write(brut)
+                    j.write(raw)
                     j.flush()
                 rc = p.wait()
             finally:
-                if self.arret.is_set():
-                    self._attendre_groupe(p.pid)
-                    self._nettoyer(p.pid)
+                if self.stop.is_set():
+                    self._wait_group(p.pid)
+                    self._clean(p.pid)
                 self.proc = None
-        if self.arret.is_set():
-            raise Annulee()
+        if self.stop.is_set():
+            raise Cancelled()
         return rc
 
-    def _nettoyer(self, pid):
+    def _clean(self, pid):
         """Job lists that catalogue.lancer_blender left behind when its Blender was stopped."""
         tmp = os.environ.get("TMPDIR") or C.CACHE
         for f in glob.glob(os.path.join(tmp, "atelier-*-%d-*.json" % pid)):
@@ -703,193 +703,193 @@ class Extraction:
             except OSError:
                 pass
 
-    def manque(self, test, noms=None):
-        return [n for n in (self.noms if noms is None else noms) if self.refaire or not test(n)]
+    def missing(self, test, names=None):
+        return [n for n in (self.names if names is None else names) if self.redo or not test(n)]
 
     # ------------------------------------------------------------ chain
-    def mener(self):
-        """Run the chain to its end, its failure or its cancellation; the state file always ends "fini"."""
+    def lead(self):
+        """Run the chain to its end, its failure or its cancellation; the state file always ends "finished"."""
         try:
-            self.chaine()
-        except Annulee:
+            self.chain()
+        except Cancelled:
             self.note("cancelled")
-            self.poser(etape="annulee", fini=True, ok=False, annulee=True, modele=None,
+            self.place(step="cancelled", done=True, ok=False, cancelled=True, model=None,
                        message="Extraction cancelled. What was finished stays in the catalogue; extracting again resumes from there.",
-                       duree=round(time.time() - self.etat["debut"], 1))
+                       duration=round(time.time() - self.state["start"], 1))
         except Exception as e:   # noqa: BLE001 — any failure ends the job and is reported
             self.note("error: %r" % e)
-            self.poser(etape="erreur", fini=True, ok=False, erreur=str(e) if isinstance(e, Refus) else "%s: %s" % (type(e).__name__, e),
+            self.place(step="error", done=True, ok=False, error=str(e) if isinstance(e, Refusals) else "%s: %s" % (type(e).__name__, e),
                        message="The extraction failed.")
 
-    def chaine(self):
+    def chain(self):
         """Pivot head (once, it needs every model), then the lots one after the other."""
         import catalog as K
-        avant = etat_modeles()
+        before = state_models()
         places = max(1, min(C.places(), 12))     # beyond 12 programs at once a desktop machine slows down
-        travaux = str(places)
-        outils = C.OUTILS
-        self.lots = [self.noms[k:k + places] for k in range(0, len(self.noms), places)]
-        self.poser(lots=len(self.lots), total=len(self.noms))
-        if not os.path.isfile(os.path.join(PIVOT, "tete-pivot.json")):
-            self.poser(etape="pivot", pas="pivot", message="Pivot head: the head closest to the game's average…")
-            if self.commande([os.path.join(outils, "head", "pivot.py"), "--output", PIVOT, "--no-sheet",
-                              "--travaux", travaux]) or not os.path.isfile(os.path.join(PIVOT, "tete-pivot.json")):
-                raise Refus("The pivot head could not be computed (see the log).")
-        manque = K.manque_pour_preparer()
-        if manque:
-            raise Refus("The catalogue cannot be prepared: " + " ".join(manque))
-        for k, lot in enumerate(self.lots):
-            self.lot(k, lot, travaux)
-        apres = etat_modeles()
-        self.poser(etape="fin", part=1.0, fini=True, ok=True, message="Extraction finished.", modele=None,
-                   bilan=bilan(avant, apres, self.noms), duree=round(time.time() - self.etat["debut"], 1))
+        tasks = str(places)
+        tools = C.TOOLS
+        self.batches = [self.names[k:k + places] for k in range(0, len(self.names), places)]
+        self.place(batches=len(self.batches), total=len(self.names))
+        if not os.path.isfile(os.path.join(PIVOT, "pivot-head.json")):
+            self.place(step="pivot", stage="pivot", message="Pivot head: the head closest to the game's average…")
+            if self.command([os.path.join(tools, "head", "pivot.py"), "--output", PIVOT, "--no-sheet",
+                              "--jobs", tasks]) or not os.path.isfile(os.path.join(PIVOT, "pivot-head.json")):
+                raise Refusals("The pivot head could not be computed (see the log).")
+        missing = K.missing_for_prepare()
+        if missing:
+            raise Refusals("The catalogue cannot be prepared: " + " ".join(missing))
+        for k, batch in enumerate(self.batches):
+            self.batch(k, batch, tasks)
+        after = state_models()
+        self.place(step="done", fraction=1.0, done=True, ok=True, message="Extraction finished.", model=None,
+                   assessment=assessment(before, after, self.names), duration=round(time.time() - self.state["start"], 1))
 
-    def lot(self, k, lot, travaux):
+    def batch(self, k, batch, tasks):
         """One lot through the whole chain: faces, hairstyles, clothes, then the catalogue, model by model."""
-        outils = C.OUTILS
-        de = sum(len(x) for x in self.lots[:k])
-        rangs = {n: de + i + 1 for i, n in enumerate(lot)}
-        portee = {"de": de + 1, "a": de + len(lot), "total": len(self.noms), "noms": lot}
+        tools = C.TOOLS
+        de = sum(len(x) for x in self.batches[:k])
+        ranks = {n: de + i + 1 for i, n in enumerate(batch)}
+        reach = {"from": de + 1, "to": de + len(batch), "total": len(self.names), "names": batch}
 
-        def etape(pas, dans, message):
-            self.poser(etape=pas, pas=pas, lot=portee, modele=None, part=self.part(k, dans), message=message)
+        def step(stage, in_, message):
+            self.place(step=stage, stage=stage, batch=reach, model=None, fraction=self.part(k, in_), message=message)
 
-        rang = "%d-%d of %d" % (portee["de"], portee["a"], portee["total"])
+        rank = "%d-%d of %d" % (reach["from"], reach["to"], reach["total"])
         # faces: prerequisite of hairstyles and clothes (both read the face library)
-        v = self.manque(lambda n: os.path.isfile(os.path.join(C.BIBLIO_VIS, n, "fiche.json")), lot)
+        v = self.missing(lambda n: os.path.isfile(os.path.join(C.LIBRARY_VIS, n, "record.json")), batch)
         if v:
-            etape("visages", 0.0, "Models %s: faces" % rang)
-            self.commande([os.path.join(outils, "head", "library.py"), "extraire", "--output", C.BIBLIO_VIS,
-                           "--travaux", travaux, "--seuls", ",".join(v)])
-        avec_visage = [n for n in lot if os.path.isfile(os.path.join(C.BIBLIO_VIS, n, "partie.npz"))]
-        if "coiffures" in self.quoi:
-            c = [n for n in avec_visage if self.refaire or not os.path.isfile(os.path.join(C.BIBLIO_VIS, n, "coiffure.json"))]
+            step("faces", 0.0, "Models %s: faces" % rank)
+            self.command([os.path.join(tools, "head", "library.py"), "extract", "--output", C.LIBRARY_VIS,
+                           "--jobs", tasks, "--only", ",".join(v)])
+        with_face = [n for n in batch if os.path.isfile(os.path.join(C.LIBRARY_VIS, n, "part.npz"))]
+        if "hairstyles" in self.what:
+            c = [n for n in with_face if self.redo or not os.path.isfile(os.path.join(C.LIBRARY_VIS, n, "hairstyle.json"))]
             if c:
-                etape("coiffures", 0.35, "Models %s: hairstyles" % rang)
-                self.commande([os.path.join(outils, "head", "hairstyle.py"), "extraire", "--library", C.BIBLIO_VIS,
-                               "--travaux", travaux, "--seuls", ",".join(c)])
-        if "vetements" in self.quoi:
-            w = [n for n in avec_visage if self.refaire or not os.path.isfile(os.path.join(C.BIBLIO_VET, n, "decoupe.json"))]
+                step("hairstyles", 0.35, "Models %s: hairstyles" % rank)
+                self.command([os.path.join(tools, "head", "hairstyle.py"), "extract", "--library", C.LIBRARY_VIS,
+                               "--jobs", tasks, "--only", ",".join(c)])
+        if "clothes" in self.what:
+            w = [n for n in with_face if self.redo or not os.path.isfile(os.path.join(C.LIBRARY_GARMENT, n, "cutout.json"))]
             if w:
-                etape("vetements", 0.4, "Models %s: cutting the clothes" % rang)
-                self.commande([os.path.join(outils, "clothes", "library.py"), "extraire", "--output", C.BIBLIO_VET,
-                               "--seuls", ",".join(w)])
-        etape("catalogue", 0.45, "Models %s: fitting the faces on the base body" % rang)
-        suite = {"total": 0, "fait": 0}
+                step("clothes", 0.4, "Models %s: cutting the clothes" % rank)
+                self.command([os.path.join(tools, "clothes", "library.py"), "extract", "--output", C.LIBRARY_GARMENT,
+                               "--only", ",".join(w)])
+        step("catalog", 0.45, "Models %s: fitting the faces on the base body" % rank)
+        suite = {"total": 0, "done": 0}
 
-        def ligne(m):
-            """Progress lines of catalog.py prepare (catalogue.Suivi)."""
-            if "tetes_faites" in m:
-                self.poser(version=self.etat["version"] + 1, part=self.part(k, 0.7))
+        def line(m):
+            """Progress lines of catalog.py prepare (catalog.Track)."""
+            if "heads_made" in m:
+                self.place(version=self.state["version"] + 1, fraction=self.part(k, 0.7))
             if "suite" in m:
                 suite["total"] = m["suite"]
-            if "fait" in m:
-                suite["fait"] += m["fait"]
-                self.poser(part=self.part(k, 0.7 + 0.3 * suite["fait"] / max(1, suite["total"])))
-            if "fini" in m and m["fini"] in rangs and m["fini"] not in self.etat["finis"]:
-                self.note("model ready in the catalogue: %s" % m["fini"])
-                self.poser(finis=self.etat["finis"] + [m["fini"]], version=self.etat["version"] + 1)
-            if "modele" in m and m["modele"] in rangs:
-                pas = {"coiffure": "hairstyle", "pieces": "clothes"}.get(m.get("pas"), m.get("pas"))
-                self.poser(modele={"rang": rangs[m["modele"]], "total": len(self.noms), "nom": m["modele"],
-                                   "pas": m.get("pas")},
-                           message="Model %d of %d: %s, %s" % (rangs[m["modele"]], len(self.noms), m["modele"], pas))
-        if self.commande([os.path.join(C.ICI, "catalog.py"), "preparer", "--order", ",".join(lot)], ligne):
-            raise Refus("Preparing the catalogue stopped with an error (see the log).")
+            if "done" in m:
+                suite["done"] += m["done"]
+                self.place(fraction=self.part(k, 0.7 + 0.3 * suite["done"] / max(1, suite["total"])))
+            if "model_done" in m and m["model_done"] in ranks and m["model_done"] not in self.state["finished"]:
+                self.note("model ready in the catalogue: %s" % m["model_done"])
+                self.place(finished=self.state["finished"] + [m["model_done"]], version=self.state["version"] + 1)
+            if "model" in m and m["model"] in ranks:
+                stage = {"hairstyle": "hairstyle", "parts": "clothes"}.get(m.get("stage"), m.get("stage"))
+                self.place(model={"rank": ranks[m["model"]], "total": len(self.names), "name": m["model"],
+                                   "stage": m.get("stage")},
+                           message="Model %d of %d: %s, %s" % (ranks[m["model"]], len(self.names), m["model"], stage))
+        if self.command([os.path.join(C.HERE, "catalog.py"), "prepare", "--order", ",".join(batch)], line):
+            raise Refusals("Preparing the catalogue stopped with an error (see the log).")
         # models of the lot that the catalogue had nothing to do for (already there, or refused before it)
-        manquants = [n for n in lot if n not in self.etat["finis"]]
-        self.poser(finis=self.etat["finis"] + manquants, version=self.etat["version"] + 1, modele=None,
-                   part=self.part(k, 1.0))
+        missing = [n for n in batch if n not in self.state["finished"]]
+        self.place(finished=self.state["finished"] + missing, version=self.state["version"] + 1, model=None,
+                   fraction=self.part(k, 1.0))
 
 
-def bilan(avant, apres, noms):
-    a = {m["id"]: m for m in avant}
-    res = {"visages": [], "coiffures": [], "pieces": 0, "modeles": {}, "refus": []}
-    for m in apres:
+def assessment(before, after, names):
+    a = {m["id"]: m for m in before}
+    res = {"face_count": [], "hairstyles": [], "parts": 0, "models": {}, "refusals": []}
+    for m in after:
         n = m["id"]
-        if n not in noms:
+        if n not in names:
             continue
-        av = a.get(n, {"catalogue": {"visage": False, "coiffure": False, "pieces": 0}})
-        if m["catalogue"]["visage"] and not av["catalogue"]["visage"]:
-            res["visages"].append(n)
-        if m["catalogue"]["coiffure"] and not av["catalogue"]["coiffure"]:
-            res["coiffures"].append(n)
-        res["pieces"] += max(0, m["catalogue"]["pieces"] - av["catalogue"]["pieces"])
-        res["modeles"][n] = {"extrait": m["extrait"], "catalogue": m["catalogue"]}
-        res["refus"] += [{"nom": "%s · %s" % (n, r["nom"]), "raison": r["raison"]} for r in m["refus"]]
+        av = a.get(n, {"catalog": {"face": False, "hairstyle": False, "parts": 0}})
+        if m["catalog"]["face"] and not av["catalog"]["face"]:
+            res["face_count"].append(n)
+        if m["catalog"]["hairstyle"] and not av["catalog"]["hairstyle"]:
+            res["hairstyles"].append(n)
+        res["parts"] += max(0, m["catalog"]["parts"] - av["catalog"]["parts"])
+        res["models"][n] = {"extracted": m["extracted"], "catalog": m["catalog"]}
+        res["refusals"] += [{"name": "%s · %s" % (n, r["name"]), "reason": r["reason"]} for r in m["refusals"]]
     return res
 
 
-def lire_travail(ident):
+def read_work(ident):
     """State of a job (extraction "x…" or assembly), with the end of the log for an extraction."""
     if not re.fullmatch(r"x?[0-9]{8}-[0-9]{6}(-[0-9]{1,4})?", ident or ""):
         return None
     if ident.startswith("x"):
         d = os.path.join(EXTRACTIONS, ident)
-        e = C.lire_json(os.path.join(d, "etat.json"))
+        e = C.read_json(os.path.join(d, "state.json"))
         if e is None:
             return None
         try:
-            with open(os.path.join(d, "journal.txt"), "rb") as f:
+            with open(os.path.join(d, "log.txt"), "rb") as f:
                 f.seek(max(0, os.path.getsize(f.name) - 6000))
-                lignes = f.read().decode("utf-8", "replace").splitlines()[1:]
-            e["journal"] = [l[:300] for l in lignes if l.strip() and not l.startswith(("Blender ", "Blender quit"))][-25:]
+                lines = f.read().decode("utf-8", "replace").splitlines()[1:]
+            e["log"] = [l[:300] for l in lines if l.strip() and not l.startswith(("Blender ", "Blender quit"))][-25:]
         except OSError:
-            e["journal"] = []
+            e["log"] = []
         return e
-    return C.lire_json(os.path.join(ASSEMBLAGES, ident, "etat.json"))
+    return C.read_json(os.path.join(ASSEMBLIES, ident, "state.json"))
 
 
 # ===================================================================== assemblages
 
-def assemblages():
+def assemblies():
     res = []
-    if not os.path.isdir(ASSEMBLAGES):
+    if not os.path.isdir(ASSEMBLIES):
         return res
-    for ident in sorted(os.listdir(ASSEMBLAGES), reverse=True):
+    for ident in sorted(os.listdir(ASSEMBLIES), reverse=True):
         if not re.fullmatch(r"[0-9]{8}-[0-9]{6}(-[0-9]{1,4})?", ident):
             continue
-        d = os.path.join(ASSEMBLAGES, ident)
-        sel = C.lire_json(os.path.join(d, "selection.json"), {}) or {}
-        e = C.lire_json(os.path.join(d, "etat.json"), {}) or {}
-        fmts = [f for f, c in (("pmx", "resultat.pmx"), ("vrm", "resultat.vrm")) if os.path.isfile(os.path.join(d, "modele", c))]
+        d = os.path.join(ASSEMBLIES, ident)
+        sel = C.read_json(os.path.join(d, "selection.json"), {}) or {}
+        e = C.read_json(os.path.join(d, "state.json"), {}) or {}
+        fmts = [f for f, c in (("pmx", "result.pmx"), ("vrm", "result.vrm")) if os.path.isfile(os.path.join(d, "model", c))]
         res.append({"id": ident, "date": "%s-%s-%sT%s:%s:%s" % (ident[:4], ident[4:6], ident[6:8], ident[9:11], ident[11:13], ident[13:15]),
-                    "nom": sel.get("nom") or None, "tete": sel.get("tete"), "coiffure": sel.get("coiffure"),
-                    "pieces": len(sel.get("pieces") or []),
-                    "planche": "/data/assemblages/%s/planche.png" % ident if os.path.isfile(os.path.join(d, "planche.png")) else None,
-                    "formats": fmts, "fini": bool(e.get("fini")), "ok": e.get("ok"), "etape": e.get("etape"),
-                    "erreur": e.get("erreur"), "vrm_note": e.get("vrm_note") or None})
+                    "name": sel.get("name") or None, "head": sel.get("head"), "hairstyle": sel.get("hairstyle"),
+                    "parts": len(sel.get("parts") or []),
+                    "sheet": "/data/assemblies/%s/sheet.png" % ident if os.path.isfile(os.path.join(d, "sheet.png")) else None,
+                    "formats": fmts, "done": bool(e.get("done")), "ok": e.get("ok"), "step": e.get("step"),
+                    "error": e.get("error"), "vrm_note": e.get("vrm_note") or None})
     return res
 
 
 def export(ident, fmt):
     """(path to send, ASCII file name, UTF-8 name, type, temporary?) of an assembly."""
     if not re.fullmatch(r"[0-9]{8}-[0-9]{6}(-[0-9]{1,4})?", ident) or fmt not in ("pmx", "vrm"):
-        raise Refus("Unknown assembly or format.", 404)
-    d = os.path.join(ASSEMBLAGES, ident)
-    m = os.path.join(d, "modele")
-    sel = C.lire_json(os.path.join(d, "selection.json"), {}) or {}
-    a, u = nom_telechargement(sel.get("nom") or "", "character-" + ident)
+        raise Refusals("Unknown assembly or format.", 404)
+    d = os.path.join(ASSEMBLIES, ident)
+    m = os.path.join(d, "model")
+    sel = C.read_json(os.path.join(d, "selection.json"), {}) or {}
+    a, u = name_download(sel.get("name") or "", "character-" + ident)
     if fmt == "vrm":
-        c = os.path.join(m, "resultat.vrm")
+        c = os.path.join(m, "result.vrm")
         if not os.path.isfile(c):
-            raise Refus("This assembly has no VRM.", 404)
+            raise Refusals("This assembly has no VRM.", 404)
         return c, a + ".vrm", u + ".vrm", "model/gltf-binary", False
-    pmx = os.path.join(m, "resultat.pmx")
+    pmx = os.path.join(m, "result.pmx")
     if not os.path.isfile(pmx):
-        raise Refus("This assembly has no PMX.", 404)
+        raise Refusals("This assembly has no PMX.", 404)
     tmp = os.path.join(d, ".export-%s.zip" % secrets.token_hex(6))
-    racine = os.path.realpath(m)
+    root = os.path.realpath(m)
     with zipfile.ZipFile(tmp, "w", zipfile.ZIP_DEFLATED, compresslevel=3) as z:
         z.write(pmx, "%s/%s.pmx" % (a, a))
-        for base, dirs, fichiers in os.walk(m):
+        for base, dirs, files in os.walk(m):
             dirs[:] = sorted(x for x in dirs if not os.path.islink(os.path.join(base, x)))
-            for f in sorted(fichiers):
+            for f in sorted(files):
                 c = os.path.join(base, f)
                 rel = os.path.relpath(c, m)
-                # the PMX on the original bones (resultat-zzz.pmx) and the work files stay in the cache
+                # the PMX on the original bones (result-zzz.pmx) and the work files stay in the cache
                 if f.lower().endswith((".pmx", ".vrm", ".json")) or os.path.islink(c) or \
-                        not os.path.realpath(c).startswith(racine + os.sep):
+                        not os.path.realpath(c).startswith(root + os.sep):
                     continue
                 z.write(c, "%s/%s" % (a, rel.replace(os.sep, "/")),
                         compress_type=zipfile.ZIP_STORED if f.lower().endswith((".png", ".jpg", ".jpeg", ".webp")) else None)
@@ -898,18 +898,18 @@ def export(ident, fmt):
 
 # ===================================================================== command line
 
-def _lire_pmx(chemin):
-    sys.path.insert(0, os.path.join(C.OUTILS, "atlas"))
+def _read_pmx(path):
+    sys.path.insert(0, os.path.join(C.TOOLS, "atlas"))
     import pmx as PMX
-    P = PMX.lire(chemin)
-    print(json.dumps({"materiaux": [m["nom"] for m in P["materiaux"]], "os": [o["nom"] for o in P["os"]],
-                      "textures": P["textures"], "sommets": len(P["sommets"]["pos"])}, ensure_ascii=False))
+    P = PMX.read(path)
+    print(json.dumps({"materials": [m["name"] for m in P["materials"]], "bones": [o["name"] for o in P["bones"]],
+                      "textures": P["textures"], "vertices": len(P["vertices"]["pos"])}, ensure_ascii=False))
 
 
 if __name__ == "__main__":
     a = sys.argv[1:]
     if a[:1] == ["lire-pmx"] and len(a) == 2:
-        _lire_pmx(a[1])
+        _read_pmx(a[1])
     elif a[:1] == ["formats"]:
         print(json.dumps(formats(), ensure_ascii=False, indent=1))
     else:

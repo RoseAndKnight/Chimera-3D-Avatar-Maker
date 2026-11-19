@@ -1,14 +1,14 @@
 """The house skeleton: bones of our own, placed by measurement on our mesh, with their twist.
 
-    python3 -I skeleton.py [--sortie squelette.json]      # places the bones, compares them with those of ZZZ
+    python3 -I skeleton.py [--output skeleton.json]      # places the bones, compares them with those of ZZZ
 
 What sets it apart from VRoid and ZZZ:
  - the joints are placed by measurements on the rings of the grid (measurements.py) and by
    anatomy rules written here, not taken from another model;
  - the twist is in the skeleton: the forearm follows the roll of the hand, the upper arm and the thigh
    hold back the roll of their bone (VRoid has no twist bones; those of ZZZ are turned by hand);
- - one bone per toe, under a common bone "orteils" (toes) that keeps the usual role;
- - readable names (French): bassin, colonne, bras_G, avant_bras_G, index1_G...
+ - one bone per toe, under a common bone "toes" (toes) that keeps the usual role;
+ - readable names: pelvis, spine, arm_L, forearm_L, index1_L...
 
 Frame: cm, y up, front = -z, character's left = +x. As in MMD, the rest frame of each
 bone is aligned with the world: a local rotation is a rotation about the world axes, under the parent.
@@ -19,39 +19,39 @@ import sys
 
 import numpy as np
 
-ICI = os.path.dirname(os.path.abspath(__file__))
-for d in (ICI, os.path.join(ICI, "..", "atlas")):
+HERE = os.path.dirname(os.path.abspath(__file__))
+for d in (HERE, os.path.join(HERE, "..", "atlas")):
     if d not in sys.path:
         sys.path.insert(0, d)
-import kinematics as CIN     # noqa: E402
+import kinematics as KIN     # noqa: E402
 import measurements as M           # noqa: E402
 
-DOIGTS = ("index", "majeur", "annulaire", "petit_doigt")
+FINGERS = ("index", "middle", "ring", "little")
 # anatomy rules (fractions of length), each one stated where it is used
-PART_COUDE = 0.54          # shoulder -> elbow, over shoulder -> wrist (humerus 0.186 H; forearm 0.146 H... rounded for the posed arm)
+PART_ELBOW = 0.54          # shoulder -> elbow, over shoulder -> wrist (humerus 0.186 H; forearm 0.146 H... rounded for the posed arm)
 PART_PHALANGES = (0.45, 0.28, 0.27)   # the three phalanges, fingertip included
-PART_DOIGT_LIBRE = 0.75    # the web is in the middle of the first phalanx: the free finger is 3/4 of it
-PART_POUCE = 0.52          # first phalanx of the thumb over its free part
-PART_COLONNE_ARRIERE = 0.35   # the spine is in the back third of the trunk, not in the middle
+PART_FINGER_FREE = 0.75    # the web is in the middle of the first phalanx: the free finger is 3/4 of it
+PART_THUMB = 0.52          # first phalanx of the thumb over its free part
+PART_SPINE_BACK = 0.35   # the spine is in the back third of the trunk, not in the middle
 PART_CAGE = 0.6            # the trunk is a cage, not a line: crossbars up to 60 % of the half-width
-TORSION = (1 / 3, 2 / 3)   # twist steps between the two ends of a bone
+TWIST = (1 / 3, 2 / 3)   # twist steps between the two ends of a bone
 
-# roles (VRM 1.0, as in the squelettes tool) and equivalent MMD name, to translate poses and animations
-ROLES = {"racine": ("x.root", "全ての親"), "bassin": ("hips", "下半身"), "colonne": ("spine", "上半身"),
-         "poitrine": ("chest", "上半身1"), "haut_poitrine": ("upperChest", "上半身2"), "cou": ("neck", "首"),
-         "tete": ("head", "頭")}
-for _c, _C, _m in (("G", "left", "左"), ("D", "right", "右")):
-    for _n, _r, _j in (("epaule", "Shoulder", "肩"), ("bras", "UpperArm", "腕"), ("avant_bras", "LowerArm", "ひじ"),
-                       ("main", "Hand", "手首"), ("cuisse", "UpperLeg", "足"), ("jambe", "LowerLeg", "ひざ"),
-                       ("pied", "Foot", "足首"), ("orteils", "Toes", "つま先")):
+# roles (VRM 1.0, as in the skeletons tool) and equivalent MMD name, to translate poses and animations
+ROLES = {"root": ("x.root", "全ての親"), "pelvis": ("hips", "下半身"), "spine": ("spine", "上半身"),
+         "chest": ("chest", "上半身1"), "upper_chest": ("upperChest", "上半身2"), "neck": ("neck", "首"),
+         "head": ("head", "頭")}
+for _c, _C, _m in (("L", "left", "左"), ("R", "right", "右")):
+    for _n, _r, _j in (("shoulder", "Shoulder", "肩"), ("arm", "UpperArm", "腕"), ("forearm", "LowerArm", "ひじ"),
+                       ("hand", "Hand", "手首"), ("thigh", "UpperLeg", "足"), ("leg", "LowerLeg", "ひざ"),
+                       ("foot", "Foot", "足首"), ("toes", "Toes", "つま先")):
         ROLES["%s_%s" % (_n, _c)] = (_C + _r, _m + _j)
-    for _n, _r, _j in (("pouce", "Thumb", "親指"), ("index", "Index", "人指"), ("majeur", "Middle", "中指"),
-                       ("annulaire", "Ring", "薬指"), ("petit_doigt", "Little", "小指")):
-        for _k, _p in enumerate(("Metacarpal", "Proximal", "Distal") if _n == "pouce" else ("Proximal", "Intermediate", "Distal")):
-            ROLES["%s%d_%s" % (_n, _k + 1, _c)] = (_C + _r + _p, _m + _j + "０１２"[_k] if _n == "pouce" else _m + _j + "１２３"[_k])
+    for _n, _r, _j in (("thumb", "Thumb", "親指"), ("index", "Index", "人指"), ("middle", "Middle", "中指"),
+                       ("ring", "Ring", "薬指"), ("little", "Little", "小指")):
+        for _k, _p in enumerate(("Metacarpal", "Proximal", "Distal") if _n == "thumb" else ("Proximal", "Intermediate", "Distal")):
+            ROLES["%s%d_%s" % (_n, _k + 1, _c)] = (_C + _r + _p, _m + _j + "０１２"[_k] if _n == "thumb" else _m + _j + "１２３"[_k])
 
 
-def _le_long(C, s):
+def _long(C, s):
     """Point at abscissa s (cm) along a line of centres; before the start: the first slope is extended."""
     L = np.r_[0, np.cumsum(np.linalg.norm(np.diff(C, axis=0), axis=1))]
     if s <= 0:
@@ -62,99 +62,99 @@ def _le_long(C, s):
     return C[k] + (C[k + 1] - C[k]) * (s - L[k]) / (L[k + 1] - L[k])
 
 
-def placer(g):
+def put(g):
     """Positions of the joints of the left side and the middle, with the measurement that gives them."""
     P = g["P"]
-    J, dit = {}, {}
+    J, said = {}, {}
 
-    def pose(nom, p, comment):
-        J[nom], dit[nom] = np.asarray(p, float), comment
+    def pose(name, p, comment):
+        J[name], said[name] = np.asarray(p, float), comment
 
     # ---- leg: ankle, knee, hip
-    r, C, L = M.ligne(g, "jambe")
-    sol = float(P[:, 1].min())
-    fin = int(np.argmin(L[40:56])) + 40                      # the narrowest ring of the lower leg
-    che = next(v for v in range(fin, len(L)) if L[v] > 1.15 * L[fin])
-    pose("pied_G", C[che], "first ring below the narrowest of the lower leg (rank %d) that widens by 15 per cent: the malleoli" % fin)
-    y_fourche = float(P[M.anneau(g, "bande", 4)][:, 1].min())
-    larg = float(np.abs(P[M.anneau(g, "tronc", 0)][:, 0]).max())
-    axe = (C[6] - C[20]) / np.linalg.norm(C[6] - C[20])
-    y_h = y_fourche + 0.10 * (y_fourche - sol)
-    h = C[6] + axe * (y_h - C[6][1]) / axe[1]
-    pose("cuisse_G", [0.45 * larg, y_h, h[2]],
+    r, C, L = M.line(g, "leg")
+    ground = float(P[:, 1].min())
+    end = int(np.argmin(L[40:56])) + 40                      # the narrowest ring of the lower leg
+    che = next(v for v in range(end, len(L)) if L[v] > 1.15 * L[end])
+    pose("foot_L", C[che], "first ring below the narrowest of the lower leg (rank %d) that widens by 15 per cent: the malleoli" % end)
+    y_crotch = float(P[M.loop(g, "band", 4)][:, 1].min())
+    wid = float(np.abs(P[M.loop(g, "trunk", 0)][:, 0]).max())
+    axis = (C[6] - C[20]) / np.linalg.norm(C[6] - C[20])
+    y_h = y_crotch + 0.10 * (y_crotch - ground)
+    h = C[6] + axis * (y_h - C[6][1]) / axis[1]
+    pose("thigh_L", [0.45 * wid, y_h, h[2]],
          "height: crotch + 10 % of the leg; spread: 45 % of the half-width of the hips; depth: axis of the thigh")
-    creux = int(np.argmin(L[20:34])) + 20                    # the hollow under the knee
-    y_g = C[creux][1] + 0.04 * (y_h - C[che][1])
+    hollow = int(np.argmin(L[20:34])) + 20                    # the hollow under the knee
+    y_g = C[hollow][1] + 0.04 * (y_h - C[che][1])
     k = int(np.argmin(np.abs(C[:, 1] - y_g)))
-    pose("jambe_G", [C[k][0], y_g, C[k][2]], "4 per cent of the leg above the hollow under the knee (narrowest ring, rank %d)" % creux)
-    pose("orteils_G", C[-2], "centre of the second-to-last ring of the foot: the line where the toes attach")
-    talon = P[M.anneau(g, "jambe", che + 2)]
-    J["_talon_G"] = talon[talon[:, 2].argmax()] * [1, 1, 0.8] + [0, 0, 0]
+    pose("leg_L", [C[k][0], y_g, C[k][2]], "4 per cent of the leg above the hollow under the knee (narrowest ring, rank %d)" % hollow)
+    pose("toes_L", C[-2], "centre of the second-to-last ring of the foot: the line where the toes attach")
+    heel = P[M.loop(g, "leg", che + 2)]
+    J["_heel_L"] = heel[heel[:, 2].argmax()] * [1, 1, 0.8] + [0, 0, 0]
     for k in range(5):
-        _, Cd, _ = M.ligne(g, "doigt_orteil%d" % k)
+        _, Cd, _ = M.line(g, "digit_toe%d" % k)
         lng = np.linalg.norm(np.diff(Cd, axis=0), axis=1).sum()
-        pose("orteil%d_G" % (k + 1), _le_long(Cd, -min(1.0, 0.35 * lng)), "a little behind the base of the toe")
-        J["_bout_orteil%d_G" % (k + 1)] = Cd[-1]
+        pose("toe%d_L" % (k + 1), _long(Cd, -min(1.0, 0.35 * lng)), "a little behind the base of the toe")
+        J["_tip_toe%d_L" % (k + 1)] = Cd[-1]
 
     # ---- trunk
-    rt = M.rangs(g, "tronc")
-    per = np.array([M.perimetre(g, "tronc", v) for v in rt])
+    rt = M.ranks(g, "trunk")
+    per = np.array([M.perimeter(g, "trunk", v) for v in rt])
     v_t = int(np.argmin(per))
 
-    def dos(carte, v):
+    def back(map_, v):
         """Point of the spine at this ring: in the back third, on the middle plane."""
-        p = P[M.anneau(g, carte, v)]
+        p = P[M.loop(g, map_, v)]
         m = p[np.abs(p[:, 0]) < 3.0]
         za, zb = m[:, 2].min(), m[:, 2].max()
-        return np.array([0.0, p[:, 1].mean(), zb - PART_COLONNE_ARRIERE * (zb - za)])
-    taille = dos("tronc", v_t)
-    y_aisselle = float(P[M.anneau(g, "bras", 0)][:, 1].min())
-    pose("bassin", [0, y_h + 0.3 * (taille[1] - y_h), taille[2]], "30 % of the way from the hips to the waist")
-    pose("colonne", [0, y_h + 0.4 * (taille[1] - y_h), taille[2]], "40 % of the way from the hips to the waist: the bottom of the lumbar spine")
-    pose("poitrine", taille, "the waist: the narrowest ring of the trunk (rank %d)" % v_t)
-    v_s = int(np.argmin(np.abs(np.array([P[M.anneau(g, "tronc", v)][:, 1].mean() for v in rt]) - (taille[1] + y_aisselle) / 2)))
-    pose("haut_poitrine", dos("tronc", v_s), "halfway from the waist to the armpit: under the chest")
-    rc = M.rangs(g, "cou")
-    pose("cou", dos("cou", rc[0]), "the base of the neck")
-    pose("tete", dos("cou", rc[int(round(0.6 * (len(rc) - 1)))]), "at 60 % of the neck")
-    J["_haut_tete"] = J["tete"] + [0, 5.0, 0]
+        return np.array([0.0, p[:, 1].mean(), zb - PART_SPINE_BACK * (zb - za)])
+    size = back("trunk", v_t)
+    y_armpit = float(P[M.loop(g, "arm", 0)][:, 1].min())
+    pose("pelvis", [0, y_h + 0.3 * (size[1] - y_h), size[2]], "30 % of the way from the hips to the waist")
+    pose("spine", [0, y_h + 0.4 * (size[1] - y_h), size[2]], "40 % of the way from the hips to the waist: the bottom of the lumbar spine")
+    pose("chest", size, "the waist: the narrowest ring of the trunk (rank %d)" % v_t)
+    v_s = int(np.argmin(np.abs(np.array([P[M.loop(g, "trunk", v)][:, 1].mean() for v in rt]) - (size[1] + y_armpit) / 2)))
+    pose("upper_chest", back("trunk", v_s), "halfway from the waist to the armpit: under the chest")
+    rc = M.ranks(g, "neck")
+    pose("neck", back("neck", rc[0]), "the base of the neck")
+    pose("head", back("neck", rc[int(round(0.6 * (len(rc) - 1)))]), "at 60 % of the neck")
+    J["_head_top"] = J["head"] + [0, 5.0, 0]
 
     # ---- arm: wrist, shoulder, elbow
-    r, C, L = M.ligne(g, "bras")
+    r, C, L = M.line(g, "arm")
     poi = int(np.argmin(L[20:40])) + 20
-    pose("main_G", C[poi], "the narrowest ring of the arm (rank %d)" % poi)
-    axe = (C[4] - C[12]) / np.linalg.norm(C[4] - C[12])
+    pose("hand_L", C[poi], "the narrowest ring of the arm (rank %d)" % poi)
+    axis = (C[4] - C[12]) / np.linalg.norm(C[4] - C[12])
     ray = L[4] / (2 * np.pi)
-    pas = np.arange(0.0, 20.0, 0.25)
-    libre = np.array([np.linalg.norm(P - (C[4] + x * axe), axis=1).min() for x in pas])
-    fin = next((k for k in range(len(pas)) if libre[k] < 0.5 * ray), len(pas))      # the axis exits through the top of the shoulder
-    s = pas[int(np.argmax(libre[:fin]))]
-    pose("bras_G", C[4] + s * axe, "on the axis of the arm extended into the shoulder: the point where the largest ball fits under the skin (%.1f cm)" % libre[:fin].max())
-    d = J["main_G"] - J["bras_G"]
-    y_c = J["bras_G"] + PART_COUDE * d
+    stage = np.arange(0.0, 20.0, 0.25)
+    free = np.array([np.linalg.norm(P - (C[4] + x * axis), axis=1).min() for x in stage])
+    end = next((k for k in range(len(stage)) if free[k] < 0.5 * ray), len(stage))      # the axis exits through the top of the shoulder
+    s = stage[int(np.argmax(free[:end]))]
+    pose("arm_L", C[4] + s * axis, "on the axis of the arm extended into the shoulder: the point where the largest ball fits under the skin (%.1f cm)" % free[:end].max())
+    d = J["hand_L"] - J["arm_L"]
+    y_c = J["arm_L"] + PART_ELBOW * d
     k = int(np.argmin(np.linalg.norm(C[:poi] - y_c, axis=1)))
-    pose("avant_bras_G", C[k], "%d per cent from the shoulder to the wrist, brought back to the centre of the ring" % round(100 * PART_COUDE))
-    pose("epaule_G", [0.18 * J["bras_G"][0], J["bras_G"][1] + 0.25 * (J["cou"][1] - J["bras_G"][1]), J["cou"][2]],
+    pose("forearm_L", C[k], "%d per cent from the shoulder to the wrist, brought back to the centre of the ring" % round(100 * PART_ELBOW))
+    pose("shoulder_L", [0.18 * J["arm_L"][0], J["arm_L"][1] + 0.25 * (J["neck"][1] - J["arm_L"][1]), J["neck"][2]],
          "near the sternum: 18 % of the shoulder spread, a quarter of the way to the base of the neck")
 
     # ---- hand
-    for k, nom in enumerate(DOIGTS):
-        _, Cd, _ = M.ligne(g, "doigt_doigt%d" % k)
+    for k, name in enumerate(FINGERS):
+        _, Cd, _ = M.line(g, "digit_finger%d" % k)
         lng = np.linalg.norm(np.diff(Cd, axis=0), axis=1).sum()
-        tout = lng / PART_DOIGT_LIBRE
-        s0 = lng - tout
+        all_ = lng / PART_FINGER_FREE
+        s0 = lng - all_
         for i, part in enumerate((0.0, PART_PHALANGES[0], PART_PHALANGES[0] + PART_PHALANGES[1])):
-            pose("%s%d_G" % (nom, i + 1), _le_long(Cd, s0 + part * tout),
+            pose("%s%d_L" % (name, i + 1), _long(Cd, s0 + part * all_),
                  "phalanges at 45, 28 and 27 % of the finger, 3/4 of which is free")
-        J["_bout_%s_G" % nom] = Cd[-1]
-    _, Cd, _ = M.ligne(g, "doigt_pouce")
+        J["_tip_%s_L" % name] = Cd[-1]
+    _, Cd, _ = M.line(g, "digit_thumb")
     lng = np.linalg.norm(np.diff(Cd, axis=0), axis=1).sum()
-    pose("pouce1_G", J["main_G"] + 0.35 * (Cd[0] - J["main_G"]), "35 % from the wrist to the free base of the thumb")
-    pose("pouce2_G", Cd[0], "the free base of the thumb")
-    pose("pouce3_G", _le_long(Cd, PART_POUCE * lng), "52 % of the free part of the thumb")
-    J["_bout_pouce_G"] = Cd[-1]
-    J["_sol"] = np.array([0.0, sol, 0.0])
-    return J, dit
+    pose("thumb1_L", J["hand_L"] + 0.35 * (Cd[0] - J["hand_L"]), "35 % from the wrist to the free base of the thumb")
+    pose("thumb2_L", Cd[0], "the free base of the thumb")
+    pose("thumb3_L", _long(Cd, PART_THUMB * lng), "52 % of the free part of the thumb")
+    J["_tip_thumb_L"] = Cd[-1]
+    J["_ground"] = np.array([0.0, ground, 0.0])
+    return J, said
 
 
 def cage(g, y0, y1, x_max):
@@ -162,8 +162,8 @@ def cage(g, y0, y1, x_max):
     skin of the trunk is far from the spine; without them, the chest and the flanks take the heat of the arm."""
     P = g["P"]
     segs = []
-    for v in M.rangs(g, "tronc")[::2]:
-        p = P[M.anneau(g, "tronc", v)]
+    for v in M.ranks(g, "trunk")[::2]:
+        p = P[M.loop(g, "trunk", v)]
         y = float(p[:, 1].mean())
         if not (y0 <= y < y1):
             continue
@@ -177,125 +177,125 @@ def cage(g, y0, y1, x_max):
     return segs
 
 
-def construire(g, place=None):
-    """The whole skeleton: list of bones {nom, parent, pos, segments, role, mmd, torsion}.
+def build(g, place=None):
+    """The whole skeleton: list of bones {name, parent, pos, segments, role, mmd, torsion}.
     place: (joints, measurements) already placed (free_base/body.py); otherwise placer(g)."""
-    J, dit = place or placer(g)
+    J, said = place or put(g)
     os_ = []
 
-    def os(nom, parent, pos, segs, torsion=None):
-        role, mmd = ROLES.get(nom, (None, None))
-        os_.append({"nom": nom, "parent": parent, "pos": [float(x) for x in pos],
+    def os(name, parent, pos, segs, twist=None):
+        role, mmd = ROLES.get(name, (None, None))
+        os_.append({"name": name, "parent": parent, "pos": [float(x) for x in pos],
                     "segments": [[[float(x) for x in a], [float(x) for x in b]] for a, b in segs],
-                    "role": role, "mmd": mmd, "torsion": torsion, "mesure": dit.get(nom.replace("_D", "_G"))})
+                    "role": role, "mmd": mmd, "twist": twist, "measure": said.get(name.replace("_R", "_L"))})
 
     mir = np.array([-1.0, 1.0, 1.0])
-    os("racine", None, [0, J["_sol"][1], 0], [])
-    hanches = J["cuisse_G"] * [0, 1, 1]
+    os("root", None, [0, J["_ground"][1], 0], [])
+    hips = J["thigh_L"] * [0, 1, 1]
     large = 1e9
-    os("bassin", "racine", J["bassin"], [(J["bassin"], hanches), (J["cuisse_G"], J["cuisse_G"] * mir)]
-       + cage(g, J["cuisse_G"][1], J["colonne"][1], large))
-    for a, b in (("colonne", "poitrine"), ("poitrine", "haut_poitrine"), ("haut_poitrine", "cou"), ("cou", "tete")):
-        haut = min(J[b][1], J["epaule_G"][1] - 2.0)          # above, the shoulder holds the skin
-        barres = cage(g, J[a][1], haut, J["bras_G"][0]) if a != "cou" else []
-        os(a, "bassin" if a == "colonne" else os_[-1]["nom"], J[a], [(J[a], J[b])] + barres)
-    os("tete", "cou", J["tete"], [(J["tete"], J["_haut_tete"])])
-    for c, m in (("G", np.ones(3)), ("D", mir)):
+    os("pelvis", "root", J["pelvis"], [(J["pelvis"], hips), (J["thigh_L"], J["thigh_L"] * mir)]
+       + cage(g, J["thigh_L"][1], J["spine"][1], large))
+    for a, b in (("spine", "chest"), ("chest", "upper_chest"), ("upper_chest", "neck"), ("neck", "head")):
+        top = min(J[b][1], J["shoulder_L"][1] - 2.0)          # above, the shoulder holds the skin
+        bars = cage(g, J[a][1], top, J["arm_L"][0]) if a != "neck" else []
+        os(a, "pelvis" if a == "spine" else os_[-1]["name"], J[a], [(J[a], J[b])] + bars)
+    os("head", "neck", J["head"], [(J["head"], J["_head_top"])])
+    for c, m in (("L", np.ones(3)), ("R", mir)):
         def j(n):
-            return J[n + "_G"] * m
+            return J[n + "_L"] * m
 
-        def tors(nom, parent, a, b, sorte, source, paliers):
-            """Twist bones along a -> b. kind "retient" (holds back): child of the bone, undoes a share of its
+        def tors(name, parent, a, b, sort, source, tiers):
+            """Twist bones along a -> b. kind "keeps" (holds back): child of the bone, undoes a share of its
             roll (the top stays in place); "suit" (follows): child of the bone, takes a share of the roll of the source."""
-            axe = (b - a) / np.linalg.norm(b - a)
-            for i, t in enumerate(paliers):
-                os("%s_torsion%d_%s" % (nom, i + 1, c), parent, a + t * (b - a), [],
-                   {"sorte": sorte, "source": source, "axe": [float(x) for x in axe], "part": float(t)})
-        os("epaule_" + c, "haut_poitrine", j("epaule"), [(j("epaule"), j("bras"))])
-        os("bras_" + c, "epaule_" + c, j("bras"), [(j("bras"), j("avant_bras"))])
-        tors("bras", "bras_" + c, j("bras"), j("avant_bras"), "retient", "bras_" + c, (0.0,) + TORSION)
-        os("avant_bras_" + c, "bras_" + c, j("avant_bras"), [(j("avant_bras"), j("main"))])
-        tors("avant_bras", "avant_bras_" + c, j("avant_bras"), j("main"), "suit", "main_" + c, TORSION + (1.0,))
-        os("main_" + c, "avant_bras_" + c, j("main"), [(j("main"), j(d + "1")) for d in DOIGTS])
-        for d in ("pouce",) + DOIGTS:
-            pts = [j(d + "1"), j(d + "2"), j(d + "3"), J["_bout_%s_G" % d] * m]
+            axis = (b - a) / np.linalg.norm(b - a)
+            for i, t in enumerate(tiers):
+                os("%s_twist%d_%s" % (name, i + 1, c), parent, a + t * (b - a), [],
+                   {"sort": sort, "source": source, "axis": [float(x) for x in axis], "fraction": float(t)})
+        os("shoulder_" + c, "upper_chest", j("shoulder"), [(j("shoulder"), j("arm"))])
+        os("arm_" + c, "shoulder_" + c, j("arm"), [(j("arm"), j("forearm"))])
+        tors("arm", "arm_" + c, j("arm"), j("forearm"), "holds", "arm_" + c, (0.0,) + TWIST)
+        os("forearm_" + c, "arm_" + c, j("forearm"), [(j("forearm"), j("hand"))])
+        tors("forearm", "forearm_" + c, j("forearm"), j("hand"), "follows", "hand_" + c, TWIST + (1.0,))
+        os("hand_" + c, "forearm_" + c, j("hand"), [(j("hand"), j(d + "1")) for d in FINGERS])
+        for d in ("thumb",) + FINGERS:
+            pts = [j(d + "1"), j(d + "2"), j(d + "3"), J["_tip_%s_L" % d] * m]
             for i in range(3):
-                os("%s%d_%s" % (d, i + 1, c), "main_" + c if i == 0 else "%s%d_%s" % (d, i, c), pts[i], [(pts[i], pts[i + 1])])
-        os("cuisse_" + c, "bassin", j("cuisse"), [(j("cuisse"), j("jambe"))])
-        tors("cuisse", "cuisse_" + c, j("cuisse"), j("jambe"), "retient", "cuisse_" + c, (0.0,) + TORSION)
-        os("jambe_" + c, "cuisse_" + c, j("jambe"), [(j("jambe"), j("pied"))])
-        os("pied_" + c, "jambe_" + c, j("pied"), [(j("pied"), j("orteils")), (j("pied"), J["_talon_G"] * m)])
-        os("orteils_" + c, "pied_" + c, j("orteils"), [])
+                os("%s%d_%s" % (d, i + 1, c), "hand_" + c if i == 0 else "%s%d_%s" % (d, i, c), pts[i], [(pts[i], pts[i + 1])])
+        os("thigh_" + c, "pelvis", j("thigh"), [(j("thigh"), j("leg"))])
+        tors("thigh", "thigh_" + c, j("thigh"), j("leg"), "holds", "thigh_" + c, (0.0,) + TWIST)
+        os("leg_" + c, "thigh_" + c, j("leg"), [(j("leg"), j("foot"))])
+        os("foot_" + c, "leg_" + c, j("foot"), [(j("foot"), j("toes")), (j("foot"), J["_heel_L"] * m)])
+        os("toes_" + c, "foot_" + c, j("toes"), [])
         for k in range(1, 6):
-            os("orteil%d_%s" % (k, c), "orteils_" + c, j("orteil%d" % k), [(j("orteil%d" % k), J["_bout_orteil%d_G" % k] * m)])
+            os("toe%d_%s" % (k, c), "toes_" + c, j("toe%d" % k), [(j("toe%d" % k), J["_tip_toe%d_L" % k] * m)])
     return os_
 
 
 # ------------------------------------------------------------------------------------------ kinematics
-def _roulis(q, axe):
+def _roll(q, axis):
     """Part of a rotation that turns about an axis (swing / twist decomposition)."""
-    p = np.dot(q[1:], axe) * np.asarray(axe)
+    p = np.dot(q[1:], axis) * np.asarray(axis)
     r = np.r_[q[0], p]
     n = np.linalg.norm(r)
-    return r / n if n > 1e-9 else CIN.IDENTITE.copy()
+    return r / n if n > 1e-9 else KIN.IDENTITY.copy()
 
 
-class Squelette:
+class Skeleton:
     def __init__(self, os_):
         self.os = os_
-        self.noms = [o["nom"] for o in os_]
-        self.i = {n: k for k, n in enumerate(self.noms)}
-        self.tetes = np.array([o["pos"] for o in os_])
+        self.names = [o["name"] for o in os_]
+        self.i = {n: k for k, n in enumerate(self.names)}
+        self.heads = np.array([o["pos"] for o in os_])
         self.parents = np.array([-1 if o["parent"] is None else self.i[o["parent"]] for o in os_])
-        self.de_mmd = {o["mmd"]: o["nom"] for o in os_ if o["mmd"]}
+        self.of_mmd = {o["mmd"]: o["name"] for o in os_ if o["mmd"]}
         n = len(os_)
-        self._rien = (np.full(n, -1), np.zeros(n), np.zeros(n, bool), np.zeros(n, bool))
+        self._nothing = (np.full(n, -1), np.zeros(n), np.zeros(n, bool), np.zeros(n, bool))
 
-    def miroir(self):
+    def mirror(self):
         """Index of the opposite bone."""
-        return np.array([self.i.get(n[:-2] + ("_D" if n.endswith("_G") else "_G"), k) if n[-2:] in ("_G", "_D") else k
-                         for k, n in enumerate(self.noms)])
+        return np.array([self.i.get(n[:-2] + ("_R" if n.endswith("_L") else "_L"), k) if n[-2:] in ("_L", "_R") else k
+                         for k, n in enumerate(self.names)])
 
-    def poser(self, rotations):
+    def place(self, rotations):
         """World matrices (R, t) for local rotations given by bone name; the twist follows on its own."""
         rot = {self.i[n]: np.asarray(q, float) for n, q in rotations.items()}
         for k, o in enumerate(self.os):
-            t = o["torsion"]
+            t = o["twist"]
             if not t:
                 continue
-            r = _roulis(rot.get(self.i[t["source"]], CIN.IDENTITE), t["axe"])
-            rot[k] = CIN.q_puissance(r, t["part"] - 1.0 if t["sorte"] == "retient" else t["part"])
-        return CIN.cinematique(self.tetes, self.parents, *self._rien, rotations=rot)
+            r = _roll(rot.get(self.i[t["source"]], KIN.IDENTITY), t["axis"])
+            rot[k] = KIN.q_power(r, t["fraction"] - 1.0 if t["sort"] == "holds" else t["fraction"])
+        return KIN.kinematics(self.heads, self.parents, *self._nothing, rotations=rot)
 
 
-def ecrire(os_, chemin):
-    with open(chemin, "w", encoding="utf-8") as f:
-        json.dump({"unite": "cm", "repere": "y up, front -z, character's left +x",
-                   "torsion": "retient: the bone undoes (1 - part) of the roll of its source about the axis; "
-                              "suit: the bone takes part of the roll of its source about the axis",
-                   "os": os_}, f, ensure_ascii=False, indent=1)
+def write(os_, path):
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump({"unit": "cm", "frame": "y up, front -z, character's left +x",
+                   "twist": "holds: the bone undoes (1 - fraction) of the roll of its source about the axis; "
+                              "follows: the bone takes the fraction of the roll of its source about the axis",
+                   "bones": os_}, f, ensure_ascii=False, indent=1)
 
 
-def lire(chemin):
-    with open(chemin, encoding="utf-8") as f:
-        return Squelette(json.load(f)["os"])
+def read(path):
+    with open(path, encoding="utf-8") as f:
+        return Skeleton(json.load(f)["bones"])
 
 
 def main():
     import pmx as PMX
-    g = M.charger()
-    os_ = construire(g)
+    g = M.load()
+    os_ = build(g)
     a = sys.argv[1:]
-    if "--sortie" in a:
-        ecrire(os_, a[a.index("--sortie") + 1])
-    Z = PMX.lire(os.path.join(os.path.dirname(M.FORME), "corps.pmx"))
-    z = {o["nom"]: np.array(o["pos"]) * 8 for o in Z["os"]}
+    if "--output" in a:
+        write(os_, a[a.index("--output") + 1])
+    Z = PMX.read(os.path.join(os.path.dirname(M.SHAPE), "body.pmx"))
+    z = {o["name"]: np.array(o["pos"]) * 8 for o in Z["bones"]}
     print("%d bones. Gap to the ZZZ bone with the same role (cm):" % len(os_))
     for o in os_:
-        if o["mmd"] in z and not o["nom"].endswith("_D"):
+        if o["mmd"] in z and not o["name"].endswith("_R"):
             p = np.array(o["pos"])
             print("  %-16s %-7s (%6.1f %6.1f %6.1f)  ZZZ (%6.1f %6.1f %6.1f)  gap %4.1f   %s" % (
-                o["nom"], o["mmd"], *p, *z[o["mmd"]], np.linalg.norm(p - z[o["mmd"]]), o["mesure"] or ""))
+                o["name"], o["mmd"], *p, *z[o["mmd"]], np.linalg.norm(p - z[o["mmd"]]), o["measure"] or ""))
 
 
 if __name__ == "__main__":
