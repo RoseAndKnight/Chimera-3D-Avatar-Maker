@@ -1,7 +1,7 @@
 """A head read from a GLB (a studio other than the active game): same attributes as head.Head for
 registration onto the pivot head (pivot.register_one, registration.register) and the signature spectrum.
 
-    python3 -I tools/head/head_glb.py inspecter <model.glb>     # materials, chosen skin, landmarks
+    python3 -I tools/head/head_glb.py inspect <model.glb>     # materials, chosen skin, landmarks
 
 Reading: binary glTF 2.0 in numpy (JSON + buffer), rest positions of the primitives (bind
 pose, mesh frame), without the morphs. The face skin is the material whose
@@ -41,7 +41,7 @@ SKIN_EXCLUDED = ("mask", "eye", "brow", "hair", "lash", "jiemao", "mei", "teeth"
 EYES_PATTERNS = ("_eyes", "eyeball", "_eye", "eye", "white_of_eyes")
 EYES_EXCLUDED = ("brow", "lash", "bantou", "touming", "gaoguang", "highlight", "shadow")
 EYEBROWS_PATTERNS = ("brow", "meimao", "_mei", "eyebrows")
-HAIR_PATTERNS = ("hair", "chevelure")
+HAIR_PATTERNS = ("hair", "chevelure")   # fr-ok: material name written in some models
 # typical interocular distance of the active game's heads (MMD units, description: heads.typical_eye_gap): used to
 # bring the head to a similar scale
 IOD_GAME = games.active().value("heads.typical_eye_gap")
@@ -468,7 +468,7 @@ def main(argv=None):
     import argparse
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sp = ap.add_subparsers(dest="cmd", required=True)
-    p = sp.add_parser("inspecter")
+    p = sp.add_parser("inspect")
     p.add_argument("glb", nargs="+")
     a = ap.parse_args(argv)
     for c in a.glb:

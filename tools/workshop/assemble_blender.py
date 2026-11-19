@@ -37,10 +37,10 @@ def recolor(path, sel, hair):
     hair = set(hair)
     t = sel["tint"]
     tr, tg, tb = t["r"], t["g"], t["b"]
-    vcible = max(tr, tg, tb)
-    scible = 0.0 if vcible <= 0 else 1 - min(tr, tg, tb) / vcible
+    target_v = max(tr, tg, tb)
+    target_s = 0.0 if target_v <= 0 else 1 - min(tr, tg, tb) / target_v
     # target tint as saturated RGB, recomposed on each pixel
-    pure = np.array([tr, tg, tb]) / max(vcible, 1e-6)
+    pure = np.array([tr, tg, tb]) / max(target_v, 1e-6)
     ref = max(float(t.get("ref") or 0.5), 1e-3)
     made = {}
     for m in P["materials"]:
@@ -56,8 +56,8 @@ def recolor(path, sel, hair):
             im.pixels.foreach_get(px)
             px = px.reshape(h, w, 4)
             v = px[..., :3].max(2)
-            v2 = np.minimum(v * vcible / ref, 1.0)
-            rgb = (v2[..., None] * pure) * scible + v2[..., None] * (1 - scible)
+            v2 = np.minimum(v * target_v / ref, 1.0)
+            rgb = (v2[..., None] * pure) * target_s + v2[..., None] * (1 - target_s)
             px[..., :3] = rgb
             name, _ = os.path.splitext(rel)
             new = name + "_tint.png"

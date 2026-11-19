@@ -270,17 +270,17 @@ def zone_mouth(T, mats, W, H):
             int(uv[:, 0].max() * W) + m, min(H, int(uv[:, 1].max() * H) + m))
 
 
-def texture_iris(path_tex_face, frames, path_iris, output, T=None, erase=(), mouth=None, mats_mouth=()):
+def texture_iris(path_tex_face, frames, path_iris, output, T=None, wiped=(), mouth=None, mats_mouth=()):
     """Copy of the face texture where each iris frame receives the image path_iris (blended by its alpha);
-    the pixels under the faces effacer become transparent (the viewer discards them). mouth: repainted image of the
+    the pixels under the faces listed in wiped become transparent (the viewer discards them). mouth: repainted image of the
     mouth area (zone_mouth of materials mats_mouth), pasted as is (blended by its alpha)."""
     background = bpy.data.images.load(path_tex_face, check_existing=False)
     W, H = background.size
     px = np.empty(W * H * 4, np.float32)
     background.pixels.foreach_get(px)
     px = px.reshape(H, W, 4)   # row 0 at the bottom
-    if len(erase):
-        px[_mask_faces(T, erase, W, H)[::-1], 3] = 0.0
+    if len(wiped):
+        px[_mask_faces(T, wiped, W, H)[::-1], 3] = 0.0
     for x0, y0, x1, y1 in frames:
         c0, c1 = int(round(x0 * W)), int(round(x1 * W))
         l0, l1 = int(round(y0 * H)), int(round(y1 * H))   # rows from the top
@@ -339,19 +339,19 @@ def glb_head(res, R, output, iris=None, mouth=None):
     t_vis = R["materials"][names.index("目")]["texture"] if "目" in names else -1
     if (iris or mouth) and 0 <= t_vis < len(R["textures"]):
         i_eye = names.index("目")
-        frames, erase = _iris_and_texture_layers(T, i_eye) if iris else ([], np.zeros((0, 3), int))
+        frames, wiped = _iris_and_texture_layers(T, i_eye) if iris else ([], np.zeros((0, 3), int))
         if frames:
             with_eyes = {i_eye}
             for j, n in enumerate(names):
                 if n == "目光" and R["materials"][j]["texture"] == t_vis:
                     with_eyes.add(j)
-                    erase = np.concatenate([erase, T["faces"][T["mat_face"] == j]])
+                    wiped = np.concatenate([wiped, T["faces"][T["mat_face"] == j]])
         mats_mouth = [j for j in mats_mouth if R["materials"][j]["texture"] == t_vis] if mouth else []
         if mats_mouth:
             with_eyes |= {j for j, n in enumerate(names) if n in ("齿", "口舌", "口线") and R["materials"][j]["texture"] == t_vis}
         if with_eyes:
             dest = os.path.join(os.path.dirname(output), "eyes.png")
-            texture_iris(path_tex(res, R["textures"][t_vis]), frames, iris, dest, T=T, erase=erase,
+            texture_iris(path_tex(res, R["textures"][t_vis]), frames, iris, dest, T=T, wiped=wiped,
                          mouth=mouth if mats_mouth else None, mats_mouth=mats_mouth)
             url_eyes = texture(dest)
     prims, mats = [], []

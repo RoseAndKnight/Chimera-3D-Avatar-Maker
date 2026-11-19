@@ -31,8 +31,8 @@ LENGTH = 0.06     # ray towards the body: beyond it, the upper part is no longer
 
 # Reference outfits: what is really put together in the workshop, from tight layers to loose ones. They name
 # catalogue parts (character__id), so from the active game and the house: description tools/games/<game>/game.json,
-# "etudes.outfits_layers".
-OUTFITS = games.active().value("etudes.outfits_layers", {})
+# "studies.outfits_layers".
+OUTFITS = games.active().value("studies.outfits_layers", {})
 
 
 def seeds(V, F):
@@ -76,7 +76,7 @@ def pair(L, U, cp):
     depth = inside[outside] * 1000
     return {"under": L.id, "over": U.id,
             "crossings": int(len(X)),
-            "recouvrement_cm2": round(float(area[covered].sum()) * 1e4, 1),
+            "overlap_cm2": round(float(area[covered].sum()) * 1e4, 1),
             "outside_cm2": round(float(area[outside].sum()) * 1e4, 1),
             "flared_cm2": round(area_flared * 1e4, 1),
             "outside_mm_median": round(float(np.median(depth)), 1) if len(depth) else 0.0,
@@ -126,7 +126,7 @@ def main():
         for r in res:
             if r["crossings"] or r["outside_cm2"] >= 0.5:
                 print("    %-22s under %-22s %5d crossings, %7.1f cm² outside of %7.1f, median %.1f mm, worst %.1f mm" % (
-                    r["under"], r["over"], r["crossings"], r["outside_cm2"], r["recouvrement_cm2"],
+                    r["under"], r["over"], r["crossings"], r["outside_cm2"], r["overlap_cm2"],
                     r["outside_mm_median"], r["outside_mm_max"]))
         all_[name] = {"assessment": b, "pairs": [{k: v for k, v in r.items() if k not in ("points", "cross")} for r in res]}
     if a.json:

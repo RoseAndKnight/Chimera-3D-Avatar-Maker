@@ -14,14 +14,14 @@ from mathutils import Vector
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "atlas"))
 import pmx as PMX
 
-COLUMNS = (("face", 0, {}), ("trois_quarts", 35, {}), ("profile", 90, {}),
+COLUMNS = (("face", 0, {}), ("three_quarters", 35, {}), ("profile", 90, {}),
             ("blink", 0, {"まばたき": 1.0}), ("smile", 0, {"笑い": 1.0, "口角上げ": 1.0}),
             ("a", 0, {"あ": 1.0}))
 HIDDEN = ("髮+",)  # duplicated hair outline
-COLUMNS_HAIRSTYLE = (("face", 0, {}), ("trois_quarts", 35, {}), ("profile", 90, {}), ("back", 180, {}))
+COLUMNS_HAIRSTYLE = (("face", 0, {}), ("three_quarters", 35, {}), ("profile", 90, {}), ("back", 180, {}))
 TX, TY = 400, 460
 _E = int(os.environ.get("SHEET_SCALE", "1"))  # enlarge the tiles for an image to show
-# SHEET_COLUMNS=face,trois_quarts: render only these columns (compare candidates more cheaply)
+# SHEET_COLUMNS=face,three_quarters: render only these columns (compare candidates more cheaply)
 TX, TY = TX * _E, TY * _E
 FRAME_EYES = os.environ.get("SHEET_FRAME") == "eyes"
 MARGIN_EYES = (0.35, 1.2)  # margin around the box of both eye whites, as a fraction of its width / height
@@ -193,7 +193,7 @@ def main():
     hairstyle = a[0] == "--hairstyle"
     a = a[1:] if hairstyle else a
     columns = COLUMNS_HAIRSTYLE if hairstyle else COLUMNS
-    keep = os.environ.get("SHEET_COLUMNS")  # e.g. "face,trois_quarts": quick comparison sheet
+    keep = os.environ.get("SHEET_COLUMNS")  # e.g. "face,three_quarters": quick comparison sheet
     if keep:
         columns = tuple(c for c in columns if c[0] in keep.split(","))
     output, pairs = a[0], list(zip(a[1::2], a[2::2]))

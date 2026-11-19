@@ -1,6 +1,7 @@
 """Import, extraction and export of the workshop (inputs.py) and their routes: guards, booby-trapped archives,
 rejected formats, list of formats true to the game descriptions. Nothing is converted or started (no Blender); the
 cancellation test runs a small stand-in tool."""
+# fr-ok-words: Élise, été -- accented names (a person's name, a French word) are the point of these tests
 import http.client
 import io
 import json
@@ -166,7 +167,7 @@ class TestImportRefused(Tray):
             with self.assertRaises(E.Refusals) as r:
                 E.header_vrm(self.deposit(bytes_))
             self.assertIn(expected, str(r.exception))
-        self.assertEqual(E.header_vrm(self.deposit(one_glb({"VRM": {"meta": {"title": "Elle"}}}))), "Elle")
+        self.assertEqual(E.header_vrm(self.deposit(one_glb({"VRM": {"meta": {"title": "Alice"}}}))), "Alice")
         self.assertEqual(E.header_vrm(self.deposit(one_glb({"VRMC_vrm": {"specVersion": "1.0", "meta": {"name": "Lui"}}}))), "Lui")
 
     def test_already_ingested_and_received_efface(self):
@@ -178,13 +179,13 @@ class TestImportRefused(Tray):
         self.assertFalse(os.path.exists(c))
 
     def test_names(self):
-        self.assertEqual(E.identifier("C:\\x\\Élise été.vrm"), "Elise_ete")   # fr-ok: accented names are the point of the test
+        self.assertEqual(E.identifier("C:\\x\\Élise été.vrm"), "Elise_ete")
         self.assertEqual(E.identifier("../../etc/passwd.zip"), "passwd")
         with self.assertRaises(E.Refusals):
             E.identifier("日本.vrm")
         self.assertEqual(E.clean_name("  Rose <script>/../  "), "Rose script")
         self.assertEqual(len(E.clean_name("a" * 200)), 60)
-        self.assertEqual(E.name_download("Élise \"x\"", "p"), ("Elise_x", "Élise x"))   # fr-ok: accented names are the point of the test
+        self.assertEqual(E.name_download("Élise \"x\"", "p"), ("Elise_x", "Élise x"))
 
 
 class TestFormatsFaithful(unittest.TestCase):
@@ -245,7 +246,7 @@ class TestRoutes(Tray):
         self.assertEqual(self.request("POST", "/api/extract", b'{"models": ["../x"]}', **j)[0], 400)
         self.assertEqual(self.request("POST", "/api/extract", b'{"all": true}', **j)[0], 400)   # no model
         os.makedirs(os.path.join(self.tmp, "mmd_extracted", "A"))
-        self.assertEqual(self.request("POST", "/api/extract", b'{"all": true, "what": ["mouvement"]}', **j)[0], 400)
+        self.assertEqual(self.request("POST", "/api/extract", b'{"all": true, "what": ["motion"]}', **j)[0], 400)
         E._extraction.acquire()          # an extraction is already running
         try:
             s, b, _ = self.request("POST", "/api/extract", b'{"models": ["A"]}', **j)
@@ -309,9 +310,9 @@ class TestRoutes(Tray):
             with open(os.path.join(d, f), "wb") as o:
                 o.write(b)
         with open(os.path.join(d, "selection.json"), "w") as o:
-            json.dump({"head": "t", "hairstyle": "c", "parts": [], "name": "Élise"}, o)   # fr-ok: accented display name kept as is
+            json.dump({"head": "t", "hairstyle": "c", "parts": [], "name": "Élise"}, o)
         items = lu(self.request("GET", "/api/assemblies")[1])
-        self.assertEqual((items[0]["name"], items[0]["formats"]), ("Élise", ["pmx", "vrm"]))   # fr-ok: accented display name kept as is
+        self.assertEqual((items[0]["name"], items[0]["formats"]), ("Élise", ["pmx", "vrm"]))
         s, b, r = self.request("GET", "/api/assemblies/20261117-101010/vrm")
         self.assertEqual((s, b), (200, b"V"))
         self.assertIn('attachment; filename="Elise.vrm"', r.getheader("Content-Disposition"))

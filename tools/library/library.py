@@ -50,7 +50,7 @@ def main(a):
         statuses = _option(a, "--statuses")
         repo = _option(a, "--repo", "Rose-and-Knight/chimera-vroid-library")
         if not statuses:
-            sys.exit("--statuses <statuses.json> is needed (status of each VRoid Hub model: originale, fan…)")
+            sys.exit("--statuses <statuses.json> is needed (status of each VRoid Hub model, as written in the maintainer's file)")
         if command == "build":
             P.build(a[0], a[1], statuses, repo=repo)
             return 1 if P.check(a[1], statuses) else 0

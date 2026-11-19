@@ -122,7 +122,7 @@ def pose_bench(name, sq, sides=("L", "R")):
             _add(r, _rot_to(sq, _name(c, "足"), _name(c, "ひざ"), FRONT, 110))
             _add(r, _rot_to(sq, _name(c, "ひざ"), _name(c, "足首"), -FRONT, 140))
             _add(r, _rot_to(sq, _name(c, "足首"), _name(c, "つま先"), TOP, 30))
-    elif name == "ASSIS":      # sitting on a chair (outside the bench): hips and knees at 90°
+    elif name == "SEATED":      # sitting on a chair (outside the bench): hips and knees at 90°
         for c in sides:
             _add(r, _rot_to(sq, _name(c, "足"), _name(c, "ひざ"), FRONT, 90))
             _add(r, _rot_to(sq, _name(c, "ひざ"), _name(c, "足首"), -FRONT, 90))
@@ -571,14 +571,14 @@ def d10_margin(positions_a, touched, amplitudes):
     """D10: first amplitude (in the given order) where `touched(positions)` is true.
 
     positions_a(amplitude) -> posed positions; touched(positions) -> bool (D4 against the
-    body). Returns {"margin": amplitude or None if nothing touches, "derniere_free": the last amplitude without contact}.
+    body). Returns {"margin": amplitude or None if nothing touches, "last_free": the last amplitude without contact}.
     Quantity without a threshold, compared between intact and ablation."""
     free = None
     for a in amplitudes:
         if touched(positions_a(a)):
-            return {"margin": float(a), "derniere_free": free}
+            return {"margin": float(a), "last_free": free}
         free = float(a)
-    return {"margin": None, "derniere_free": free}
+    return {"margin": None, "last_free": free}
 
 
 def rotation_chain(sq, root, axe_rotation, degrees, rotations=None):

@@ -30,6 +30,16 @@ def pmx(textures, rest=b"MATERIALS AND THE REST"):
     return d + rest
 
 
+def pmx_morphs(names, textures=("skin.png",)):
+    """pmx() with a readable tail: no material nor bone, one vertex morph per name, no frame, body or joint."""
+    tail = struct.pack("<ii", 0, 0) + struct.pack("<i", len(names))
+    for n in names:
+        b = n.encode("utf-16-le")
+        tail += struct.pack("<i", len(b)) + b + struct.pack("<i", len(b)) + b + bytes([4, 1])
+        tail += struct.pack("<i", 1) + bytes([0]) + struct.pack("<3f", 0.0, 0.1, 0.0)
+    return pmx(list(textures), tail + struct.pack("<iii", 0, 0, 0))
+
+
 def write(p, content):
     os.makedirs(os.path.dirname(p), exist_ok=True)
     with open(p, "wb" if isinstance(content, bytes) else "w") as f:
@@ -124,7 +134,7 @@ class Migration(unittest.TestCase):
                          "jupe")
         self.assertEqual(M.check(D), [])
         self.assertTrue(M.check(self.saved))
-        self.assertEqual(read(os.path.join(c, "hairstyles", "Libre", "meta.json"))["fingerprint"],   # inside a signature
+        self.assertEqual(read(os.path.join(c, "hairstyles", "Free", "meta.json"))["fingerprint"],   # inside a signature
                          "v9:A:" + M.fingerprint(os.path.join(D, "vroid-base", "hairstyle.pmx")))
         # again: nothing to do, nothing changes
         before = read(os.path.join(c, "parts", "A__skirt-2", "meta.json"))
@@ -221,14 +231,14 @@ class Migration(unittest.TestCase):
 
 
 class Revision1(unittest.TestCase):
-    """A format-2 folder converted before revision 1: only the names inside files change, the backup keeps its own."""
+    """A format-2 folder converted before revisions 1 and 2: only the names inside files change, the backup keeps its own."""
     def test_inside_files(self):
         import pickle
         import numpy as np
         with tempfile.TemporaryDirectory() as tmp:
             D = os.path.join(tmp, "data")
             write(os.path.join(D, F.MARKER), {"format": 2})
-            write(os.path.join(D, LOG_NAME), {"done": [p for p in M.PHASES if p != "revision-1"]})
+            write(os.path.join(D, LOG_NAME), {"done": [p for p in M.PHASES if p not in ("revision-1", "revision-2")]})
             rig = os.path.join(D, "body", "own-rig")
             write(os.path.join(rig, "skeleton.json"), {"unite": "cm", "repere": "y", "torsion": "t", "bones": [
                 {"name": "racine", "parent": None, "torsion": None, "mesure": None},
@@ -246,7 +256,7 @@ class Revision1(unittest.TestCase):
             self.assertTrue(M.check(D))
             self.assertEqual(M.main([D]), 0)
             self.assertEqual(M.check(D), [])
-            self.assertEqual(F.revision_of(D), 1)
+            self.assertEqual(F.revision_of(D), F.REVISION)
             sk = read(os.path.join(rig, "skeleton.json"))
             self.assertEqual(list(sk)[:3], ["unit", "frame", "twist"])
             b = sk["bones"][1]
@@ -268,6 +278,82 @@ class Revision1(unittest.TestCase):
             # the backup (other names of the same files) is untouched
             self.assertEqual(sorted(np.load(os.path.join(D + ".format-1", "hairstyle.npz")).files), ["coiffure", "oreilles", "os"])
             self.assertEqual(M.main([D]), 0)                 # a second run changes nothing
+
+
+class Revision2(unittest.TestCase):
+    """A folder at revision 1: the ids, folders, built parts and morph names format 2 forgot get their English
+    names; the fingerprints of moved files follow; a cache in another folder follows its data folder."""
+    def test_names_forgotten(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            D = os.path.join(tmp, "data")
+            write(os.path.join(D, F.MARKER), {"format": 2, "revision": 1})
+            write(os.path.join(D, LOG_NAME), {"done": [p for p in M.PHASES if p not in ("revision-2", "marker")]})
+            c = os.path.join(D, "workshop-vroid-base")
+            write(os.path.join(c, "catalog.json"), {"heads": [{"id": "Libre"}, {"id": "A"}]})
+            write(os.path.join(c, "labels.json"), {"heads/Libre": {"name": ["Free", "Libre"]}})
+            write(os.path.join(c, "heads", "Libre", "meta.json"), {"id": "Libre"})
+            hair = os.path.join(D, "vroid-base", "hairstyle.pmx")
+            write(hair, pmx(["skin.png"]))
+            write(os.path.join(c, "hairstyles", "Libre", "meta.json"),
+                  {"id": "Libre", "fingerprint": "v9:A,Libre,Zed:" + M.fingerprint(hair)})
+            write(os.path.join(c, "hairstyles", "Libre", "Libre.bin"), b"bin")
+            body = os.path.join(D, "clothes", "tenue", "corps_refait", "body.pmx")
+            write(body, pmx_morphs(["forme_waist", "smile"]))
+            write(os.path.join(D, "clothes", "tenue-maelys-2", "result.pmx"), pmx(["skin.png"]))
+            write(os.path.join(D, "trials", "maelys", "essais", "sur-A-cheveux-B", "x.json"), {"a": 1})
+            built = os.path.join(c, "fabriquees", "Maelys", "debardeur")
+            write(os.path.join(built, "debardeur.pmx"), pmx(["skin.png"]))
+            src = os.path.join(D, "clothes", "tenue-maelys-2", "result.pmx")
+            write(os.path.join(built, "record.json"), {"atelier": {"source": src, "fingerprint": M.fingerprint(src)},
+                                                       "built": M.fingerprint(os.path.join(built, "debardeur.pmx"))})
+            write(os.path.join(c, "parts", "Maelys__debardeur", "meta.json"), {"id": "Maelys__debardeur"})
+            # a cache of its own, outside, made from this folder's outfit
+            out = os.path.join(tmp, "outside")
+            write(os.path.join(out, "catalog.json"), {"parts": [{"id": "Maelys__debardeur", "source": src,
+                                                                  "fingerprint": M.fingerprint(src)}]})
+            write(os.path.join(out, "parts", "Maelys__debardeur", "meta.json"), {"id": "Maelys__debardeur"})
+            write(os.path.join(out, F.MARKER), {"format": 2, "revision": 1})
+            write(os.path.join(out, LOG_NAME), {"done": [p for p in M.PHASES if p not in ("revision-2", "marker")]})
+            size, mtime = os.path.getsize(body), os.stat(body).st_mtime_ns
+            os.system("cp -al '%s' '%s'" % (D, D + ".format-1"))
+            self.assertTrue(M.check(D))
+            with self.assertRaises(SystemExit):              # the cache before its data folder: refused, untouched
+                M.main([out])
+            self.assertEqual(read(os.path.join(out, "catalog.json"))["parts"][0]["source"], src)
+            self.assertEqual(M.main([D]), 0)
+            self.assertEqual(M.main([out]), 0)
+            self.assertEqual(M.check(D), [])
+            self.assertEqual(M.check(out), [])
+            self.assertEqual(F.revision_of(D), 2)
+            self.assertEqual(read(os.path.join(c, "catalog.json"))["heads"][0]["id"], "Free")
+            self.assertEqual(list(read(os.path.join(c, "labels.json"))), ["heads/Free"])
+            self.assertEqual(read(os.path.join(c, "heads", "Free", "meta.json")), {"id": "Free"})
+            nhair = os.path.join(D, "vroid-base", "hairstyle.pmx")
+            self.assertEqual(read(os.path.join(c, "hairstyles", "Free", "meta.json"))["fingerprint"],
+                             "v9:A,Free,Zed:" + M.fingerprint(nhair))
+            self.assertTrue(os.path.isfile(os.path.join(c, "hairstyles", "Free", "Free.bin")))
+            nbody = os.path.join(D, "clothes", "outfit", "rebuilt-body", "body.pmx")
+            self.assertEqual((os.path.getsize(nbody), os.stat(nbody).st_mtime_ns), (size, mtime))
+            sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(HERE)), "atlas"))
+            import pmx as PMX
+            self.assertEqual([m["name"] for m in PMX.read(nbody)["morphs"]], ["shape_waist", "smile"])
+            self.assertTrue(os.path.isdir(os.path.join(D, "trials", "maelys", "trials", "on-A-hair-B")))
+            nsrc = os.path.join(D, "clothes", "outfit-maelys-2", "result.pmx")
+            nbuilt = os.path.join(c, "built", "Maelys", "tank_top")
+            r = read(os.path.join(nbuilt, "record.json"))
+            self.assertEqual(r["workshop"], {"source": nsrc, "fingerprint": M.fingerprint(nsrc)})
+            self.assertEqual(r["built"], M.fingerprint(os.path.join(nbuilt, "tank_top.pmx")))
+            self.assertTrue(os.path.isdir(os.path.join(c, "parts", "Maelys__tank_top")))
+            p = read(os.path.join(out, "catalog.json"))["parts"][0]
+            self.assertEqual(p, {"id": "Maelys__tank_top", "source": nsrc, "fingerprint": M.fingerprint(nsrc)})
+            # the backup keeps its names, and the old morph names
+            old = os.path.join(D + ".format-1", "clothes", "tenue", "corps_refait", "body.pmx")
+            self.assertEqual([m["name"] for m in PMX.read(old)["morphs"]], ["forme_waist", "smile"])
+            self.assertEqual(read(os.path.join(D + ".format-1", "workshop-vroid-base", "catalog.json"))["heads"][0]["id"],
+                             "Libre")
+            before = read(os.path.join(nbuilt, "record.json"))
+            self.assertEqual(M.main([D]), 0)                 # a second run changes nothing
+            self.assertEqual(read(os.path.join(nbuilt, "record.json")), before)
 
 
 LOG_NAME = M.LOG

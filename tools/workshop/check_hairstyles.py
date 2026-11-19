@@ -169,7 +169,7 @@ def measure(name, scene):
     worst = max(views, key=lambda v: v["pixels"])
     return {"hairstyle": name, "head": scene.head, "hole_cm2": round(cm2, 2),
             "worst_view": list(worst["view"]), "worst_cm2": round(worst["pixels"] * (PIXEL * 100) ** 2, 2),
-            "touchee": worst["pixels"] * (PIXEL * 100) ** 2 > VIEW_CM2, "_views": views}
+            "flagged": worst["pixels"] * (PIXEL * 100) ** 2 > VIEW_CM2, "_views": views}
 
 
 def image(v):
@@ -226,9 +226,9 @@ def main():
             continue
         res.append(r)
         print("%-14s skin through the hair %6.2f cm2 (worst view %s: %5.2f cm2)%s" % (
-            n, r["hole_cm2"], tuple(r["worst_view"]), r["worst_cm2"], "  FLAGGED" if r["touchee"] else ""), flush=True)
+            n, r["hole_cm2"], tuple(r["worst_view"]), r["worst_cm2"], "  FLAGGED" if r["flagged"] else ""), flush=True)
     res.sort(key=lambda r: -r["hole_cm2"])
-    touched = [r for r in res if r["touchee"]]
+    touched = [r for r in res if r["flagged"]]
     print("%d / %d hairstyles show skin through the hair on %s (over %.1f cm2 in one view)" % (len(touched), len(res), scene.head, VIEW_CM2))
     if a.json:
         C.write_json(a.json, {"head": scene.head, "thickness_m": THICKNESS, "threshold_view_cm2": VIEW_CM2,

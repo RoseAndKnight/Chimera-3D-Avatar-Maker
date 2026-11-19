@@ -38,7 +38,7 @@ _SIDE = [
 _SIDE_MIDDLE = re.compile(r"^(.+?)_([LR])_(.+)$")
 
 
-def separer_side(name):
+def split_side(name):
     """'左腕' -> ('腕', 'L') ; '腰キャンセル右' -> ('腰キャンセル', 'R') ; '頭' -> ('頭', None)."""
     n = nfkc(name)
     for rx, c in _SIDE:
@@ -54,7 +54,7 @@ def separer_side(name):
 
 def identifier(name):
     """Normalized identifier of §6.1: _L / _R instead of 左 / 右, NFKC digits."""
-    base, c = separer_side(name)
+    base, c = split_side(name)
     return base + ("_" + c if c else "")
 
 
@@ -65,7 +65,7 @@ def name_mirror(name):
     if "右" in name:
         return name.replace("右", "左")
     m = _SIDE_MIDDLE.match(nfkc(name))
-    if m and separer_side(name)[1] is not None and not any(rx.match(nfkc(name)) for rx, _ in _SIDE):
+    if m and split_side(name)[1] is not None and not any(rx.match(nfkc(name)) for rx, _ in _SIDE):
         return "%s_%s_%s" % (m.group(1), "R" if m.group(2) == "L" else "L", m.group(3))
     return None
 
@@ -82,7 +82,7 @@ SEMI_STANDARD_MMD = {"操作中心", "足IK親", "肩P", "肩C", "腕捩", "腕�
 def class__os(name, sheet=False):
     """SQ-01: standard_mmd, semi_standard_mmd or own. The "先" end bones
     (leaves whose name ends with 先) are semi-standard."""
-    base, _ = separer_side(name)
+    base, _ = split_side(name)
     if base in STANDARD_MMD:
         return "standard_mmd"
     if base in SEMI_STANDARD_MMD:
@@ -186,7 +186,7 @@ def family_os(name, manual=None):
     e = input_os(name, manual)
     if e is not None:
         return e["family"]
-    base, _ = separer_side(name)
+    base, _ = split_side(name)
     for f, rx in _FAMILIES:
         if rx.search(base):
             return f
@@ -202,7 +202,7 @@ def region_os(name, family):
     e = input_os(name)
     if e is not None and e.get("region"):
         return e["region"]
-    base, _ = separer_side(name)
+    base, _ = split_side(name)
     best, n = None, 0
     for r, rx in _REGIONS_OS:
         t = rx.search(base)
@@ -590,8 +590,8 @@ def _loop_empty(n_loops):
 
 def loop(pos, faces, origin, direction, length=1.0, t=0.0, mask_faces=None, choice="nearest"):
     """P-04: cut of the mesh by the plane perpendicular to `direction` going
-    through origin + t·longueur·direction. Returns the closed loop closest to
-    the axis: {closed, n_vertices, rayon, centre, normale, rms_plan, angle_axe, n_loops,
+    through origin + t·length·direction. Returns the closed loop closest to
+    the axis: {closed, n_vertices, radius, center, normal, rms_plan, angle_axe, n_loops,
     n_closed, dist_axe, points, edges (cut edge of each point, (a, b) with a < b)}.
     The shape is always the same: without a closed loop, closed is False, n_vertices 0,
     edges and points are empty, the geometric quantities are None.
@@ -673,7 +673,7 @@ def loop(pos, faces, origin, direction, length=1.0, t=0.0, mask_faces=None, choi
 
 # ======================================================================= UV channels (NO-08, IN-05)
 
-def r2_lineaire(X, Y):
+def r2_linear(X, Y):
     """R² (minimum over the columns of Y) of a linear regression with a constant."""
     if len(X) < 10:
         return None
@@ -757,7 +757,7 @@ def label_islands(lab_vertices, mat_vertex, pos):
 
 def density(pos, edges, mask_vertices, H):
     """P-06: mean length (in H) of the edges of `welded` touching the zone, and
-    density = 1 / length. Returns (longueur_H, density, n_edges)."""
+    density = 1 / length. Returns (length_H, density, n_edges)."""
     m = mask_vertices[edges[:, 0]] | mask_vertices[edges[:, 1]]
     if not m.any():
         return None, None, 0
@@ -1238,7 +1238,7 @@ def landmarks_face(pos, faces, group_face, name_mat_face, weight_head, H_tol=0.0
     out["nose"] = pos[sel[np.argmin(pos[sel, 1])]]
     out["skull"] = skull
     out["H"] = float(out["skull"][2] - out["chin"][2])
-    out["symetrie_iris_H"] = (float(np.linalg.norm(out["iris_L"] * [-1, 1, 1] - out["iris_R"]) / out["H"])
+    out["iris_symmetry_H"] = (float(np.linalg.norm(out["iris_L"] * [-1, 1, 1] - out["iris_R"]) / out["H"])
                               if a_iris else None)
     return out
 

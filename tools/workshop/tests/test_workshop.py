@@ -448,12 +448,12 @@ class TestSettingsLayers(unittest.TestCase):
         local = {"layers": {
             "garments": {"skirt": {"rank": 33}, "hood": None,
                          "kimono": {"tab": "top", "slot": "outer", "rank": 57, "name": "kimono"}},
-            "accessories": {"broche": {"rank": 79}, "corset": {"rank": 37, "exclusive": True, "belt_like": True}},
+            "accessories": {"brooch": {"rank": 79}, "corset": {"rank": 37, "exclusive": True, "belt_like": True}},
             "outfit": {"closed_bottoms": ["trousers"]},
             "thresholds": {"max_outward_mm": 10}}}
         code = ("import json, sys; sys.path.insert(0, %r); import common as C, outfit as CB; "
                 "print(json.dumps({'skirt': C.CLOTHES['skirt'], 'jacket': C.CLOTHES['jacket'], 'kimono': C.CLOTHES.get('kimono'), "
-                "'hood': 'hood' in C.CLOTHES, 'broche': C.ACCESSORIES.get('broche'), 'name_broche': C.FR_TYPE.get('broche'), "
+                "'hood': 'hood' in C.CLOTHES, 'brooch': C.ACCESSORIES.get('brooch'), 'name_brooch': C.FR_TYPE.get('brooch'), "
                 "'belts': sorted(C.BELTS), 'corset_env': C.enveloping({'tab': 'accessories', 'type': 'corset'}), "
                 "'range': C.arrange({'class': 'garment', 'type': 'skirt', 'tab': 'bottom', 'slot': 'bottom', 'rank': 32}), "
                 "'output': CB.OUTPUT_MAX, 'margin': CB.MARGIN_TUCKED, 'bottom_closed': CB.BOTTOM_CLOSED}))"
@@ -470,8 +470,8 @@ class TestSettingsLayers(unittest.TestCase):
         self.assertEqual(v["jacket"], ["top", "outer", 55])     # the rest of the table is there
         self.assertEqual(v["kimono"], ["top", "outer", 57])    # type added
         self.assertFalse(v["hood"])                           # null removes a type
-        self.assertEqual(v["broche"], [79, False])               # kind added, not exclusive by default
-        self.assertEqual(v["name_broche"], "broche")              # no name: its own
+        self.assertEqual(v["brooch"], [79, False])               # kind added, not exclusive by default
+        self.assertEqual(v["name_brooch"], "brooch")              # no name: its own
         self.assertEqual(v["belts"], ["belt", "corset"])
         self.assertTrue(v["corset_env"])
         self.assertEqual(v["range"]["rank"], 33)                 # a record prepared earlier takes today's rank
@@ -774,9 +774,9 @@ class TestTrackPerModel(unittest.TestCase):
         s = K.Track(["Belle", "Anby"])
         suite = [{"kind": "part", "id": C.the_key("Anby", "boots")}, {"kind": "hairstyle", "id": "Belle"},
                  {"kind": "part", "id": C.the_key("Belle", "gloves")}, {"kind": "hairstyle", "id": "Anby"},
-                 {"kind": "hairstyle_free", "id": "Libre"}, {"kind": "hairstyle", "id": "Jane"}]   # fr-ok: "Libre" is the id of the free head and hairstyle, a folder name in installed caches
+                 {"kind": "hairstyle_free", "id": "Free"}, {"kind": "hairstyle", "id": "Jane"}]
         s.sort(suite)
-        self.assertEqual([it["id"] for it in suite][:2], ["Libre", "Jane"])   # fr-ok: "Libre" is the id of the free head and hairstyle, a folder name in installed caches; shared work first
+        self.assertEqual([it["id"] for it in suite][:2], ["Free", "Jane"])   # shared work first
         self.assertEqual([it["id"] for it in suite][2:], ["Belle", C.the_key("Belle", "gloves"), "Anby", C.the_key("Anby", "boots")])
         output = io.StringIO()
         with contextlib.redirect_stdout(output):

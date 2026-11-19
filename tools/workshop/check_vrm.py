@@ -85,7 +85,7 @@ def main():
     path = os.path.abspath(a[0])
     output = a[a.index("--output") + 1] if "--output" in a else None
     bpy.ops.wm.read_factory_settings(use_empty=True)
-    tmp = os.path.join(os.environ.get("TMPDIR") or "/tmp", "verif-vrm-%d" % os.getpid())
+    tmp = os.path.join(os.environ.get("TMPDIR") or "/tmp", "check-vrm-%d" % os.getpid())
     os.makedirs(tmp, exist_ok=True)
     defaults = VR.validate(path)
     doc, _ = VR.read(path)
@@ -144,7 +144,7 @@ def main():
     if expr and moves_blink < 1e-3:
         defaults.append("the blink expression moves nothing")
     report = {"method": method, "bones": len(arm.data.bones), "humanoids": len(os_of), "expressions": sorted(expr), "targets": n_keys,
-               "pose_moved_m": round(moves, 3), "blink_moved_m": round(moves_blink, 4), "etirement": assessment_stretched,
+               "pose_moved_m": round(moves, 3), "blink_moved_m": round(moves_blink, 4), "stretch": assessment_stretched,
                "materials_mtoon": sum(1 for m in doc["materials"] if "VRMC_materials_mtoon" in m.get("extensions", {})), "defaults": defaults}
     print("vrm check:", json.dumps(report, ensure_ascii=False))
     if output:
@@ -162,7 +162,7 @@ def main():
         place_camera((0, 0, 0.88), (0.8, -3.6, 1.1))
         sc.render.filepath = os.path.join(output, "pose.png")
         bpy.ops.render.render(write_still=True)
-        with open(os.path.join(output, "verif.json"), "w") as f:
+        with open(os.path.join(output, "check.json"), "w") as f:
             json.dump(report, f, ensure_ascii=False, indent=1)
         print("rendered", name)
     shutil.rmtree(tmp, ignore_errors=True)

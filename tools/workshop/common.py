@@ -106,7 +106,7 @@ def launcher():
     import shlex
     v = R.value("compute.launcher", "") or ""
     return list(v) if isinstance(v, list) else shlex.split(v)
-# One metre = 12.5 MMD units (1 unit = 8 cm); 1 mm = 1/80 of a unit.
+# One meter = 12.5 MMD units (1 unit = 8 cm); 1 mm = 1/80 of a unit.
 METER = 0.08
 MM = 1 / 80.0
 

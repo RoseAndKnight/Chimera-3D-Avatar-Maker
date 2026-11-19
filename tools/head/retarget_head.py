@@ -228,7 +228,7 @@ def mode_shape(A, B, output):
     rec, w, X = place_face(A, XK, B, XB, on_place=True)
     # A's hair and ears do not move: the skin under the hair (B's shape would not be seen
     # there and would pierce the hair) and the ears keep their place on A
-    q, nfixe = zone_fixed(A)
+    q, n_fixed = zone_fixed(A)
     q = q * (1 - w)
     X = q[:, None] * XA + (1 - q[:, None]) * X
     # neck seam: gradual return to A
@@ -276,11 +276,11 @@ def mode_shape(A, B, output):
     eyes = 0.5 * (X[A.loop_eye["g"]].mean(0) + X[A.loop_eye["d"]].mean(0))[1]
     eyes0 = 0.5 * (XA[A.loop_eye["g"]].mean(0) + XA[A.loop_eye["d"]].mean(0))[1]
     chin, skull = X[A.landmarks["chin"], 1], B._host(np.array([[0.0, B.y_skull, 0.0]]))[0, 1]
-    info = {"scale_target": s, "etirement_face": K.round(4).tolist(), "zone_fixed": nfixe,
+    info = {"scale_target": s, "stretch_face": K.round(4).tolist(), "zone_fixed": n_fixed,
             "height_eyes_on_head": {"A": round(float((eyes0 - A.V[A.landmarks["chin"], 1]) / A.H_crane), 4),
                                       "result": round(float((eyes - chin) / (skull - chin)), 4)},
-            "icp_track": rec["track"], "vertices_suiveurs": int(len(others)),
-            "shift_max_suiveurs": float(np.linalg.norm(Dsh, axis=1).max()) if len(others) else 0.0,
+            "icp_track": rec["track"], "vertices_followers": int(len(others)),
+            "shift_max_followers": float(np.linalg.norm(Dsh, axis=1).max()) if len(others) else 0.0,
             "zone": {"face_w>0.5": int((w > 0.5).sum()), "band": int(((w > 0.02) & (w < 0.98)).sum()),
                      "crane_w<0.02": int((w <= 0.02).sum())}}
     return path, info, {"w": w, "p_neck": p, "q": q, "XB": XB, "rec": rec, "K": K,
@@ -895,7 +895,7 @@ def mode_face(A, B, output, proportions="target"):
             "morphs_from_A_added": [mor[k]["name"] for k in addition], "seam_harmony": harm,
             "refinement_B": refinement,
             "zone": {"face_w>0.5": int((w > 0.5).sum()), "band": int(((w > 0.02) & (w < 0.98)).sum())}}
-    return path, info, {"B_raffine": B, "w": w, "XB": XB, "rec": rec, "sel": sel, "hole": hole,
+    return path, info, {"B_refined": B, "w": w, "XB": XB, "rec": rec, "sel": sel, "hole": hole,
                           "loop_A": loop_A, "Lb": Lb, "idxA": idxA, "vertsB_kept": vertsB_kept,
                           "n_dup0": n_dup0, "n_dup": n_dup, "border_expected":
                           sum(len(x) for x in bp if x is not loop_A_raw) + sum(len(x) for x in br if x is not lb[0])}
@@ -958,7 +958,7 @@ def main(argv=None):
         path, info, inner = mode_shape(A, B, output)
     else:
         path, info, inner = mode_face(A, B, output, a.proportions)
-        B = inner.pop("B_raffine")
+        B = inner.pop("B_refined")
     log("result written: %s" % path)
     measures = VF.check(a.mode, A, B, path, inner, log=log)
     measures["entries"] = {"mode": a.mode, "source": A.summary(), "target": B.summary()}

@@ -48,7 +48,7 @@ DUPLICATES = {"左足": "左足D", "左ひざ": "左ひざD", "左足首": "左�
 EXPRESSIONS = {
     "happy": ["笑い", "にこり"], "angry": ["怒り", "怒り目"], "sad": ["悲しむ", "困る"], "surprised": ["びっくり"], "relaxed": ["じと目"],
     "blink": ["まばたき"], "blinkLeft": ["ウィンク", "ウィンク２"], "blinkRight": ["ウィンク右", "ウィンク２右"],
-    "aa": ["あ"], "ih": ["い"], "ou": ["う"], "ee": ["え"], "oh": ["お"],   # fr-ok: VRM preset names
+    "aa": ["あ"], "ih": ["い"], "ou": ["う"], "ee": ["え"], "oh": ["お"],   # VRM preset names
 }
 
 
@@ -239,7 +239,7 @@ def write_vrm(P, output, images, name="Character", author="Chimera", twist=None,
     `twist`: twist bones of the house skeleton, name -> {sort, source, fraction} (skeleton.json). A bone that "follows"
     becomes a VRM 1.0 roll constraint, changing nothing for a viewer that ignores constraints. A bone that
     "holds" would need a negative weight, which VRM lacks: its rule is in `extras`. With `sights`, it
-    goes under an aimer (aim constraint: its source's swing without its roll) and takes back its share of the
+    goes under an aim constraint (its source's swing without its roll) and takes back its share of the
     roll: exact in a VRM viewer (three-vrm), but the bone no longer follows its arm in a viewer that ignores
     constraints (Blender, Godot). Hence the default: without."""
     S = Skeleton(P)
@@ -399,7 +399,7 @@ def write_vrm(P, output, images, name="Character", author="Chimera", twist=None,
                 nodes[k]["extensions"] = constraint("roll", source=s, rollAxis=a[1], weight=t["fraction"])
                 constraints += 1
         elif sights and s in parent and axe_of(s):
-            # "keeps" (holds back): the bone keeps a share of its source's roll. It leaves its source for an aimer
+            # "keeps" (holds back): the bone keeps a share of its source's roll. It leaves its source for an aim constraint
             # placed at the same spot, aiming at the next bone (the swing only, no roll), and takes back a share of the roll.
             a = axe_of(s)
             if s not in vis:

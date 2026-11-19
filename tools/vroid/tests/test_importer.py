@@ -289,13 +289,13 @@ class Ingester(unittest.TestCase):
     def test_family_whose_each_brings_its_models(self):
         # models "*": the <Name>/<Name>.pmx folders of mmd_extracted; a value of the description is overridden
         # by the setting games.<game>.<key>
-        regl = os.path.join(self.tmp.name, "settings.json")
-        with open(regl, "w", encoding="utf-8") as f:
+        settings_file = os.path.join(self.tmp.name, "settings.json")
+        with open(settings_file, "w", encoding="utf-8") as f:
             json.dump({"games": {"active": "vroid", "vroid": {"mmd_extracted": os.path.join(self.tmp.name, "mmd"),
                                                            "base_head": {"name": "Dummy"}}}}, f)
         code = ("import sys, json; sys.path.insert(0, %r); import games as games; J = games.active(); "
                 "print(json.dumps([J.name, J.models(), J.value('base_head.name'), J.value('base_head.tint')]))" % TOOLS)
-        r = subprocess.run([sys.executable, "-I", "-c", code], env=dict(os.environ, CHIMERA_SETTINGS=regl),
+        r = subprocess.run([sys.executable, "-I", "-c", code], env=dict(os.environ, CHIMERA_SETTINGS=settings_file),
                            capture_output=True, text=True, check=True)
         name, models, head, tint = json.loads(r.stdout)
         self.assertEqual(name, "vroid")

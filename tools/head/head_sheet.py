@@ -18,7 +18,7 @@ import pmx as PMX  # noqa: E402
 
 SKINS = ("颜", "颜_A", "颜_A2")
 HIDDEN = ("髮", "发", "目影", "二重影", "瞳光")
-COLUMNS = (("face", 0, {}), ("trois_quarts", 35, {}), ("profile", 90, {}),
+COLUMNS = (("face", 0, {}), ("three_quarters", 35, {}), ("profile", 90, {}),
             ("blink", 0, {"まばたき": 1.0}), ("smile", 0, {"笑い": 1.0, "口角上げ": 1.0}),
             ("a", 0, {"あ": 1.0}))
 TX, TY = 360, 420

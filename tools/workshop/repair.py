@@ -86,7 +86,7 @@ def resume(S, Z, F, shape=True, outfit=None, faces=False, steps=False):
     Fw = w[F]
     E = np.unique(np.sort(np.concatenate([Fw[:, [0, 1]], Fw[:, [1, 2]], Fw[:, [2, 0]]]), axis=1), axis=0)
     E = E[E[:, 0] != E[:, 1]]
-    assessment = {"vertices": n, "fautifs": 0, "recousus": 0, "zones": 0, "laissees": 0}
+    assessment = {"vertices": n, "faulty": 0, "restitched": 0, "zones": 0, "left": 0}
     if not len(E):
         return Z.copy(), assessment
     ls = np.linalg.norm(Sw[E[:, 0]] - Sw[E[:, 1]], axis=1)
@@ -142,7 +142,7 @@ def resume(S, Z, F, shape=True, outfit=None, faces=False, steps=False):
                 front = suite
             border = np.array(sorted(border), np.int64)
             if len(border) < 3:
-                assessment["laissees"] += 1
+                assessment["left"] += 1
                 continue
             M = _similarity(Sw[border], Zw[border])
             en = np.zeros(n, bool)
@@ -162,11 +162,11 @@ def resume(S, Z, F, shape=True, outfit=None, faces=False, steps=False):
                 if finished:
                     break
             assessment["zones"] += 1
-            assessment["fautifs"] += int(len(in_))
+            assessment["faulty"] += int(len(in_))
     elif free.any():
-        assessment["laissees"] = -1      # too much of the part is wrong
+        assessment["left"] = -1      # too much of the part is wrong
         free[:] = False
-    assessment["recousus"] = int((~free & (gap > SEAM)).sum())
+    assessment["restitched"] = int((~free & (gap > SEAM)).sum())
     if not shape:
         out = Z.copy()
         sewn = free | (gap > SEAM)

@@ -12,12 +12,12 @@ import numpy as np
 sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 import settings as R  # noqa: E402
 
-OUTFIT = os.path.join(R.path("paths.data"), "clothes", "tenue")   # fr-ok: folder of the owner's data
+OUTFIT = os.path.join(R.path("paths.data"), "clothes", "outfit")   # the owner's outfit folder
 # Chimera's body (same rule as tools/workshop/common.py: workshop.body of the settings, CHIMERA_BODY).
 BODY = R.path("workshop.body")
 SHAPE = os.path.join(os.path.dirname(BODY), "shape.pkl")
 # The house skeleton of this body: <body folder>/own-rig; that of the rebuilt body stayed in a folder of the outfit (owner's data).
-OWN_RIG = (os.path.join(OUTFIT, "corps_maison") if os.path.basename(os.path.dirname(BODY)) == "corps_refait"   # fr-ok: owner's data folders
+OWN_RIG = (os.path.join(OUTFIT, "own-rig-body") if os.path.basename(os.path.dirname(BODY)) == "rebuilt-body"
           else os.path.join(os.path.dirname(BODY), "own-rig"))
 
 

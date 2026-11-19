@@ -417,8 +417,8 @@ def transport(X, Is, W, src, target, own_ones, tree_target, Y, s, part_faces, ti
         # another garment under the part (shirt under the jacket) stands in for the body: the part is
         # fitted alone on the target, at the offset it had from what it covered. Only the part
         # itself, when it is the first surface, gives no more than a bound on the body.
-        elle = np.isfinite(Rp) & (Rp <= R1 + 1e-4)
-        known = skin | ((f1 >= 0) & ~elle & np.isfinite(Rt))
+        is_part = np.isfinite(Rp) & (Rp <= R1 + 1e-4)
+        known = skin | ((f1 >= 0) & ~is_part & np.isfinite(Rt))
         fields[k] = [rs, rt, tt[0], Rt, R1, Rp, known, float(skin.mean())]
         if known.sum() >= KNOWN_MIN:
             reports.append(float(np.median(R1[known] / Rt[known])))

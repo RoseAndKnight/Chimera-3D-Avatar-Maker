@@ -258,9 +258,9 @@ class Management(BaseHTTPRequestHandler):
                     pass
 
     def under(self, root, rel):
-        """Path under racine, with no way out through ".." (the page stays in the cache)."""
+        """Path under root, with no way out through ".." (the page stays in the cache)."""
         c = os.path.realpath(os.path.join(root, rel))
-        return c if c.startswith(os.path.realpath(root) + os.sep) else os.path.join(root, "__interdit__")
+        return c if c.startswith(os.path.realpath(root) + os.sep) else os.path.join(root, "__forbidden__")
 
     def read_body(self, max_=BODY_MAX):
         n = int(self.headers.get("Content-Length") or 0)

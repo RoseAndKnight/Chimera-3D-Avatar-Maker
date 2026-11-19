@@ -12,6 +12,35 @@ Convert a format-1 data folder once (rerunnable, says what it did, keeps the fil
 
 The data folder gets `chimera-data.json` (`{"format": 2}`); a ready-made package says `"format": 2` in its `index.json`.
 
+## Revisions
+
+`chimera-data.json` says `{"format": 2, "revision": N}`; `migrate` brings a folder at any earlier revision up to the
+current one (`tools/dataformat.py REVISION`), with the same command, and `--check` lists what is left.
+
+- **Revision 1**: names inside files: the arrays of the `.npz` files, the handmade skeleton (`skeleton.json`,
+  `weights.npz`, `poses.npz`), the grid `shape.pkl`, the check code `waist_outline` → `outline_size`.
+- **Revision 2**: names format 2 forgot (`REVISED_*` tables of `tools/dataformat.py`). The files keep their
+  bytes and dates (records are rewritten as new files; the morph names of a `.pmx` are patched at the same
+  length), so the fingerprints of the files that do not move stay, and those of the moved files are redone
+  without recomputing anything.
+
+| revision 1 | revision 2 | where |
+|---|---|---|
+| `Libre` | `Free` | id of the free base's own head and hairstyle: folders `heads/`, `hairstyles/`, `library/`, `<id>.bin`, records, labels, signatures `v9:<ids>` (re-sorted) |
+| `fabriquees/` | `built/` | built parts of a workshop cache |
+| key `atelier` | `workshop` | `built/<character>/<id>/record.json` |
+| `debardeur` | `tank_top` | built part id (cache only: folder, `.pmx`, `<character>__debardeur`) |
+| `tenue/`, `tenue-<x>/` | `outfit/`, `outfit-<x>/` | the owner's outfit folders |
+| `corps_maison/` | `own-rig-body/` | body with the handmade rig |
+| `corps_refait/` | `rebuilt-body/` | rebuilt body |
+| `essais/` | `trials/` | trial folders |
+| `coupe-neuve/` | `new-cut/` | |
+| `sur-<a>/`, `sur-<a>-cheveux-<b>/` | `on-<a>/`, `on-<a>-hair-<b>/` | trials of a face on another head |
+| `atelier-base-*.json`, `atelier-tetes-*.json` | `workshop-base-*.json`, `workshop-heads-*.json` | |
+| morph prefix `forme_` | `shape_` | shape morphs of the rebuilt bodies (`.pmx`) |
+
+A cache kept outside its data folder follows once its data folder is converted: convert the data folder first.
+
 ## What stays as it is
 
 - proper names: model and character names (`Sendagaya_Shino`, `Vivi`), bone and material names of the models (Japanese or Chinese);

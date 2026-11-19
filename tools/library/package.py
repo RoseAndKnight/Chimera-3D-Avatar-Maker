@@ -6,7 +6,7 @@
 <installation> is a folder holding settings.json (the settings of the prepared data, read through CHIMERA_SETTINGS):
 nothing is written there. The output folder can be uploaded as is to a Hugging Face dataset repository.
 
-Which models go in: a VRoid Hub model (`h<id>`) only if its status in statuses.json is "originale" and the
+Which models go in: a VRoid Hub model (`h<id>`) only if its status in statuses.json is the one for original models and the
 licence read on its page (sources.json of the cache) allows redistribution and the redistribution of modified
 versions; any other model only if its own file says so (VRM meta: CC0 or a VRoid Hub licence URL allowing both;
 for the base, the meta recorded by tools/vroid_base in provenance.json). Everything else is left out everywhere:
@@ -37,6 +37,7 @@ import installation as I  # noqa: E402
 VERSION_CODE = 1          # version of this code the package is made for (index.json "code")
 LIMIT = 1800 << 20       # raw bytes per archive before compression (HF: < 200 GB recommended per file; small ones resume better)
 LEVEL = 6                # gzip level
+ORIGINAL_STATUS = "original"   # statuses.json: {id: {"status": "original" | "fan" | "uncertain" | "real-person", "reason": ...}}
 TEX = re.compile(rb"tex/([0-9a-f]{16}\.webp)")
 MACHINE = re.compile(rb"/(?:home|Users)/[^/\s\"]+/")   # a path into someone's home folder
 # in a refused item's folder only these remain (the page lists refused items by their record)
@@ -84,9 +85,8 @@ def license_file(m):
 # ------------------------------------------------------------------ reading the installation
 
 def status_of(entry):
-    """Status of a model in statuses.json; the maintainer's file writes the key in French."""
-    e = entry or {}
-    return e.get("status") or e.get("statut")   # fr-ok: key of the maintainer's existing statuses file
+    """Status of a model in statuses.json."""
+    return (entry or {}).get("status")
 
 
 class Installation:
@@ -128,7 +128,7 @@ class Installation:
             src = self.sources.get(n)
             if re.fullmatch(r"h\d+", n):
                 st = status_of(self.statuses.get(n[1:]))
-                if st != "originale":
+                if st != ORIGINAL_STATUS:
                     discard[n] = "status %s" % (st or "unknown")
                 elif not src:
                     discard[n] = "no source page recorded"
@@ -137,7 +137,7 @@ class Installation:
                 else:
                     keep[n] = "VRoid Hub, original, licence allows redistribution of modifications"
                 continue
-            if n == "Libre":   # fr-ok: "Libre" is the id of the free head and hairstyle, a folder name in installed caches
+            if n == "Free":   # the base's own head and hairstyle (tools/workshop/catalog.py FREE)
                 prov = self.C.read_json(os.path.join(self.rt["base"], "provenance.json"), {}) or {}
                 why = license_file(prov.get("vrm_meta"))
                 what = "base (%s, provenance.json)" % prov.get("model")
@@ -258,7 +258,7 @@ class Plan:
             if ok:
                 parts_kept.append(m)
         # base, body, the base head's library entry, the base and the pivot head
-        for r in ("base", "body", "library/Libre"):   # fr-ok: "Libre" is the id of the free head and hairstyle, a folder name in installed caches
+        for r in ("base", "body", "library/Free"):
             if os.path.isdir(os.path.join(cache, r)):
                 self.units.append("cache/" + r)
                 self.folder("base", "cache/" + r, os.path.join(cache, r))
@@ -537,7 +537,7 @@ French names) is converted in place, without downloading again: `python3 -I tool
   licence allows redistribution **and** the redistribution of modified versions. Models based on an existing work
   (fan art), on a real person, or whose source is uncertain were left out, with all their parts, textures and
   thumbnails.
-- VRoid Studio sample characters (`Base_Female`, `Vita`…, and the base body, `Libre`, made from `Sendagaya_Shibu`): <!-- fr-ok: id of the free base -->
+- VRoid Studio sample characters (`Base_Female`, `Vita`…, and the base body, `Free`, made from `Sendagaya_Shibu`):
   CC0, as written in each model's own file.
 
 ## Terms of use
@@ -636,7 +636,7 @@ def build(installation, output, statuses, repo="Rose-and-Knight/chimera-vroid-li
         usage.setdefault(p["character"], set()).add("P")
     usage = {n: "".join(x for x in "FHP" if x in v) for n, v in usage.items()}
     index = {
-        "format": I.FORMAT, "code": VERSION_CODE, "version": time.strftime("%Y-%m-%d"),
+        "format": I.FORMAT, "revision": I.FMT.REVISION, "code": VERSION_CODE, "version": time.strftime("%Y-%m-%d"),
         "counts": {"models": len(keep), "heads": len(cat["heads"]), "hairstyles": len(cat["hairstyles"]),
                     "parts": len(cat["parts"]), "refusals": len(cat["refusals"])},
         "archives": archives, "installed_size": sum(a["extracted_size"] for a in archives),
@@ -662,13 +662,13 @@ def build(installation, output, statuses, repo="Rose-and-Knight/chimera-vroid-li
 
 def check(output, statuses):
     """Reads every archive back: sizes and sha256 of index.json, safe members, no machine path, no id of a model
-    that is not kept (statuses.json other than "originale", or left out), no texture of cache/tex that no kept record
+    that is not kept (statuses.json other than the original-model status, or left out), no texture of cache/tex that no kept record
     names, every unit present. Returns the list of defects."""
     index = I.read_json(os.path.join(output, "index.json"))
     with open(statuses, encoding="utf-8") as f:
         st = json.load(f)
     kept = set(index["models"])
-    out_of = {i for i, v in st.items() if status_of(v) != "originale"} | {
+    out_of = {i for i, v in st.items() if status_of(v) != ORIGINAL_STATUS} | {
         n[1:] if re.fullmatch(r"h\d+", n) else n for n in index["discarded"]}
     out_of -= {n[1:] for n in kept if n.startswith("h")}
     pattern = re.compile(rb"(?<![0-9])(" + b"|".join(re.escape(x.encode()) for x in sorted(out_of)) + rb")(?![0-9])") if out_of else None

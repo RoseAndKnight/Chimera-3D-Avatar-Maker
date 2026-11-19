@@ -49,7 +49,7 @@ VIEWS = {
     # lower body (trousers); with --frame body, the "top" views take in the whole body
     "squat": ("P7@D", 35, ("top", None)),   # bench squat: hips 110 deg, knees 140 deg
     "step": ("P12", 60, ("top", None)),      # walking step
-    "seat": ("ASSIS", 40, ("top", None)),    # seated on a chair: hips and knees at 90 deg
+    "seat": ("SEATED", 40, ("top", None)),    # seated on a chair: hips and knees at 90 deg
     "leg_bent": ("P5@60", 40, ("top", None)),  # left thigh raised 60 deg
     "waist": (None, 30, ("下半身", 0.16)),      # close-up of the top / trousers seam
     "waist_back": (None, 180, ("下半身", 0.16)),
@@ -231,13 +231,13 @@ def scene(size, samp):
         sc.eevee.use_shadows = False
     except Exception:
         pass
-    sl = bpy.data.lights.new("soleil", "SUN")
+    sl = bpy.data.lights.new("sun", "SUN")
     sl.energy = 3.0
     try:
         sl.use_shadow = False
     except Exception:
         pass
-    so = bpy.data.objects.new("soleil", sl)
+    so = bpy.data.objects.new("sun", sl)
     so.rotation_euler = (math.radians(50), 0, math.radians(-35))
     sc.collection.objects.link(so)
     return sc
@@ -290,7 +290,7 @@ def main():
     M = MD.Model("render", path=os.path.abspath(a.pmx))
     garment = np.isin(M.mf, [i for i, m in enumerate(M.mats) if m["name"] == a.mat])
     made = []
-    pose_prev = "__aucune__"
+    pose_prev = "__none__"
     pos = M.pos
     for name in a.views.split(","):
         v_info = VIEWS[name]

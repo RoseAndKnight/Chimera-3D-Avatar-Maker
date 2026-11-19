@@ -24,7 +24,7 @@ Keys read (all optional except the ones used by the tool you run):
 
 | Key | Read by | Content |
 |---|---|---|
-| `title`, `abrege`, `format` | comments, log | game name, abbreviation, `pmx` or `glb` |
+| `title`, `short_name`, `format` | comments, log | game name, abbreviation, `pmx` or `glb` |
 | `sources.<source>` | `J.path(source)` | public default of a source folder (`{data}/…`); `mmd_extracted` = the game's PMX files |
 | `models` | `head/pivot.py`, `head/library.py` | `{character: relative path of the PMX in mmd_extracted}`, or `"*"`: every `<Name>/<Name>.pmx` folder of `mmd_extracted` (a family where everyone brings their own models, like VRoid) |
 | `base_head` | `workshop/common.py`, `head/pivot.py`, `head/outerplane.py` | Chimera's base head (`name`), the distance between its eyes and their midpoint, base of the pivot's first pass; `tint`: `face` when the neck of the head carries a painted shadow (the body skin then takes the tint of the face, not that of the neck ring) |
@@ -33,7 +33,7 @@ Keys read (all optional except the ones used by the tool you run):
 | `catalog` | `workshop/catalog.py` | heads and hairstyles offered (`"all"` = every hairstyle of the library), `small` trial level |
 | `people.<character>.expressions` | `workshop/expressions.py` | expression corrections for a head |
 | `people.<character>.exception_garment` | `clothes/library.py` | garment that the mesh does not separate, cut by a study entry |
-| `etudes.clothes`, `etudes.hair`, `etudes.outfits_layers` | `clothes/measure.py`, `hair/measure.py`, `workshop/check_layers.py` | test sets of the studies |
+| `studies.clothes`, `studies.hair`, `studies.outfits_layers` | `clothes/measure.py`, `hair/measure.py`, `workshop/check_layers.py` | test sets of the studies |
 | `families.json` (file next to it) | `atlas/primitives.py` | classification of materials into families; without it, no classification |
 | `materials` | `atlas/pmx.py` (`read`), `head/outerplane.py` | the game's material names translated into the common language (below) |
 | `compatibility` | `games/compatibility.py` only | what the tool does with the game's files, and at what level (below); changes nothing in what the other tools do |
@@ -133,7 +133,7 @@ Names written by Chimera itself (outputs, never to be translated): `颜_A`, `颜
   would become skin twice; an `eyehight` would become eye). And `HeadGlb` is called without knowing which game the
   GLB comes from (`hair/measure.py` and research tools not published). Its patterns mix NTE (`face_new`, `_eyes`, `meimao`,
   `jiemao`, `bantou`, `touming`, `gaoguang`), the generic names also used for Outerplane (`_face`, `_eye`,
-  `hair`) and the house set (Keijo: `chevelure`).
+  `hair`) and the house set (Keijo: a French name for hair).
 - **Cutting an Outerplane face** (`head/outerplane.py`): a single `FACE` material carries skin, eyes, highlights,
   fold, mouth, blush; its pieces are classified by their position, not by a name. Only the role of each material
   (FACE, FACE_EYE, HAIR, BODY) goes through its table.

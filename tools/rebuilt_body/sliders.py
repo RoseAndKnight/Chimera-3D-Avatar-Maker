@@ -23,7 +23,7 @@ import geom as G              # noqa: E402
 
 CM = 8.0
 MIR = np.array([-1.0, 1.0, 1.0])
-PREFIX = "forme_"   # fr-ok: prefix of the morphs already written in the remade bodies on disk
+PREFIX = "shape_"   # prefix of the shape morphs written in the remade bodies (format 2, revision 2)
 
 
 def bell(x, center, width):

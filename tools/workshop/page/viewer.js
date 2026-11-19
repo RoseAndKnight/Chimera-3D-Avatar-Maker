@@ -195,11 +195,11 @@ vec3 studio(vec3 rgb, vec3 n, vec3 v){
     if(part_==0||iris[0].w<=0.0) return enc(o);
     // the eye, layer by layer: the eyelid shades the top of the white and of the iris; the iris keeps its light in
     // the shade (it is what one looks at), lightens in a crescent towards the bottom; painted highlights stay white
-    vec4 b=P0.x>=0.0?iris[0]:iris[1]; float t=(P0.y-b.y)/b.w, paupiere=smoothstep(0.0,1.1,t);
-    o*=mix(vec3(1.0),vec3(0.55,0.50,0.68),paupiere*0.55);
+    vec4 b=P0.x>=0.0?iris[0]:iris[1]; float t=(P0.y-b.y)/b.w, eyelid=smoothstep(0.0,1.1,t);
+    o*=mix(vec3(1.0),vec3(0.55,0.50,0.68),eyelid*0.55);
     if(part_==2){
       vec3 c=vif(al,1.35);
-      o=mix(o,c*1.05*mix(1.0,0.6,paupiere),0.7);
+      o=mix(o,c*1.05*mix(1.0,0.6,eyelid),0.7);
       o+=c*0.20*smoothstep(0.1,-0.9,t);
       o=mix(o,vec3(1.0),smoothstep(0.80,0.92,min(rgb.r,min(rgb.g,rgb.b))));
       if(gaze.x>0.0){
@@ -246,12 +246,12 @@ vec3 studio(vec3 rgb, vec3 n, vec3 v){
     // blush on the cheeks and the tip of the nose, placed from the eyes and mouth (at the rest position: it follows the skin)
     vec4 b=P0.x>=0.0?iris[0]:iris[1];
     if(b.w>0.0){
-      float joue=1.0-smoothstep(0.0,1.0,length((P0.xy-vec2(b.x*1.10,b.y-b.w*2.7))/vec2(b.w*2.3,b.w*1.1)));
+      float cheek=1.0-smoothstep(0.0,1.0,length((P0.xy-vec2(b.x*1.10,b.y-b.w*2.7))/vec2(b.w*2.3,b.w*1.1)));
       float nose=mouth.w>0.0?1.0-smoothstep(0.0,1.0,length((P0.xy-vec2(0.0,mix(b.y,mouth.y,0.60)))/vec2(b.w*0.5,b.w*0.42))):0.0;
-      o*=mix(vec3(1.0),vec3(1.05,0.78,0.78),joue*joue*0.50*blush);
+      o*=mix(vec3(1.0),vec3(1.05,0.78,0.78),cheek*cheek*0.50*blush);
       o*=mix(vec3(1.0),vec3(1.10,0.90,0.88),nose*nose*0.45*blush);                      // the nose turns pink without darkening (darkening made a grey patch on tanned skin)
       // on dark skin, tinting does not show: the pink is added
-      o+=vec3(0.20,0.03,0.05)*(joue*joue*0.50+nose*nose*0.28)*blush*(1.0-smoothstep(0.12,0.45,dot(al,vec3(0.3,0.59,0.11))))*mix(0.4,1.0,lum);
+      o+=vec3(0.20,0.03,0.05)*(cheek*cheek*0.50+nose*nose*0.28)*blush*(1.0-smoothstep(0.12,0.45,dot(al,vec3(0.3,0.59,0.11))))*mix(0.4,1.0,lum);
     }
     // lips: a stronger pink below the line, thinner above, and a small sharp highlight on the lower one
     if(mouth.w>0.0){
@@ -373,20 +373,20 @@ void main(){
 const NEAR=0.02, FAR=20, FIELD=0.55;   // the view's perspective
 const VS_END = `#version 300 es
 precision highp sampler2D;   // depth is read through Z: at the default low precision a graphics card returns it in 0.6 mm steps
-uniform sampler2D Z; out vec2 UV; flat out float sujet;
+uniform sampler2D Z; out vec2 UV; flat out float subject;
 float metres(float d){ return 2.0*${NEAR}*${FAR}.0/(${FAR}.0+${NEAR}-(d*2.0-1.0)*(${FAR}.0-${NEAR})); }
 void main(){ vec2 q=vec2(float((gl_VertexID<<1)&2),float(gl_VertexID&2)); UV=q; gl_Position=vec4(q*2.0-1.0,0.0,1.0);
   // the subject: mean distance of what fills the center of the image
   float s=0.0,n=0.0; for(int i=-2;i<=2;i++) for(int j=-2;j<=2;j++){ float d=textureLod(Z,vec2(0.5)+vec2(float(i),float(j))*0.045,0.0).r; if(d<1.0){ s+=metres(d); n+=1.0; } }
-  sujet=n>0.0?s/n:0.0; }`;
+  subject=n>0.0?s/n:0.0; }`;
 const FS_END = `#version 300 es
-precision highp float; precision highp sampler2D; in vec2 UV; flat in float sujet; out vec4 c;   // highp sampler: see VS_FIN (contact shadows drew rings on smooth cloth)
+precision highp float; precision highp sampler2D; in vec2 UV; flat in float subject; out vec4 c;   // highp sampler: see VS_FIN (contact shadows drew rings on smooth cloth)
 uniform sampler2D C; uniform sampler2D Z; uniform sampler2D A; uniform sampler2D G; uniform int mode; uniform vec2 stage, dir; uniform float aspect; uniform float outline;
 uniform float contact, blur, thumbnail, grain, outlinePart; uniform vec3 outlineC;
 const float T=${Math.tan(FIELD/2).toFixed(5)}, RADIUS=0.022, BLUR=0.012;   // RADIUS: reach of a contact shadow, in metres; BLUR: diameter of the largest blur, in image heights
 float metres(float d){ return 2.0*${NEAR}*${FAR}.0/(${FAR}.0+${NEAR}-(d*2.0-1.0)*(${FAR}.0-${NEAR})); }
 vec3 place(vec2 uv){ float z=metres(texture(Z,uv).r); return vec3((uv*2.0-1.0)*vec2(aspect*T,T)*z,-z); }
-float alea(vec2 p){ return fract(sin(dot(p,vec2(12.9898,78.233)))*43758.5453); }
+float rand(vec2 p){ return fract(sin(dot(p,vec2(12.9898,78.233)))*43758.5453); }
 void main(){
   if(mode==0){
     if(texture(Z,UV).r>=1.0||contact<=0.0){ c=vec4(0.0); return; }
@@ -413,7 +413,7 @@ void main(){
     o=smoothstep(0.06,0.62,o/16.0)*(x.a>0.8?1.0:x.a);
     // blur at this point: zero around the subject, it grows with the distance from it, all the more as the subject is close;
     // the sharp zone reaches further behind than in front: a strand in the centre of the image must not blur the eyes
-    float z=metres(d), e=(z-sujet)/z, f=sujet>0.0?clamp((e>0.0?e-0.22:-e-0.10)*0.010*blur/(2.0*T*sujet)/BLUR,0.0,1.0):0.0;
+    float z=metres(d), e=(z-subject)/z, f=subject>0.0?clamp((e>0.0?e-0.22:-e-0.10)*0.010*blur/(2.0*T*subject)/BLUR,0.0,1.0):0.0;
     vec3 img=x.rgb*mix(vec3(1.0),vec3(0.60,0.43,0.57),o*0.85*contact);
     // outline: drawn separately (modes 4 and 5), smoothed, then laid here; it spills slightly over both sides of the edge
     if(outline>0.0&&(d>=1.0||x.a>0.25)){ vec4 l=texture(G,UV); img=mix(img,l.rgb/max(l.a,0.004),smoothstep(0.10,0.21,l.a)*0.92*min(outline,1.0)); }
@@ -428,11 +428,11 @@ void main(){
     float z=metres(d), threshold=0.004+0.012*z, m=0.0, force=0.0; vec2 outside=vec2(0.0);
     for(int i=0;i<8;i++){
       float a=float(i)*0.7854; vec2 q=vec2(cos(a),sin(a))*stage*(i%2==0?1.0:1.4142);
-      float saut=(metres(texture(Z,UV+q).r)-z)-max(z-metres(texture(Z,UV-q).r),0.0), k=smoothstep(threshold*0.8,threshold*1.3,saut);
+      float jump=(metres(texture(Z,UV+q).r)-z)-max(z-metres(texture(Z,UV-q).r),0.0), k=smoothstep(threshold*0.8,threshold*1.3,jump);
       if(k<=0.0) continue;
       // a real edge continues beyond; two surfaces that brush against each other make only one point
       k*=smoothstep(threshold*0.4,threshold,(metres(texture(Z,UV+q*3.0).r)-z)-max(z-metres(texture(Z,UV-q*3.0).r),0.0));
-      m=max(m,k); force=max(force,k*smoothstep(threshold,0.03+threshold*4.0,saut)); outside+=vec2(cos(a),sin(a))*k;
+      m=max(m,k); force=max(force,k*smoothstep(threshold,0.03+threshold*4.0,jump)); outside+=vec2(cos(a),sin(a))*k;
     }
     if(m<=0.0){ c=vec4(0.0); return; }
     float support=0.5+0.5*dot(normalize(outside+vec2(1e-5)),normalize(vec2(-0.45,-1.0)));   // under the shape, opposite the light
@@ -452,7 +452,7 @@ void main(){
   if(mode==2){
     vec4 x=texture(C,UV); float r=x.a*BLUR*0.5;   // radius, in image heights
     if(r*float(textureSize(C,0).y)<0.6){ c=vec4(x.rgb,1.0); return; }
-    vec3 s=x.rgb; float n=1.0, turn=alea(gl_FragCoord.xy)*6.2832;
+    vec3 s=x.rgb; float n=1.0, turn=rand(gl_FragCoord.xy)*6.2832;
     for(int i=0;i<20;i++){
       float a=turn+float(i)*2.39996, k=sqrt((float(i)+0.5)/20.0)*r;
       vec4 y=texture(C,UV+vec2(cos(a)/aspect,sin(a))*k);
@@ -462,7 +462,7 @@ void main(){
     c=vec4(s/n,1.0); return;
   }
   float border=1.0-thumbnail*smoothstep(0.38,0.95,length((UV-0.5)*vec2(min(aspect,1.6),1.0)));
-  c=vec4(vec3(0.5*border*(1.0+(alea(gl_FragCoord.xy)-0.5)*grain)),0.5);
+  c=vec4(vec3(0.5*border*(1.0+(rand(gl_FragCoord.xy)-0.5)*grain)),0.5);
 }`;
 // Floor: a disc of light under the character, which receives its shadow (third depth map).
 const VS_FLOOR = `#version 300 es
@@ -662,8 +662,8 @@ export class Viewer extends ViewerBase {
       if(opts.hair){ if(!d.smooth) d.smooth=smoothing(d); smooth=d.smooth; d=smooth.d; }
       const vao=g.createVertexArray(); g.bindVertexArray(vao);
       const buf=(a,loc,n)=>{const b=g.createBuffer();g.bindBuffer(g.ARRAY_BUFFER,b);g.bufferData(g.ARRAY_BUFFER,a,g.DYNAMIC_DRAW);g.enableVertexAttribArray(loc);g.vertexAttribPointer(loc,n,g.FLOAT,false,0,0);return b;};
-      m={url,vao,bpos:buf(d.pos,0,3),bnor:buf(d.nor,1,3),buv:buf(d.uv,2,2),brepos:key==="head"?buf(d.pos,4,3):null,d,prims:d.prims.map(p=>{const e=g.createBuffer();g.bindBuffer(g.ELEMENT_ARRAY_BUFFER,e);g.bufferData(g.ELEMENT_ARRAY_BUFFER,p.indices,g.DYNAMIC_DRAW);return {...p,ebo:e,n:p.indices.length};})};
-      if(!m.brepos){ g.bindBuffer(g.ARRAY_BUFFER,m.bpos); g.enableVertexAttribArray(4); g.vertexAttribPointer(4,3,g.FLOAT,false,0,0); }   // outside the head, the rest position is simply the position
+      m={url,vao,bpos:buf(d.pos,0,3),bnor:buf(d.nor,1,3),buv:buf(d.uv,2,2),bRestPos:key==="head"?buf(d.pos,4,3):null,d,prims:d.prims.map(p=>{const e=g.createBuffer();g.bindBuffer(g.ELEMENT_ARRAY_BUFFER,e);g.bufferData(g.ELEMENT_ARRAY_BUFFER,p.indices,g.DYNAMIC_DRAW);return {...p,ebo:e,n:p.indices.length};})};
+      if(!m.bRestPos){ g.bindBuffer(g.ARRAY_BUFFER,m.bpos); g.enableVertexAttribArray(4); g.vertexAttribPointer(4,3,g.FLOAT,false,0,0); }   // outside the head, the rest position is simply the position
       m.smooth=smooth;
       g.bindVertexArray(null); this.models.set(key,m);
     }
@@ -675,11 +675,11 @@ export class Viewer extends ViewerBase {
   async maps(key,url){
     const a=await fetch(url).then(r=>r.ok?r.arrayBuffer():null).catch(()=>null), m=this.models.get(key), g=this.g; if(!m) return;
     g.bindVertexArray(m.vao);
-    if(m.bcartes){ g.deleteBuffer(m.bcartes); m.bcartes=null; }
+    if(m.bmaps){ g.deleteBuffer(m.bmaps); m.bmaps=null; }
     let o=a&&new Uint8Array(a);
     if(o&&m.smooth&&o.length===m.smooth.n*4) o=m.smooth.average(o,4,Uint8Array,false);
     if(o&&o.length===m.d.pos.length/3*4){
-      m.bcartes=g.createBuffer(); g.bindBuffer(g.ARRAY_BUFFER,m.bcartes); g.bufferData(g.ARRAY_BUFFER,o,g.STATIC_DRAW);
+      m.bmaps=g.createBuffer(); g.bindBuffer(g.ARRAY_BUFFER,m.bmaps); g.bufferData(g.ARRAY_BUFFER,o,g.STATIC_DRAW);
       g.enableVertexAttribArray(3); g.vertexAttribPointer(3,4,g.UNSIGNED_BYTE,true,0,0);
     } else g.disableVertexAttribArray(3);
     g.bindVertexArray(null); this.sale=true;
@@ -720,7 +720,7 @@ export class Viewer extends ViewerBase {
     g.activeTexture(g.TEXTURE0); m.drawing={t,frame:j.frame,axis:j.axis||0}; this.sale=true;
   }
   remove(key){ const m=this.models.get(key); if(m){this.release(m);this.models.delete(key);this.sale=true;} }
-  release(m){ const g=this.g; g.deleteVertexArray(m.vao); [m.bpos,m.bnor,m.buv,m.brepos,m.bcartes,...m.prims.map(p=>p.ebo)].forEach(b=>b&&g.deleteBuffer(b)); if(m.drawing) g.deleteTexture(m.drawing.t); }
+  release(m){ const g=this.g; g.deleteVertexArray(m.vao); [m.bpos,m.bnor,m.buv,m.bRestPos,m.bmaps,...m.prims.map(p=>p.ebo)].forEach(b=>b&&g.deleteBuffer(b)); if(m.drawing) g.deleteTexture(m.drawing.t); }
   positions(key,a){ const m=this.models.get(key); if(!m) return; const g=this.g; if(m.smooth&&a.length===m.smooth.n*3) a=m.smooth.positions(a); g.bindBuffer(g.ARRAY_BUFFER,m.bpos); g.bufferData(g.ARRAY_BUFFER,a,g.DYNAMIC_DRAW); m.top=height(a); m.bottom=bottom(a); this.sale=true; }
   vertices(key,a,n){ const m=this.models.get(key); if(!m) return; this.positions(key,a); const g=this.g; g.bindBuffer(g.ARRAY_BUFFER,m.bnor); g.bufferData(g.ARRAY_BUFFER,n,g.DYNAMIC_DRAW); }
   // Removes the listed faces (numbered across the primitives); true removes them all.
@@ -779,7 +779,7 @@ export class Viewer extends ViewerBase {
     g.vertexAttrib4f(3,1,0,1,1); g.activeTexture(g.TEXTURE0);
     g.disable(g.CULL_FACE);
     for(const m of this.models.values()){
-      g.bindVertexArray(m.vao); g.uniform1i(this.u.aMaps,m.bcartes?1:0); g.uniform1f(this.u.top,m.top||0);
+      g.bindVertexArray(m.vao); g.uniform1i(this.u.aMaps,m.bmaps?1:0); g.uniform1f(this.u.top,m.top||0);
       g.uniform1i(this.u.aDrawing,m.drawing?1:0); g.uniform1i(this.u.Drawing,8); if(m.drawing){ g.activeTexture(g.TEXTURE8); g.bindTexture(g.TEXTURE_2D,m.drawing.t); g.uniform4fv(this.u.frame,m.drawing.frame); g.uniform1f(this.u.axis,m.drawing.axis); g.activeTexture(g.TEXTURE0); }
       g.uniform4fv(this.u.iris,m.iris||new Float32Array(8)); g.uniform4fv(this.u.mouth,m.mouth||new Float32Array(4));
       const te=m.tint; g.uniform4f(this.u.tint,te?te.r:0,te?te.g:0,te?te.b:0,te?1:0); g.uniform3f(this.u.ref,te?te.ref:1,0,0);
@@ -883,7 +883,7 @@ export class Viewer extends ViewerBase {
 // Same scene without WebGL: depth buffer, textures, two tones, hair tint. Of the render, it applies the direction
 // and colour of the light, the shadow tints, thresholds and softnesses, the exposure and the background.
 export class SoftwareViewer extends ViewerBase {
-  constructor(canvas,opts={}){ super(canvas,opts); this.logiciel=true; this.x=canvas.getContext("2d",{willReadFrequently:true}); }
+  constructor(canvas,opts={}){ super(canvas,opts); this.software=true; this.x=canvas.getContext("2d",{willReadFrequently:true}); }
   texture(url){
     if(!url) return null;
     if(!this.tex.has(url)){ const e={ready:false}; this.tex.set(url,e);

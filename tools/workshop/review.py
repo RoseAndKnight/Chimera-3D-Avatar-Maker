@@ -26,7 +26,7 @@ part's overall scale is a defect.
 
     python3 review.py pieces [--json sortie.json] [id ...]     every part of the cache, worst to best
     python3 review.py outfit --parts a,b,c [--hairstyle name]    one outfit
-    python3 review.py sondage 40 [--hairstyle name] [--healthy]   outfits drawn at random
+    python3 review.py sample 40 [--hairstyle name] [--healthy]   outfits drawn at random
 
 An outfit defect at the place of a part defect is only one defect: `--healthy` only draws parts with
 no defect of their own, to judge the layers and the hair alone.
@@ -420,7 +420,7 @@ def main():
                    "catalogue: beyond NOTE_REFUSALS (common.py), the part is removed from the page")
     b = sp.add_parser("outfit")
     b.add_argument("--parts", dest="parts", required=True)
-    c = sp.add_parser("sondage")
+    c = sp.add_parser("sample")
     c.add_argument("n", type=int)
     c.add_argument("--seed", dest="seed", type=int, default=7)
     c.add_argument("--healthy", dest="sound", action="store_true", help="only parts with no defect of their own: what is left comes from the layers")
@@ -434,7 +434,7 @@ def main():
         _say_outfit(r)
         if args.json:
             C.write_json(args.json, r)
-    if args.command == "sondage":
+    if args.command == "sample":
         res = []
         for ids in draw(args.n, args.seed, args.sound):
             try:

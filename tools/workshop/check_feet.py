@@ -19,7 +19,7 @@ Asked on what the workshop shows (the adjusted part, the skin it leaves visible)
   its length on the source, relative to its piece's own median (the piece may be scaled as a whole):
   the area of faces with an edge stretched or shrunk past STRETCHED, and the worst ratio;
 - **width** (`width`): the shoe's width at the bottom (lowest BOTTOM_WIDTH) relative to the source
-  shoe's width scaled like the body (`agrandie`), and to the bare foot's width (`on_foot`).
+  shoe's width scaled like the body (`scaled`), and to the bare foot's width (`on_foot`).
 
     python3 check_feet.py                         every shoe of the cache
     python3 check_feet.py --parts a,b --sheet feet.png
@@ -151,7 +151,7 @@ def rip(Z, F, meta):
         bottom = lambda P: P[P[:, 1] < P[:, 1].min() + BOTTOM_WIDTH]
         w_o, w_s = np.ptp(bottom(zo)[:, 0]), np.ptp(bottom(xs)[:, 0]) * samp
         w_p = np.ptp(nu[nu[:, 1] < nu[:, 1].min() + BOTTOM_WIDTH][:, 0])
-        wid[name] = {"agrandie": round(float(w_o / w_s), 2), "on_foot": round(float(w_o / w_p), 2)}
+        wid[name] = {"scaled": round(float(w_o / w_s), 2), "on_foot": round(float(w_o / w_p), 2)}
     res["width"] = wid
     return res
 
@@ -253,7 +253,7 @@ def main():
         t = mes["rip"]
         if t:
             print("%-32s torn %5.1f cm2, %d faces (worst x%.2f)  width vs source %s  vs foot %s" % (
-                "", t["torn_cm2"], t["torn_faces"], t["stretched_max"], "/".join("%.2f" % v["agrandie"] for v in t["width"].values()),
+                "", t["torn_cm2"], t["torn_faces"], t["stretched_max"], "/".join("%.2f" % v["scaled"] for v in t["width"].values()),
                 "/".join("%.2f" % v["on_foot"] for v in t["width"].values())))
         if a.sheet:
             lines.append(line(objects, mes))

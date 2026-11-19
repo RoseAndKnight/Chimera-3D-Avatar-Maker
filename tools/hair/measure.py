@@ -51,8 +51,8 @@ try:
 except ImportError:
     bpy = None
 
-# hairstyles studied: chosen in the active game (description in tools/games/<game>/game.json, "etudes.hair")
-CHOICE = tuple(games.active().value("etudes.hair", ()))   # a game with no study: no hairstyle chosen
+# hairstyles studied: chosen in the active game (description in tools/games/<game>/game.json, "studies.hair")
+CHOICE = tuple(games.active().value("studies.hair", ()))   # a game with no study: no hairstyle chosen
 HAIR = ("髮", "髪", "发", "毛")
 ACCESSORY = ("饰", "飾", "带", "帽", "巾", "镜", "环", "耳", "宝", "金属", "机", "罩", "裙", "服", "工具", "下摆", "新規")
 MIN_ISLAND = 12            # minimum vertices for an island to count as a strand
@@ -319,9 +319,11 @@ class Hairstyle:
 
 # hair materials of a GLB: name containing one of these patterns (lower case), except eyebrows,
 # eyelashes and accessories; the "+" copies and overlays are then found by geometry
-PATTERNS_HAIR_GLB = ("hair", "strand", "lock", "mèche", "fringe", "hairstyle", "髮", "髪", "发", "毛")   # fr-ok: French material names of some models
+# names some models write in French (materials, bones): the model's own words, matched as they are
+MODEL_FRENCH = {"hair": ("mèche",), "head": ("tête",), "face": ("œil", "oeil", "cil", "dent", "langue", "bouche")}   # fr-ok: names written in the models
+PATTERNS_HAIR_GLB = ("hair", "strand", "lock", "fringe", "hairstyle", "髮", "髪", "发", "毛") + MODEL_FRENCH["hair"]
 EXCLUDED_HAIR_GLB = ("brow", "lash", "eyebrow", "lashes", "眉", "睫")
-PATTERNS_HEAD_OS = ("頭", "head", "tête")   # fr-ok: French bone name of some models
+PATTERNS_HEAD_OS = ("頭", "head") + MODEL_FRENCH["head"]
 EXCLUDED_HEAD_OS = ("top", "end", "tip", "_fin", "tip", "nu")   # 頭先, HeadTop_End…
 
 
@@ -515,7 +517,7 @@ class HairstyleGlb(Hairstyle):
         np.maximum.at(ecl, inv, dev)
         multi = np.bincount(inv, minlength=n) > 1
         self.weld = {"vertices_raw": int(len(inv)), "vertices_welded": int(n),
-                        "reunis_normals_differentes_part": r3((ecl[multi] > 1).mean()) if multi.any() else 0.0,
+                        "merged_normals_different_part": r3((ecl[multi] > 1).mean()) if multi.any() else 0.0,
                         "shine_normals_deg": q(ecl[multi])}
         self._ecl_weld = ecl
         for k in ("pos", "uv", "uv_add", "bones", "weights"):
@@ -578,8 +580,7 @@ class HairstyleGlb(Hairstyle):
             return
         names = [m["name"] for m in self.p["materials"]]
         excluded = set(_choose_names(names, ("eye", "eyes", "brow", "lash", "eyebrow", "teeth", "tongue", "mouth",
-                                          "œil", "oeil", "cil", "dent", "langue", "bouche",   # fr-ok: French material names
-                                          "目", "眉", "睫", "齿", "舌")))
+                                          "目", "眉", "睫", "齿", "舌") + MODEL_FRENCH["face"]))
         excluded |= set(np.unique(self.mf[self.mask_faces]).tolist())
         vk = np.unique(self.F[~np.isin(self.mf, list(excluded))])
         dom = self.t["bones"][vk, np.argmax(self.t["weights"][vk], 1)]
@@ -772,10 +773,10 @@ def measure_mesh(c):
     # normal seams: coincident vertices whose normals differ by more than 1 deg
     shine = np.zeros(len(Vw))
     groups = np.bincount(inv)
-    nmoy = np.zeros((len(Vw), 3))
-    np.add.at(nmoy, inv, Np)
-    nmoy /= np.maximum(np.linalg.norm(nmoy, axis=1, keepdims=True), 1e-12)
-    dev = np.degrees(np.arccos(np.clip((Np * nmoy[inv]).sum(1), -1, 1)))
+    n_mean = np.zeros((len(Vw), 3))
+    np.add.at(n_mean, inv, Np)
+    n_mean /= np.maximum(np.linalg.norm(n_mean, axis=1, keepdims=True), 1e-12)
+    dev = np.degrees(np.arccos(np.clip((Np * n_mean[inv]).sum(1), -1, 1)))
     np.maximum.at(shine, inv, dev)
     multi = groups > 1
     # symmetry: X mirror of each welded vertex
@@ -825,8 +826,8 @@ def measure_mesh(c):
                    "non_manifold": int(sum(x["edges_non_manifold"] for x in parts)),
                    "sizes": [x["faces"] for x in parts[:40]], "detail": parts[:25]},
         "border_edges_part": r3((cnt == 1).sum() / len(E)),
-        "faces_degenerees": int((~ok).sum()),
-        "pairs_faces_opposees": int((cc > 1).sum()),
+        "faces_degenerate": int((~ok).sum()),
+        "pairs_faces_opposite": int((cc > 1).sum()),
         "cap": {"vertices": int(cal.sum()), "part_top": r3(cal[top].mean()) if top.any() else None,
                     "faces_to_skull_part": r3(to_c[on_cal].mean()) if on_cal.any() else None,
                     "dist_crane_H": q(dist_cr[top])},
@@ -967,7 +968,7 @@ def _lock(c, k, fk, vk, Fl, P, uv, dom):
             "width_tip_rel": r3(np.nanmean(wid[-3:]) / lmed) if lmed > 0 else None,
             "width_root_rel": r3(np.nanmean(wid[:3]) / lmed) if lmed > 0 else None,
             "rings": rings, "vertices_per_loop": r3(len(vk) / rings, 1),
-            "espacement_med_H": r3(np.median(esp)) if len(esp) else None,
+            "spacing_med_H": r3(np.median(esp)) if len(esp) else None,
             "spacing_tip_rel": r3(np.mean(esp[-n4:]) / np.median(esp)) if len(esp) > 3 and np.median(esp) > 0 else None,
             "corr_v_s": r3(cv), "corr_u_s": r3(cu), "angle_axe_uv_v_deg": r3(ang_v, 1),
             "uv_box": r3([np.ptp(U[:, 0]), np.ptp(U[:, 1])]),
@@ -1038,10 +1039,10 @@ def measure_uv(c):
             vals = [abs(np.corrcoef(u[ok, d], c.s_glob[ok])[0, 1]) for d in range(4) if np.ptp(u[ok, d]) > 1e-9]
             corr = max(vals) if vals else np.nan
         layers.append({"canal": k + 1, "nature": nature, "min": r3(u.min(0)), "max": r3(u.max(0)),
-                        "values_distinctes": int(len(np.unique(np.round(u, 3), axis=0))),
+                        "values_distinct": int(len(np.unique(np.round(u, 3), axis=0))),
                         "corr_max_with_s": r3(corr)})
     return {"outside_0_1_part": r3(out_of), "pixels_covered_part": r3(len(cnt) / N / N),
-            "pixels_empiles_part": r3((v > 1).sum() / max(len(v), 1)),
+            "pixels_stacked_part": r3((v > 1).sum() / max(len(v), 1)),
             "mirror_uv_identical_part": r3((d_u < 1e-3).mean()) if len(d_u) else None,
             "mirror_pairs": int(len(d_u)), "extra_layers": layers}
 
@@ -1292,10 +1293,10 @@ def measure_physics(c):
         worst = _worst_pose(c, ch, r1, jts, seg_body, head_rg)
         chains.append({
             "racine": names[r0], "parent": names[O[r0]["parent"]] if O[r0]["parent"] >= 0 else None,
-            "chain_links": len(ch), "os_under_tree": len(under_chain_links), "ramifiee": len(under_chain_links) > len(ch),
+            "chain_links": len(ch), "os_under_tree": len(under_chain_links), "branched": len(under_chain_links) > len(ch),
             "ballasts": len(ballasts), "mass_ballasts": r3(sum(m_lest)) if m_lest else 0.0,
             "length_H": r3(seg.sum()), "spacing_H": r3(seg), "spacing_cv": r3(seg.std() / seg.mean()) if len(seg) and seg.mean() > 0 else None,
-            "first_dynamique": first, "modes": [rr["mode"] if rr else None for rr in r1],
+            "first_dynamic": first, "modes": [rr["mode"] if rr else None for rr in r1],
             "shapes": [rr["shape"] if rr else None for rr in r1],
             "masses": r3(masses), "report_mass_med": r3(np.median(rapp)) if rapp else None,
             "damping_disp": r3([rr["damping_disp"] if rr else None for rr in r1]),
@@ -1386,7 +1387,7 @@ def measure_physics(c):
         "weights": {"influences": {str(k): int((nb == k).sum()) for k in range(1, 5)},
                   "types": {PMX.TYPES_WEIGHT[k]: int((typ == k).sum()) for k in np.unique(typ)},
                   "static_head_part": r3(static.mean()),
-                  "two_os_parent_enfant_part": r3(np.mean(pe)) if pe else None,
+                  "two_os_parent_child_part": r3(np.mean(pe)) if pe else None,
                   "monotony_s_os": q(mono)}}
 
 
@@ -1456,11 +1457,11 @@ def resume_locks(locks):
         cats[m["category"]] = cats.get(m["category"], 0) + 1
     dyn = lambda m: m["os_head_part"] is not None and m["os_head_part"] < 0.5
     return {"count": len(locks), "categories": cats,
-            "dynamiques": int(sum(1 for m in locks if dyn(m))),
+            "dynamic": int(sum(1 for m in locks if dyn(m))),
             "length_H": s("length_H"), "width_H": s("width_med_H"), "thickness_H": s("thickness_med_H"),
             "flattening": s("flattening"), "tip_rel": s("width_tip_rel"),
             "rings": s("rings"), "vertices_per_loop": s("vertices_per_loop"),
-            "spacing_H": s("espacement_med_H"), "spacing_tip_rel": s("spacing_tip_rel"),
+            "spacing_H": s("spacing_med_H"), "spacing_tip_rel": s("spacing_tip_rel"),
             "corr_v_s": s("corr_v_s"), "corr_u_s": s("corr_u_s"), "angle_axe_uv_v_deg": s("angle_axe_uv_v_deg"),
             "density_texel_cv": r3(np.std([m["density_texel"] for m in locks if m["density_texel"]]) /
                                    np.mean([m["density_texel"] for m in locks if m["density_texel"]])) if locks else None,

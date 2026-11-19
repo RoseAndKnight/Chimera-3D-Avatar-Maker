@@ -55,7 +55,7 @@ PEOPLE = GAME.models()
 # Vertex reliable for a character: within RELIABLE_DIST interocular distances of its skin after
 # registration, and not on the boundary of its skin.
 RELIABLE_DIST = 0.03
-ITER_PROCUSTE = 8
+ITER_PROCRUSTES = 8
 THRESHOLD_RELIABLE = 0.5
 SMOOTHING_PIVOT = 1.0
 RADIUS_EYE = 0.3
@@ -109,12 +109,12 @@ def apply(X, sRt):
     return s * X @ R.T + t
 
 
-def procuste(shapes, weight, ref):
+def procrustes(shapes, weight, ref):
     """Weighted generalised Procrustes analysis. shapes: (k, n, 3), weights: (k, n).
     The mean keeps the size and position of ref. Returns the mean and the aligned shapes."""
     M = ref.copy()
     Y = shapes.copy()
-    for _ in range(ITER_PROCUSTE):
+    for _ in range(ITER_PROCRUSTES):
         for i in range(len(shapes)):
             Y[i] = apply(shapes[i], similarity(shapes[i], M, weight[i] + 1e-6))
         W = weight + 1e-3
@@ -164,7 +164,7 @@ def passage(path_base, tasks):
     A = _base(path_base)
     shapes = np.stack([res[n][0] for n in names])
     weight = np.stack([res[n][1] for n in names]).astype(float)
-    M, Y = procuste(shapes, weight, A.V)
+    M, Y = procrustes(shapes, weight, A.V)
     j, dm = mirror(A.V)
     ok = dm < 0.02 * A.iod
     M = symmetrize(M, j, ok)
@@ -243,7 +243,7 @@ def write_pivot(A, M, weight, output, dist):
     P["vertices"]["nor"] = [tuple(x) for x in nor / np.maximum(np.linalg.norm(nor, axis=1, keepdims=True), 1e-12)]
     P["name"] = "average-head"
     P["comment"] = "[mean head: mean shape of %d human heads from %s, mesh of %s]" % (
-        len(dist), GAME.value("abrege", GAME.title), A.name)
+        len(dist), GAME.value("short_name", GAME.title), A.name)
     path = os.path.join(output, "average-head.pmx")
     pmx_write.write(P, path)
     return path, X
@@ -261,7 +261,7 @@ def check(A, path):
 
     bR, nvR, orR = VF._border_and_orientation(R.F)
     bA = VF._border_and_orientation(A.F)[0]
-    note("topology", VF._ok({"border_edges": bR, "attendues": bA, "non_varietes": nvR}, bR == bA and nvR == 0 and orR == 0))
+    note("topology", VF._ok({"border_edges": bR, "expected": bA, "non_manifold": nvR}, bR == bA and nvR == 0 and orR == 0))
     qR, qA = G.quality(R.V, R.F), G.quality(A.V, A.F)
     note("quality", VF._ok({"result": qR, "base": qA},
                            qR["dihedral_q99_deg"] <= qA["dihedral_q99_deg"] * 1.10 + 1.0 and

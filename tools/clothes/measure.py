@@ -2,7 +2,7 @@
 tools/hair/measure.py. Accessories excluded (pockets, buttons, straps, buckles...).
 
     bin/blender-queue -b --factory-startup \
-        --python tools/clothes/measure.py -- [--output DIR] [--only id1,id2] [--sans-poses]
+        --python tools/clothes/measure.py -- [--output DIR] [--only id1,id2] [--no-poses]
     ... -- --pmx CANDIDATE.pmx --mats A,B --type top|pull|jacket|... [--id NAME]
         [--layers X] --output DIR: measures a manufactured garment and prints the checks.
 
@@ -44,10 +44,10 @@ except ImportError:  # outside Blender: nothing geometric
     bpy = None
 
 # ====================================================================== the garments studied
-# Chosen in the active game (description tools/games/<game>/game.json, "etudes.clothes"): one garment per requested
+# Chosen in the active game (description tools/games/<game>/game.json, "studies.clothes"): one garment per requested
 # type, on different characters when possible, contrasting constructions (single sheet, closed shell,
 # double-sided, garment = body), then real sweaters; the description keeps the reason for each.
-CLOTHES = MD.games.active().value("etudes.clothes", [])   # a game with no study: no garment chosen
+CLOTHES = MD.games.active().value("studies.clothes", [])   # a game with no study: no garment chosen
 
 RADIUS_UNDER = 0.15     # m: beyond this, "nothing underneath"
 CROSSES_MAX = 0.010     # m: an outgoing ray hitting the back of a surface closer than this = clipping
@@ -423,16 +423,16 @@ def measure_adjustment(V, poses=True):
     cen = M.pos[Fd].mean(1)
     nd = M.nf[fd]
     idx3, dist3, nor3 = rays(V.tree, cen + nd * 1e-5, nd, 0.05)
-    cach = idx3 >= 0
+    occluded = idx3 >= 0
     ad = M.area[fd]
     per_mat = {}
-    for i in np.where(cach)[0]:
+    for i in np.where(occluded)[0]:
         n = M.names_mat[M.mf[fd[i]]]
         per_mat[n] = per_mat.get(n, 0) + ad[i]
     pe = V.skin[fd]
-    res["cache"] = {"area_hidden_on_area_garment": r3(ad[cach].sum() / V.area.sum()),
-                    "area_hidden_skin_on_area_garment": r3(ad[cach & pe].sum() / V.area.sum()),
-                    "gap_hidden_skin_mm": qmm(dist3[cach & pe]) if (cach & pe).any() else None,
+    res["cache"] = {"area_hidden_on_area_garment": r3(ad[occluded].sum() / V.area.sum()),
+                    "area_hidden_skin_on_area_garment": r3(ad[occluded & pe].sum() / V.area.sum()),
+                    "gap_hidden_skin_mm": qmm(dist3[occluded & pe]) if (occluded & pe).any() else None,
                     "per_material_dm2": {k: r3(v * 100, 3) for k, v in sorted(per_mat.items(), key=lambda x: -x[1])[:6]}}
     # edges: free or joined, pinching
     res["borders"] = borders(V, d)
@@ -478,15 +478,15 @@ def borders(V, d):
         e0 = float(np.median(g0)) if len(g0) >= 3 else None
         e3 = float(np.median(g3)) if len(g3) >= 3 else None
         loops.append({"edges": int(m.sum()), "length_mm": r3(long_ * 1000, 1),
-                        "region": str(reg[np.argmax(nreg)]), "raccordee_part": r3(join[m].mean()),
+                        "region": str(reg[np.argmax(nreg)]), "welded_part": r3(join[m].mean()),
                         "nothing_under_part": r3((~np.isfinite(d[vb])).mean()),
                         "gap_hem_mm": mm(e0), "gap_loop3_5_mm": mm(e3),
                         "pince": bool(join[m].mean() <= 0.5 and e0 is not None and e3 is not None
                                       and e0 < 0.5 * e3 and e0 < 0.003)})
     loops.sort(key=lambda b: -b["length_mm"])
-    return {"loops": len(loops), "raccordees": sum(b["raccordee_part"] > 0.5 for b in loops),
-            "free": sum(b["raccordee_part"] <= 0.5 for b in loops),
-            "pincees": sum(b["pince"] for b in loops), "detail": loops[:12]}
+    return {"loops": len(loops), "welded": sum(b["welded_part"] > 0.5 for b in loops),
+            "free": sum(b["welded_part"] <= 0.5 for b in loops),
+            "pinched": sum(b["pince"] for b in loops), "detail": loops[:12]}
 
 
 def measure_poses(V, idx, d, cross_rest):
@@ -565,7 +565,7 @@ def measure_poses(V, idx, d, cross_rest):
     cs = [v["track_body_alone_part"] for v in vals if v.get("track_body_alone_part") is not None]
     res["track_body_alone_max_part"] = r3(max(cs), 4) if cs else None
     res["poses_without_crossing"] = sum(1 for v in vals if v["track_crosses_part"] == 0 and v["new_part"] == 0)
-    res["poses_mesurees"] = len(vals)
+    res["poses_measured"] = len(vals)
     res["worst"] = [n for _, n in worst[:4]]
     return res
 
@@ -642,7 +642,7 @@ def measure_uv(V):
            "islands_part_faces": r3(np.sort(cnt)[::-1][:8] / cnt.sum()),
            "edges_seam_uv": int(cs.sum()), "length_seam_mm": r3(Lc[cs].sum() * 1000, 0),
            "seam_on_length_border": r3(Lc[cs].sum() / max(Lc[V.Ec == 1].sum(), 1e-9)),
-           "cuts_normals_seules": int((seam & ~uvd).sum()),
+           "cuts_normals_only": int((seam & ~uvd).sum()),
            "seams_per_sector": sectors, "seam_line_center_part": r3(Lc[center].sum() / max(Lc[cs].sum(), 1e-9)),
            "uv_shared_part": part(sharing, V.area)}
     out["texels"] = density_texels(V, sizes)
@@ -685,7 +685,7 @@ def load_image(M, t, cache):
 
 
 def density_texels(V, cache):
-    """px per metre (square root of the area ratio); garment, skin, underneath."""
+    """px per meter (square root of the area ratio); garment, skin, underneath."""
     M = V.M
 
     def dens(fi):
@@ -774,7 +774,7 @@ def measure_texture(V, cache):
     ua = M.uv_add[V.vr] if M.uv_add.shape[1] else None
     if ua is not None:
         out["uv_add"] = [{"min": r3(ua[:, k].min(0)), "max": r3(ua[:, k].max(0)),
-                          "constante": bool(np.ptp(ua[:, k], 0).max() < 1e-6)} for k in range(ua.shape[1])]
+                          "constant": bool(np.ptp(ua[:, k], 0).max() < 1e-6)} for k in range(ua.shape[1])]
     else:
         out["uv_add"] = []
     return out
@@ -946,7 +946,7 @@ def measure_physics(V):
         disp = np.array([np.subtract(j["disp_max"], j["disp_min"]) for j in js]) * E_
         return {"n": len(js), "rot_min_deg_med": r3(np.median(lo, 0), 1), "rot_max_deg_med": r3(np.median(hi, 0), 1),
                 "amplitude_deg_p90": r3(np.percentile(amp, 90, axis=0), 1),
-                "bloques_part": r3((amp.max(1) < 0.01).mean()),
+                "blocked_part": r3((amp.max(1) < 0.01).mean()),
                 "translation_free_part": r3((disp.max(1) > 1e-3).mean()),
                 "spring_rot": sorted({tuple(r3(j["spring_rot"], 1)) for j in js})[:4],
                 "spring_disp": sorted({tuple(r3(j["spring_disp"], 1)) for j in js})[:4]}
@@ -955,10 +955,10 @@ def measure_physics(V):
         groups[RG[k]["group"]] = groups.get(RG[k]["group"], 0) + 1
     rd = [RG[k] for k in dyn]
     return {
-        "own_bones": len(all_), "os_portant_weight": len(own_ones), "chains": len(chains),
+        "own_bones": len(all_), "bones_carrying_weight": len(own_ones), "chains": len(chains),
         "chain_links": q([c["chain_links"] for c in chains], (10, 50, 90), 1),
         "length_chain_mm": q([c["length_mm"] for c in chains], (10, 50, 90), 1),
-        "rigid_bodies": len(rg_v), "rigid_bodies_dynamiques": len(dyn),
+        "rigid_bodies": len(rg_v), "rigid_bodies_dynamic": len(dyn),
         "modes": {str(m): sum(1 for k in rg_v if RG[k]["mode"] == m) for m in (0, 1, 2)},
         "shapes": {PMX.SHAPES_RIGID[f]: sum(1 for r in rd if r["shape"] == f) for f in (0, 1, 2)},
         "size_mm": q([max(r["size"]) * E_ for r in rd], (10, 50, 90), 1) if rd else None,
@@ -974,8 +974,8 @@ def measure_physics(V):
         "rigid_bodies_legs": len(legs),
         "hits_legs_part": r3(np.mean([any(collide(RG[k], RG[kk]) for kk in legs) for k in dyn])) if dyn and legs else None,
         "hits_trunk_arm_part": r3(np.mean([any(collide(RG[k], RG[kk]) for kk in trunk) for k in dyn])) if dyn and trunk else None,
-        "recouvrement_rest_legs_mm": q(recj, (0, 10, 50), 1) if recj else None,
-        "recouvrement_rest_trunk_mm": q(rect, (0, 10, 50), 1) if rect else None,
+        "overlap_rest_legs_mm": q(recj, (0, 10, 50), 1) if recj else None,
+        "overlap_rest_trunk_mm": q(rect, (0, 10, 50), 1) if rect else None,
         "joints_long": limits(long_), "joints_transverses": limits(transverse),
         "detail_chains": chains[:8]}
 
@@ -1076,8 +1076,8 @@ def check(r):
     cl = _g(a, "gap", "classes_part") or {}
     if r["type"] in TIGHT:
         c("tight_nothing_under", cl.get("nothing_under"), ">= 0.65", (cl.get("nothing_under") or 0) >= 0.65)
-        c("tight_welded_edge", _g(a, "borders", "raccordees"), ">= 1 loop welded to the skin",
-          (_g(a, "borders", "raccordees") or 0) >= 1)
+        c("tight_welded_edge", _g(a, "borders", "welded"), ">= 1 loop welded to the skin",
+          (_g(a, "borders", "welded") or 0) >= 1)
         c("tight_folds_p90_mm", _g(m, "folds_geometric", "gap_smooth_abs_mm", "p90"), "<= 4",
           (_g(m, "folds_geometric", "gap_smooth_abs_mm", "p90") or 0) <= 4)
         c("tight_without_own_bones", ph.get("own_bones", 0), "0", ph.get("own_bones", 0) == 0)
@@ -1104,7 +1104,7 @@ def measure(spec, M, poses=True):
         raise WithoutObj("no piece kept (%s)" %", ".join(sorted({str(d.get("reason")) for d in V.discarded}))[:120])
     out = {"id": spec["id"], "character": spec["character"], "type": spec["type"], "why": spec["why"],
            "materials": spec["mats"], "texture_layers": spec.get("texture_layers", []),
-           "isolement": {"parts_kept": [{k: d[k] for k in ("index", "faces", "region", "diag_mm", "closed", "os_dominants")}
+           "isolation": {"parts_kept": [{k: d[k] for k in ("index", "faces", "region", "diag_mm", "closed", "os_dominants")}
                                             for d in V.kept],
                          "parts_discarded": [{k: d[k] for k in ("index", "faces", "region", "diag_mm", "closed", "os_dominants", "reason")}
                                              for d in V.discarded]},
@@ -1148,7 +1148,7 @@ def array(results, path):
             _g(a, "gap", "gap_mm", "p50"), _g(a, "rest_crossing", "fraction"), _g(a, "poses", "track_max_part"),
             _g(a, "poses", "track_body_alone_max_part"), u["islands"], _g(u, "texels", "report_skin"), tex[0].get("trait_sombre_part") if tex else None,
             p["influences_avg"], _g(p, "copy_of_under", "identical_part"), ph.get("own_bones"),
-            ph.get("rigid_bodies_dynamiques")))
+            ph.get("rigid_bodies_dynamic")))
     tmp = path + ".tmp"
     with open(tmp, "w", encoding="utf-8") as fh:
         fh.write("\n".join(L) + "\n")
@@ -1172,7 +1172,7 @@ def main(argv):
     output = folder_output(argv[argv.index("--output") + 1] if "--output" in argv else None)
     os.makedirs(output, exist_ok=True)
     alone = argv[argv.index("--only") + 1].split(",") if "--only" in argv else None
-    poses = "--sans-poses" not in argv
+    poses = "--no-poses" not in argv
     models = {}
     res = []
     specs = CLOTHES

@@ -6,7 +6,7 @@ head; a face is then composed part by part.
     python3 -I tools/head/library.py extract --outerplane --output <biblio> [--only Idith,...]
     python3 -I tools/head/library.py composed --library <biblio> --output <folder> \
         --base Jane --eyes Ellen --eyebrows Miyabi --nose Miyabi --mouth Anby [--onto Belle \
-        [--hair Miyabi [--ears Nekomata|aucune]]]
+        [--hair Miyabi [--ears Nekomata|none]]]
 
 Extract, for each character:
 1. the pivot head's skin is registered onto theirs (same registration as pivot.py): same
@@ -401,7 +401,7 @@ def extract_one(args):
              "mean_distance_iod": float(np.mean(rec["dist"]) / A.iod),
              "far_texels": float(np.mean(dD > 0.03 * A.iod)), "regions": {}}
     if resumed is not None:
-        card["texels_reorientes"] = float(resumed / len(P3))
+        card["texels_reoriented"] = float(resumed / len(P3))
     mats = D.names_mat
     for p in REGIONS + (BASE,):
         w = mask_region(M, p)
@@ -505,7 +505,7 @@ def write_index(output, refusals=None):
                 e["game"] = f["game"]
             idx["regions"][p][n] = e
         if nf:
-            non[n] = {"game": f.get("game", PV.GAME.value("abrege", PV.GAME.title)), "folder": f.get("folder_game"), "regions": nf}
+            non[n] = {"game": f.get("game", PV.GAME.value("short_name", PV.GAME.title)), "folder": f.get("folder_game"), "regions": nf}
     for n, r in (refusals or {}).items():
         non[n] = dict(r, regions={p: r["reason"] for p in REGIONS + (BASE,)})
     if non:
@@ -714,7 +714,7 @@ def _write_composed(A, Xf, delta, recipe, gifts, move, output):
     # skin
     pieces_A = set(A.i_parts)
     new = []  # (material, faces)
-    mixed = len({gifts[n][1].get("game", PV.GAME.value("abrege", PV.GAME.title)) for n in set(recipe.values())}) > 1
+    mixed = len({gifts[n][1].get("game", PV.GAME.value("short_name", PV.GAME.title)) for n in set(recipe.values())}) > 1
     for p in ("eyes", "eyebrows", "mouth", BASE):
         name_d = recipe[p]
         z, card, D, _ = gifts[name_d]
@@ -885,7 +885,7 @@ def main(argv=None):
         ap.add_argument("--" + p)
     ap.add_argument("--onto", dest="on", help="character on which to place the composed face")
     ap.add_argument("--hair", dest="hair", help="with --onto: character that gives its hairstyle (hairstyle.py)")
-    ap.add_argument("--ears", dest="ears", help="with --hair: character that gives its animal ears, or 'aucune' (none)")
+    ap.add_argument("--ears", dest="ears", help="with --hair: character that gives its animal ears, or 'none'")
     a = ap.parse_args(argv)
     if a.action == "extract":
         (extract_outerplane if a.outerplane else extract)(a.output, a.tasks, a.alone.split(",") if a.alone else None)

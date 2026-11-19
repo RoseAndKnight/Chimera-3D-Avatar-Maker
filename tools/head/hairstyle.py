@@ -3,7 +3,7 @@ hat, ornaments, animal ears), its bones and its physics, placed on another chara
 
     python3 -I tools/head/hairstyle.py extract --library <biblio> [--jobs 4] [--only Jane,Ellen]
     python3 -I tools/head/hairstyle.py place --library <biblio> --hair Miyabi --onto Evelyn \
-        --output <dossier> [--ears Nekomata|aucune] [--target <pmx>] [--no-sheet]
+        --output <folder> [--ears Nekomata|none] [--target <pmx>] [--no-sheet]
     python3 -I tools/head/hairstyle.py contact_sheet ...same options...   (only redoes the render)
 
 Measurements on the 49 heads (06/11): the face skin covers only two thirds of the top of the
@@ -415,11 +415,11 @@ def place(lib, nameA, nameB, output, ears=None, target=None):
     # "+" highlights baked into the hair texture: their duplicate faces are removed
     removes, tex_reflections = RF.bake(A, parts[0][2], output)
     parts[0][2][removes] = False
-    info["reflections_cuits"] = int(removes.sum())
+    info["reflections_baked"] = int(removes.sum())
     if ears:
         parts[0][2][rA["ears"]] = False
         info["ears_removed"] = int(rA["ears"].sum())
-        if ears != "aucune":
+        if ears != "none":
             C = TT.Head(card(ears)["pmx"])
             rC = locate(C)
             if not rC["ears"].any():
@@ -693,7 +693,7 @@ def main(argv=None):
     ap.add_argument("--jobs", dest="tasks", type=int, default=4)
     ap.add_argument("--only", dest="alone")
     ap.add_argument("--hair", dest="hair")
-    ap.add_argument("--ears", dest="ears", help="character that gives its animal ears, or 'aucune' (none)")
+    ap.add_argument("--ears", dest="ears", help="character that gives its animal ears, or 'none'")
     ap.add_argument("--onto", dest="on", help="library character whose head receives the hairstyle")
     ap.add_argument("--target", dest="target", help="PMX to put the hairstyle on (default: the --onto one; e.g. a composite face placed on it)")
     ap.add_argument("--output", dest="output")

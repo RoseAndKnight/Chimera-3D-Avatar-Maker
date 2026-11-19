@@ -32,7 +32,7 @@ BUILT = [{"kind": "build", **f, "pmx": OWN_RIG.expand(f["pmx"])} for f in OWN_RI
               if os.path.isfile(OWN_RIG.expand(f["pmx"]))]
 # Free head and hairstyle (tools/free_base/free_face.py), next to the free base body: without a base head
 # from the game, these are what the workshop offers, and the page opens without any game model.
-FREE = "Libre"   # fr-ok: "Libre" is the id of the free head and hairstyle, a folder name in installed caches
+FREE = "Free"   # id of the free base's own head and hairstyle (format 2, revision 2)
 HEAD_FREE = os.path.join(os.path.dirname(C.BODY), "head.pmx")
 HAIRSTYLE_FREE = os.path.join(os.path.dirname(C.BODY), "hairstyle.pmx")
 

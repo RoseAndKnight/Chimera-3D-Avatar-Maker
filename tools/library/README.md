@@ -94,7 +94,7 @@ did and is skipped when done; `--check` lists what is still format 1 and exits 1
 
 ## Which models (`build`)
 
-A VRoid Hub model `h<id>`: status `originale` in the statuses file (`--statuses`) **and** licence (`sources.json` of the cache) with
+A VRoid Hub model `h<id>`: the status for original models in the statuses file (`--statuses`) **and** licence (`sources.json` of the cache) with
 `allowRedistribution: true` and `modification: allowModificationRedistribution`. Another model: only if its own file
 says so (VRM meta CC0, or a VRoid Hub licence URL with `redistribution=allow&modification=allow`; for the base,
 `provenance.json` of the base). The rest is left out everywhere. `check` reads every archive back: sha256, safe

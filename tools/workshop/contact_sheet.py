@@ -7,7 +7,7 @@ The back of a face is darkened: a part turned inside out or fabric seen from ins
     python3 contact_sheet.py --parts a,b,c [--hairstyle name] [--head name] --output sheet.png [--max 12]
     python3 contact_sheet.py --part id --output sheet.png                       a part's own defects, alone on the body
     python3 contact_sheet.py --turn --parts a,b --output tour.png                overall view, six directions
-    python3 contact_sheet.py --json sondage.json --output folder/ [--max 12]       one contact sheet per faulty outfit
+    python3 contact_sheet.py --json sample.json --output folder/ [--max 12]       one contact sheet per faulty outfit
 """
 import argparse
 import json

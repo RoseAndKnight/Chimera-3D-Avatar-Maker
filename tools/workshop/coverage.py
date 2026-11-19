@@ -181,7 +181,7 @@ def reopacify(ident):
             continue
         url = doc["images"][doc["textures"][bt["index"]]["source"]]["uri"]
         im = Image.open(os.path.join(C.CACHE, url[len("/data/"):]))
-        if im.mode not in ("RGBA", "LA"):   # fr-ok: PIL image mode
+        if im.mode not in ("RGBA", "LA"):
             continue
         a = np.asarray(im.convert("RGBA"), np.float32)[..., 3] / 255.0
         op[sel] = opaque_per_face(a, uv, F[sel])

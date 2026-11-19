@@ -15,7 +15,7 @@ reported near the neck seam (less than 15 mm from the cut) and near the scalp ed
 zone of the same model that the seam does not touch: the body's neck 15 to 40 mm below the cut, and the
 body's scalp 25 to 50 mm from the edge. A sound seam folds and stretches no more than its control.
 
-Output: FOLDER/epreuve.json; with --poses-pmx, FOLDER/pose_<name>.pmx for the renders.
+Output: FOLDER/trial.json; with --poses-pmx, FOLDER/pose_<name>.pmx for the renders.
 """
 import json
 import os
@@ -48,14 +48,14 @@ POSES = {
     "head_pitch-30": {"頭": q((X, -30))},
     "head_roll+25": {"頭": q((Z, 25))},
     "neck_head_lace_pitch": {"首": q((Y, 30), (X, 20)), "頭": q((Y, 30), (X, 15))},
-    "neck_head_renverse": {"首": q((X, 35)), "頭": q((X, 30))},
+    "neck_head_back": {"首": q((X, 35)), "頭": q((X, 30))},
     "neck_head_tilted": {"首": q((X, -30)), "頭": q((X, -25))},
     "neck_head_roll": {"首": q((Z, -20)), "頭": q((Z, -20), (Y, 25))},
     "bust_twist": {"上半身2": q((Y, 30)), "首": q((Y, 20)), "頭": q((Y, 30))},
     "shoulders_haussees": {"左肩": q((Z, 20)), "右肩": q((Z, -20))},
-    "arm_leves": {"左腕": q((Z, 70)), "右腕": q((Z, -70))},
+    "arm_raised": {"左腕": q((Z, 70)), "右腕": q((Z, -70))},
 }
-RENDERS = ("head_yaw+60", "head_pitch-30", "neck_head_renverse", "neck_head_roll", "bust_twist", "arm_leves")
+RENDERS = ("head_yaw+60", "head_pitch-30", "neck_head_back", "neck_head_roll", "bust_twist", "arm_raised")
 
 
 def skeleton(R):
@@ -174,7 +174,7 @@ def main(argv=None):
         for z, m in zones.items():
             ze = m[E[:, 0]] & m[E[:, 1]]
             zd = m[E2[:, 0]] & m[E2[:, 1]]
-            res[z] = {"etirement": summary(strain[ze]), "fold_deg": summary(fold[zd])}
+            res[z] = {"stretch": summary(strain[ze]), "fold_deg": summary(fold[zd])}
         assessment["poses"][name] = res
         if "--poses-pmx" in a and name in RENDERS:
             Q = dict(R)
@@ -183,7 +183,7 @@ def main(argv=None):
             ch = os.path.join(folder, "pose_%s.pmx" % name)
             pmx_write.write(Q, ch + ".tmp")
             os.replace(ch + ".tmp", ch)
-    ch = os.path.join(folder, "epreuve.json")
+    ch = os.path.join(folder, "trial.json")
     with open(ch + ".tmp", "w", encoding="utf-8") as f:
         json.dump(assessment, f, ensure_ascii=False, indent=1)
     os.replace(ch + ".tmp", ch)
@@ -193,9 +193,9 @@ def main(argv=None):
             continue
         print("%-24s open %.4f  neck str %.3f/%.3f fold %5.1f/%5.1f   scalp str %.3f/%.3f fold %5.1f/%5.1f" % (
             name, r["opening_mm"],
-            r["join_neck"]["etirement"]["max"], r["witness_neck"]["etirement"]["max"],
+            r["join_neck"]["stretch"]["max"], r["witness_neck"]["stretch"]["max"],
             r["join_neck"]["fold_deg"]["max"], r["witness_neck"]["fold_deg"]["max"],
-            r["border_skull"]["etirement"]["max"], r["witness_skull"]["etirement"]["max"],
+            r["border_skull"]["stretch"]["max"], r["witness_skull"]["stretch"]["max"],
             r["border_skull"]["fold_deg"]["max"], r["witness_skull"]["fold_deg"]["max"]))
 
 

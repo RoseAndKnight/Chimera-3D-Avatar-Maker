@@ -15,7 +15,13 @@ conversion cut short starts again where it stopped, and a second run changes not
 7. settings: the settings.json of this installation (next to the data folder, or --settings);
 8. revision 1: the names inside files (arrays of the .npz files, the house skeleton: skeleton.json, weights.npz,
    poses.npz, shape.pkl; the check code waist_outline). A folder converted before this revision gets only it;
-9. marks the folder: chimera-data.json {"format": 2, "revision": 1}.
+9. revision 2: the names format 2 forgot (tools/dataformat.py REVISED_*): the free base's id Libre -> Free (folders,
+   <head>.bin files, keys, values, the head lists of the hairstyle signatures), fabriquees/ -> built/, the owner's
+   outfit and trial folders (tenue -> outfit, essais -> trials, sur-<head> -> on-<head>...), the built part
+   debardeur -> tank_top, the shape morphs forme_ -> shape_ of the rebuilt bodies (patched in place, same size);
+   the fingerprints of the moved files are replaced in the records, those of this folder's files and those of
+   another folder's files named by a path (a cache kept outside its data folder), so nothing is computed again;
+10. marks the folder: chimera-data.json {"format": 2, "revision": 2}.
 
 Every file rewritten is a new file put in place (os.replace): a file with several names (hard links,
 cp -al backups) keeps its other names untouched. Dates of files are kept. --check lists what still has
@@ -41,7 +47,7 @@ import dataformat as F  # noqa: E402
 
 LOG = ".chimera-migrate.json"
 PHASES = ("fingerprints", "outside-links", "names", "records", "models", "fingerprints-replace", "links", "settings",
-          "revision-1", "marker")
+          "revision-1", "revision-2", "marker")
 HEX16 = re.compile(r"^[0-9a-f]{16}$")
 FIN16 = re.compile(r"^v\d+:.*:[0-9a-f]{16}$", re.S)     # a fingerprint at the end of a signature
 # the library's roots (manifest library.json: "units")
@@ -398,6 +404,120 @@ def revision_left(path):
     return None
 
 
+# ---------------------------------------------------------------- revision 2: names format 2 forgot
+def fingerprint_at(path, real):
+    """The fingerprint `path` had (tools/workshop/common.py fingerprint_file), for the file now at `real`: the path
+    may no longer exist (its folder was renamed), the size and date are the same."""
+    st = os.stat(real)
+    return hashlib.sha1(("%s|%d|%d" % (os.path.realpath(path), st.st_size, int(st.st_mtime))).encode()).hexdigest()[:16]
+
+
+def views(folder):
+    """Every path of this folder through the mounts of its file system (a bind mount gives it a second path)."""
+    real = os.path.realpath(folder)
+    out = [real]
+    try:
+        with open("/proc/self/mountinfo", encoding="utf-8") as f:
+            mounts = [ln.split() for ln in f]
+    except OSError:
+        return out
+    mounts = [(m[2], m[3], m[4]) for m in mounts if len(m) > 4]
+    own = max((m for m in mounts if real == m[2] or real.startswith(m[2].rstrip("/") + "/")), key=lambda m: len(m[2]), default=None)
+    if own is None:
+        return out
+    inside = (own[1].rstrip("/") + real[len(own[2].rstrip("/")):]) or "/"
+    for dev, root, point in mounts:
+        if dev == own[0] and (inside == root or inside.startswith(root.rstrip("/") + "/")):
+            v = "/" + os.path.normpath(point.rstrip("/") + "/" + inside[len(root.rstrip("/")):]).lstrip("/")
+            if v not in out and os.path.isdir(v) and os.path.samefile(v, real):
+                out.append(v)
+    return out
+
+
+def cache_roots(D):
+    """Workshop caches inside a data folder (or the folder itself): folders holding catalog.json or heads/ and parts/."""
+    out = []
+    for d, ds, fs in walk(D):
+        if in_sources(os.path.relpath(d, D)):
+            ds[:] = []
+            continue
+        if "catalog.json" in fs or ("heads" in ds and ("parts" in ds or "hairstyles" in ds)):
+            out.append(d)
+    return out
+
+
+def in_cache(path, caches):
+    return any(path == c or path.startswith(c + os.sep) for c in caches)
+
+
+def revised(x, cache=False, built=False, fingerprints=None):
+    """A record with the revision-2 names (keys, ids, signatures, paths) and the fingerprints of moved files."""
+    fp = fingerprints or {}
+    if isinstance(x, dict):
+        out = {}
+        for k, v in x.items():
+            nk = F.revised_word(k, cache) if isinstance(k, str) else k
+            if built and k in F.REVISED_BUILT_KEYS:
+                nk = F.REVISED_BUILT_KEYS[k]
+            out[nk] = revised(v, cache, built, fp)
+        return out
+    if isinstance(x, list):
+        return [revised(v, cache, built, fp) for v in x]
+    if isinstance(x, str):
+        if HEX16.match(x):
+            return fp.get(x, x)
+        v = F.revised_word(x, cache)
+        if FIN16.search(v) and v[-16:] in fp:
+            v = v[:-16] + fp[v[-16:]]
+        return v
+    return x
+
+
+def morph_prefix_fix(path):
+    """Shape morphs of a rebuilt body: forme_<name> -> shape_<name>, bytes patched in place (same length, so the
+    size and the fingerprint stay); only when every occurrence of the prefix is in a morph name. 1 if done."""
+    old, new = F.MORPH_PREFIX
+    with open(path, "rb") as f:
+        d = f.read()
+    if d[:4] != b"PMX ":
+        return 0
+    code = "utf-16-le" if d[9] == 0 else "utf-8"
+    a, b = old.encode(code), new.encode(code)
+    if a not in d:
+        return 0
+    sys.path.insert(0, os.path.join(TOOLS, "atlas"))
+    import pmx as PMX
+    names = [t for m in PMX.read(path)["morphs"] for t in (m["name"], m["name_en"])]
+    if d.count(a) != sum(t.count(old) for t in names):
+        say("  %s: the prefix %s is also outside the morph names, left as it is" % (path, old))
+        return 0
+    replace(path, d.replace(a, b))
+    after = [t for m in PMX.read(path)["morphs"] for t in (m["name"], m["name_en"])]
+    if after != [t.replace(old, new) for t in names]:
+        raise SystemExit("%s: morph names not as expected after the patch" % path)
+    return 1
+
+
+def revision_2_left(path, rel, cache):
+    """What revision 2 would still change in this file: None, or a short reason."""
+    name = os.path.basename(path)
+    if name.endswith(".json"):
+        try:
+            with open(path, encoding="utf-8") as f:
+                x = json.load(f)
+        except ValueError:
+            return None
+        built = cache and os.sep + "built" + os.sep in path and name == "record.json"
+        if revised(x, cache, built) != x:
+            return "revision-2 word"
+    elif name.endswith(".pmx"):
+        with open(path, "rb") as f:
+            d = f.read()
+        if d[:4] == b"PMX " and F.MORPH_PREFIX[0].encode("utf-16-le" if d[9] == 0 else "utf-8") in d:
+            return "morph prefix " + F.MORPH_PREFIX[0]
+    return None
+
+
 class Migration:
     def __init__(self, data, settings=None):
         self.D = os.path.realpath(data)
@@ -721,10 +841,146 @@ class Migration:
                     if WAIST.search(text):
                         replace(p, WAIST.sub(lambda m: F.REVISED_CHECKS[m.group(1)], raw.decode("utf-8")).encode("utf-8"))
                         n["json"] += 1
-        self.mark()
+        self.mark(1)
         return n
 
-    def mark(self):
+    # 9
+    def phase_revision_2(self):
+        """Names format 2 forgot (see the docstring). Stateless: run again, it redoes only what is left."""
+        caches = cache_roots(self.D)
+        inside = [v + os.sep for v in views(self.D)]
+        for q in self.json_files():                  # a folder this one names must be converted first
+            with open(q, encoding="utf-8") as f:
+                for path in set(re.findall(r'"((?:/|~/)[^"\\]+)"', f.read())):
+                    full = os.path.expanduser(path)
+                    if any(os.path.realpath(full).startswith(v) or full.startswith(v) for v in inside):
+                        continue
+                    for nv in {F.revised_path(full, True), F.revised_path(full)} - {full}:
+                        if os.path.exists(full) and not os.path.exists(nv):
+                            raise SystemExit("%s names %s, in a folder not converted to revision 2 yet: convert "
+                                             "that data folder first, then this one" % (q, full))
+        n = {"renamed": 0, "records": 0, "fingerprints": 0, "morphs": 0, "links": 0}
+        # names, deepest first
+        for d, ds, fs in os.walk(self.D, topdown=False):
+            rel = os.path.relpath(d, self.D)
+            if in_sources(rel) or rel.split(os.sep)[0] in (".chimera-migrate-links",):
+                continue
+            cache = in_cache(d, caches)
+            for name, folder in [(x, False) for x in fs] + [(x, True) for x in ds]:
+                q = os.path.join(d, name)
+                if rel == "." and name in (LOG, F.MARKER, "sources"):
+                    continue
+                nv = F.revised_name(name, folder and not os.path.islink(q), cache)
+                if nv == name:
+                    continue
+                if os.path.lexists(os.path.join(d, nv)):
+                    raise SystemExit("cannot rename %s: %s already exists" % (q, os.path.join(d, nv)))
+                os.rename(q, os.path.join(d, nv))
+                n["renamed"] += 1
+        # fingerprints: this folder's moved files, then the files of other folders named by a path in a record
+        # fingerprints (path, size, date) of this folder's moved files, through every view of the folder (a bind
+        # mount gives it a second path, hence a second fingerprint): the files keep their size and date, so the
+        # fingerprint they had under a former path is computed again; stateless, a second run finds the same
+        cited = set()
+        for q in self.json_files():
+            with open(q, "rb") as f:
+                cited.update(m.decode() for m in re.findall(rb'[":]([0-9a-f]{16})"', f.read()))
+        map_ = {}
+        all_views = views(self.D)
+        for d, _, fs in walk(self.D):
+            rel_d = os.path.relpath(d, self.D)
+            if in_sources(rel_d):
+                continue
+            for name in fs:
+                f = os.path.join(d, name)
+                rel = os.path.normpath(os.path.join(rel_d, name))
+                formers = [x for x in F.former_paths(rel) if x != rel]
+                if not formers or not os.path.isfile(f):
+                    continue
+                for view in all_views:
+                    for x in formers:
+                        e = fingerprint_at(os.path.join(view, x), f)
+                        if e in cited:
+                            map_[e] = fingerprint_at(os.path.join(view, rel), f)
+        texts = {}
+        for q in self.json_files():
+            with open(q, encoding="utf-8") as f:
+                texts[q] = f.read()
+        for t in texts.values():
+            # a path of another folder: the file is at its revision-2 name (that folder converted first); the
+            # fingerprints were computed on the path it had (in this record, or already rewritten by an earlier run)
+            for path in set(re.findall(r'"((?:/|~/)[^"\\]+)"', t)):
+                full = os.path.expanduser(path)
+                for cand in (F.revised_path(full, True), F.revised_path(full)):
+                    if os.path.isfile(cand):
+                        for old in F.former_paths(cand):
+                            if old != cand and not os.path.exists(old):
+                                map_.setdefault(fingerprint_at(old, cand), fingerprint(cand))
+                        break
+        map_ = {a: b for a, b in map_.items() if a != b}
+        # records
+        for q, text in texts.items():
+            try:
+                x = json.loads(text)
+            except ValueError:
+                continue
+            cache = in_cache(q, caches)
+            built = cache and os.sep + "built" + os.sep in q and os.path.basename(q) == "record.json"
+            nx = revised(x, cache, built, map_)
+            if nx != x:
+                replace(q, write_json_like(q, nx, text))
+                n["records"] += 1
+                n["fingerprints"] += sum(text.count(e) for e in map_)
+        # shape morphs of rebuilt bodies
+        for d, _, fs in walk(self.D):
+            if in_sources(os.path.relpath(d, self.D)):
+                continue
+            for name in fs:
+                if name.endswith(".pmx") and not os.path.islink(os.path.join(d, name)):
+                    n["morphs"] += morph_prefix_fix(os.path.join(d, name))
+        # links that point to a renamed path (inside this folder, or into another folder of revision 2)
+        for d, ds, fs in walk(self.D):
+            for name in ds + fs:
+                q = os.path.join(d, name)
+                if not os.path.islink(q):
+                    continue
+                target = os.readlink(q)
+                nv = F.revised_path(target, in_cache(os.path.join(d, target) if not os.path.isabs(target) else target, caches))
+                if nv != target and not os.path.exists(q) and os.path.exists(os.path.join(d, nv)):
+                    tmp = q + ".link.tmp"
+                    os.symlink(nv, tmp)
+                    os.replace(tmp, q)
+                    n["links"] += 1
+        n["settings"] = self.revised_settings()
+        self.mark(2)
+        return n
+
+    def revised_settings(self):
+        candidates = [self.settings] if self.settings else [os.path.join(os.path.dirname(self.D), "settings.json"),
+                                                         os.path.join(self.D, "settings.json")]
+        done = []
+        for s in candidates:
+            if not s or not os.path.isfile(s):
+                continue
+            with open(s, encoding="utf-8") as f:
+                text = f.read()
+            x = json.loads(text)
+
+            def rempl(v, the_key=""):
+                if isinstance(v, dict):
+                    return {k: rempl(w, k) for k, w in v.items()}
+                if isinstance(v, str) and "/" in v and not the_key.startswith("_") and not v.startswith("http"):
+                    rest = under_folder(os.path.expanduser(v), self.D) if "{data}" not in v else v
+                    if rest is not None and v.endswith(rest):
+                        return v[:len(v) - len(rest)] + F.revised_path(rest)
+                return v
+            nx = rempl(x)
+            if nx != x:
+                replace(s, json.dumps(nx, ensure_ascii=False, indent=1).encode("utf-8"))
+                done.append(s)
+        return done or "none to change"
+
+    def mark(self, revision):
         p = os.path.join(self.D, F.MARKER)
         try:
             with open(p, encoding="utf-8") as f:
@@ -733,7 +989,7 @@ class Migration:
             j = {"format": F.FORMAT, "converted": time.strftime("%Y-%m-%d %H:%M:%S")}
         if j.get("format") != F.FORMAT:
             return
-        j["revision"] = F.REVISION
+        j["revision"] = max(revision, int(j.get("revision", 0)))
         with open(p + ".tmp", "w", encoding="utf-8") as f:
             json.dump(j, f, indent=1)
         os.replace(p + ".tmp", p)
@@ -762,13 +1018,19 @@ def check(data, limit=40):
     remainders = []
     if F.format_of(D) == F.FORMAT and F.revision_of(D) < F.REVISION:
         remainders.append(("marker", "%s: format 2 before revision %d" % (F.MARKER, F.REVISION)))
+    caches = cache_roots(D)
     for d, ds, fs in walk(D):
         rel = os.path.relpath(d, D)
+        cache = in_cache(d, caches)
         for name, folder in [(x, True) for x in ds] + [(x, False) for x in fs]:
             if name.endswith(".tmp"):
                 remainders.append(("leftover", os.path.join(rel, name)))
             elif new_name(rel, name, folder) != name:
                 remainders.append(("name", os.path.join(rel, name)))
+            elif not in_sources(rel) and not (rel == "." and name in ("sources", LOG, ".chimera-migrate-links")) and \
+                    rel.split(os.sep)[0] != ".chimera-migrate-links" and \
+                    F.revised_name(name, folder and not os.path.islink(os.path.join(d, name)), cache) != name:
+                remainders.append(("name", os.path.join(rel, name) + " (revision 2)"))
         if in_sources(rel):
             continue
         for name in fs:
@@ -787,7 +1049,7 @@ def check(data, limit=40):
                 if [F.path(t) for t in tex] != tex:
                     remainders.append(("model", os.path.join(rel, name)))
             if not os.path.islink(p) and name not in (LOG, F.MARKER):
-                why = revision_left(p)
+                why = revision_left(p) or revision_2_left(p, rel, cache)
                 if why:
                     remainders.append(("inside", "%s: %s" % (os.path.join(rel, name), why)))
         for name in ds + fs:

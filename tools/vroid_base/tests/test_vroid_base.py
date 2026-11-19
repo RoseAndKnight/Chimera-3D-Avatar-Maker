@@ -175,12 +175,12 @@ class BaseHeadBuilt(unittest.TestCase):
             os.makedirs(os.path.join(t, "vroid-base"))
             with open(os.path.join(t, "vroid-base", "base.json"), "w") as f:
                 json.dump({"base_head": {"name": "Model", "eye_gap": 1.06}}, f)
-            regl = os.path.join(t, "settings.json")
-            with open(regl, "w") as f:
+            settings_file = os.path.join(t, "settings.json")
+            with open(settings_file, "w") as f:
                 json.dump({"paths": {"data": t}, "workshop": {"body": "{data}/vroid-base/body.pmx"},
                            "games": {"vroid": {"base_head": {"eye_gap": 2.0}}}}, f)
             old = os.environ.get("CHIMERA_SETTINGS")
-            os.environ["CHIMERA_SETTINGS"] = regl
+            os.environ["CHIMERA_SETTINGS"] = settings_file
             import settings as R
             import games as games
             try:

@@ -18,9 +18,9 @@ What the tool does, on the skin material only (`head_graft.main` calls it by def
    head centre -> vertex that crosses the face);
  - the skin edge thus freed is glued onto the outer edge of the face: each face corner receives a skin
    vertex, the other vertices are projected onto the edges;
- - the rest of the skin follows through a harmonic displacement that fades out at `rayon` along the
+ - the rest of the skin follows through a harmonic displacement that fades out at `radius` along the
    surface: a gentle slope instead of a step;
- - normals: the face's on the weld, blended towards the skin's over `rayon_normales`;
+ - normals: the face's on the weld, blended towards the skin's over `radius_normals`;
  - weights: the face's on the weld, blended over `radius_weight`; morphs that move the face edge carry the
    weld along. The face itself is not touched;
  - scalp: the body skin is pulled in behind the front silhouette of the face (`tuck_skull`);

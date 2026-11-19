@@ -23,7 +23,7 @@ def _fmt(size, vertex=False):
 
 
 def write(pmx, path):
-    enc = "utf-16-le" if pmx.get("encoding", "UTF-16") == "UTF-16" else "utf-8"   # fr-ok: codec name
+    enc = "utf-16-le" if pmx.get("encoding", "UTF-16") == "UTF-16" else "utf-8"
     s = pmx["vertices"]
     n_uv_add = pmx["n_uv_add"]
     t_vert = _size(len(s["pos"]), True)
@@ -47,7 +47,7 @@ def write(pmx, path):
     out.extend(b"PMX ")
     w("f", float(pmx.get("version", 2.0)))
     w("B", 8)
-    w("8B", 0 if enc == "utf-16-le" else 1, n_uv_add, t_vert, t_tex, t_mat, t_os, t_mor, t_rig)   # fr-ok: codec name
+    w("8B", 0 if enc == "utf-16-le" else 1, n_uv_add, t_vert, t_tex, t_mat, t_os, t_mor, t_rig)
     text(pmx.get("name", ""))
     text(pmx.get("name_en", ""))
     text(pmx.get("comment", ""))

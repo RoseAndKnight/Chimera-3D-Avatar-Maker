@@ -8,7 +8,7 @@ the page:
   - importing is only possible if the active game takes its models from a folder where everyone brings their own
     ("models": "*" in its description): a game with a declared list (ZZZ) only sees the models of its list;
   - extraction follows the chain of COMPATIBILITY.md: pivot head (if missing), faces, hairstyles, clothes, then
-    catalog.py prepare (Blender through the bin/blender-queue queue, settings calcul.*).
+    catalog.py prepare (Blender through the bin/blender-queue queue, settings compute.*).
 
 Received files are untrusted data: the archive is checked before it is unpacked, and model files are only read by an
 isolated Python (-I) started from the repository.

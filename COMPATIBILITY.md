@@ -1,4 +1,5 @@
 # Compatibility with game models
+<!-- fr-ok-words: controle, rendu -- file names set by the third-party Outerplane extraction (controle.glb, rendu.json; see _fr_ok in tools/games/outerplane/game.json) -->
 
 > **Read this first.** This tool contains no game model and distributes none. The game names
 > mentioned here only say which files the tool can work with. You bring your own files, and you
@@ -40,7 +41,7 @@ elsewhere with the key `games.<game>.<source>` given in the tables below.
 ```
 <data>/
   sources/zzz/mmd-extracted/<Character>/…/<model>.pmx       your PMX files, textures next to them
-  sources/outerplane/people/<id>_<Name>/controle.glb  + rendu.json and the textures   <!-- fr-ok: file names set by the third-party extraction -->
+  sources/outerplane/people/<id>_<Name>/controle.glb  + rendu.json and the textures
   vroid-base/body.pmx      base body (setting workshop.body), written by tools/vroid_base/build.py
   free-base/body.pmx      fallback without a .vrm, written by tools/free_base/build.py
   pivot-head/               written by tools/head/pivot.py
@@ -80,7 +81,7 @@ The commands are run from the repository root.
 | Game | Key | Format | Level | Faces | Hairstyles | Clothes |
 |---|---|---|---|---|---|---|
 | Zenless Zone Zero | `zzz` | PMX (MMD) | proven | proven | proven | proven |
-| Outerplane | `outerplane` | GLB (binary glTF), rendu.json | partial | partial | partial | not supported | <!-- fr-ok: see _fr_ok in the game description -->
+| Outerplane | `outerplane` | GLB (binary glTF), rendu.json | partial | partial | partial | not supported |
 | VRoid | `vroid` | VRM 0.x (.vrm), VRM 1.0 (.vrm, VRoid Hub) | partial | partial | partial | partial |
 
 ### Zenless Zone Zero (`zzz`): proven
@@ -128,8 +129,8 @@ The game the pipeline was written for: faces, hairstyles, clothes and accessorie
 
 The heads are converted and stored in the face library, but Chimera offers none of them today.
 
-- **Expected format**: GLB (binary glTF), rendu.json <!-- fr-ok: see _fr_ok in the game description -->
-- **Where these files come from**: An extraction of the game files by a third-party tool, laid out in the format of our extraction tool: one folder per character with `controle.glb` (mesh, bones, morphs), `rendu.json` (materials and textures) and the textures. No tool in this repository produces this format. <!-- fr-ok: see _fr_ok in the game description -->
+- **Expected format**: GLB (binary glTF), rendu.json
+- **Where these files come from**: An extraction of the game files by a third-party tool, laid out in the format of our extraction tool: one folder per character with `controle.glb` (mesh, bones, morphs), `rendu.json` (materials and textures) and the textures. No tool in this repository produces this format.
 
 | What the tool does | Level | Detail |
 |---|---|---|
@@ -143,11 +144,11 @@ The heads are converted and stored in the face library, but Chimera offers none 
 
 | Source | Default folder | Setting key that moves it | What it must contain |
 |---|---|---|---|
-| `people` | `{data}/sources/outerplane/people` | `games.outerplane.people` | one folder per character (`<id>` or `<id>_<Name>`) with `controle.glb`, `rendu.json` and the textures named by `rendu.json` | <!-- fr-ok: see _fr_ok in the game description -->
+| `people` | `{data}/sources/outerplane/people` | `games.outerplane.people` | one folder per character (`<id>` or `<id>_<Name>`) with `controle.glb`, `rendu.json` and the textures named by `rendu.json` |
 
 **From your files to Chimera**
 
-1. Put the character folders in `{data}/sources/outerplane/people` (or write its path under `games.outerplane.people` in the settings). Check: `python3 -I tools/games` counts the folders that have `controle.glb` and `rendu.json`. <!-- fr-ok: see _fr_ok in the game description -->
+1. Put the character folders in `{data}/sources/outerplane/people` (or write its path under `games.outerplane.people` in the settings). Check: `python3 -I tools/games` counts the folders that have `controle.glb` and `rendu.json`.
 2. Heads: the ZZZ pipeline must have produced the pivot head (`<data>/pivot-head`), then `<python> -I tools/head/library.py extract --outerplane --output <data>/face-library`; a single head as a trial: `<python> -I tools/head/outerplane.py convert <character folder> <output.pmx>`.
 3. Hairstyles: `<python> -I tools/head/hairstyle.py extract --library <data>/face-library --only <names>`.
 

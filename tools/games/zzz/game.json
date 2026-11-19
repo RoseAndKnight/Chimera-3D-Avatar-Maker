@@ -2,10 +2,11 @@
  "_readme": "Description of Zenless Zone Zero (ZZZ): where its models are, which ones, the base head, the special cases per character, the studies made on its models. The models are not provided: sources.mmd_extracted is the folder of the extracted official PMX files (MMD archives published by the studio). See tools/games/README.md.",
  "_fr_ok": {
   "WiseTenue": "name of a source folder of the owner's extracted models (Wise's alternate outfit)",
-  "Belle-Wise-tenue/": "same: folder of the extracted archives, named by the owner"
+  "Belle-Wise-tenue/": "same: folder of the extracted archives, named by the owner",
+  "Soldat11": "folder name of the model in the game's extraction"
  },
  "title": "Zenless Zone Zero",
- "abrege": "ZZZ",
+ "short_name": "ZZZ",
  "format": "pmx",
  "compatibility": {
   "_readme": "What the tool does with this game's models, according to the code and the data of 15/11/2026. Read by python3 -I tools/games (list, table, check); COMPATIBILITY.md is drawn from it. No other tool reads it.",
@@ -133,14 +134,14 @@
   "small": {"heads": ["Jane", "Miyabi"], "hairstyles": ["Anby", "Miyabi"]}
  },
  "people": {
-  "_note": "Special cases, sorted by character. expressions: strength specific to the head, replaces the named weights of the common expression (tools/workshop/expressions.py). exception_garment: a cut that the mesh alone does not find (tools/clothes/library.py), from an entry of etudes.clothes.",
+  "_note": "Special cases, sorted by character. expressions: strength specific to the head, replaces the named weights of the common expression (tools/workshop/expressions.py). exception_garment: a cut that the mesh alone does not find (tools/clothes/library.py), from an entry of studies.clothes.",
   "Jane": {"expressions": {"Yandere": {"びっくり": 1.35, "@iris": 0.66}}},
   "Yanagi": {
    "_expressions": "her own eyes are large and round; opened too wide, she looked frightened → little opening, lower eyelid raised by the smile, iris shrunk less",
    "expressions": {"Yandere": {"びっくり": 0.25, "にこり": 0.6, "下眼上": 0.35, "@iris": 0.72}}
   },
   "Yuzuha": {
-   "_exception_garment": "The material 体 carries the cardigan AND the dress, welded into one piece, of the same colour at the seams: nothing in the mesh separates them. The cut by texture area already measured is reused (etudes.clothes, \"yuzuha_cardigan\"), with no new entry.",
+   "_exception_garment": "The material 体 carries the cardigan AND the dress, welded into one piece, of the same colour at the seams: nothing in the mesh separates them. The cut by texture area already measured is reused (studies.clothes, \"yuzuha_cardigan\"), with no new entry.",
    "exception_garment": {
     "spec": "yuzuha_cardigan",
     "type": "jacket",
@@ -148,7 +149,7 @@
    }
   }
  },
- "etudes": {
+ "studies": {
   "_note": "Choices made by looking at the game's models, for the measuring tools. clothes: the clothes of tools/clothes/measure.py (one per requested type, on different characters when possible, and contrasting constructions: single sheet, closed shell, double-sided, garment = body; preview of the 16 outfits of 7/11/2026), then the real sweaters (long-sleeved tops in thick knit, without physics chains of their own). hair: the hairstyles measured by tools/hair/measure.py. outfits_layers: reference outfits of tools/workshop/check_layers.py (house and game parts, from tight layers to loose ones).",
   "_yuzuha_cardigan": "the material 体 carries the whole outfit, welded into one piece: the cardigan is cut by its texture area (front/back, sleeve, cuff, bottom ribbing), measured on the UV map; uv_exclude: dark bands of the cuffs, ends of straps and lower laces (not pink knit)",
   "clothes": [
@@ -261,7 +262,7 @@
    "tights-coat": ["Evelyn__top", "Ellen__trousers", "Evelyn__coat", "Hugo__shoes"],
    "dress-jacket": ["Ellen__dress", "Hugo__jacket", "Yuzuha__boots", "Yuzuha__socks"],
    "tshirt-waistcoat-shorts": ["Atelier__tshirt", "Belle__waistcoat", "Maelys__underwear", "Lucy__skirt", "Anby__boots"],
-   "tanktop-coat": ["Maelys__debardeur", "Maelys__skirt", "Maelys__underwear", "Evelyn__coat", "Yuzuha__socks"]
+   "tanktop-coat": ["Maelys__tank_top", "Maelys__skirt", "Maelys__underwear", "Evelyn__coat", "Yuzuha__socks"]
   }
  }
 }

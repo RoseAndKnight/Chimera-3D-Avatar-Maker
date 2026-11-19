@@ -151,7 +151,7 @@ entry; a list (`closed_bottoms`, `also_takes`…) is replaced as a whole; `null`
     {"layers": {
       "garments": {"skirt": {"rank": 33},
                     "kimono": {"tab": "top", "slot": "outer", "rank": 57, "name": "kimono"}},
-      "accessories": {"broche": {"rank": 79, "exclusive": false}},
+      "accessories": {"brooch": {"rank": 79, "exclusive": false}},
       "thresholds": {"max_outward_mm": 10}}}
 
 | Section | An entry | Role |

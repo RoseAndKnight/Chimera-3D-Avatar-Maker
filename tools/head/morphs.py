@@ -103,7 +103,7 @@ class Model:
         ids = [i for i, n in enumerate(self.names_mat) if n in names]
         return np.unique(self.t["faces"][np.isin(self.t["mat_face"], ids)])
 
-    def _accumuler(self, i, w, dv, poses, depth=0):
+    def _accumulate(self, i, w, dv, poses, depth=0):
         m = self.pmx["morphs"][i]
         if depth > 8 or w == 0:
             return
@@ -122,7 +122,7 @@ class Model:
                 poses[int(o)] = (tt + w * np.asarray(t), qq)
         elif m["type"] in (0, 9):
             for j, f in m["offsets"]:
-                self._accumuler(int(j), w * f, dv, poses, depth + 1)
+                self._accumulate(int(j), w * f, dv, poses, depth + 1)
 
     def matrices(self, poses):
         """Skinning matrices (nb, 4, 4) relative to rest for local bone poses."""
@@ -177,7 +177,7 @@ class Model:
         if name not in self.index:
             return dv
         poses = {}
-        self._accumuler(self.index[name], w, dv, poses)
+        self._accumulate(self.index[name], w, dv, poses)
         p = self.pos + dv
         if not poses:
             return dv
@@ -343,7 +343,7 @@ def check(Mo, names=None, donors=None):
         np.add.at(ds, inv, D[vp])
         ds /= np.maximum(np.bincount(inv, minlength=len(Vs0)), 1)[:, None]
         L = {"morph": name, "type": Mo.pmx["morphs"][Mo.index[name]]["type"] if name in Mo.index else None,
-             "materials": {}, "figees": [], "percent": [], "vides": []}
+             "materials": {}, "frozen": [], "percent": [], "empty": []}
         L["materials"]["skin"] = round(float(np.linalg.norm(ds, axis=1).max()), 4) if len(ds) else 0.0
         for i, v in parts.items():
             n = Mo.names_mat[i]
@@ -356,7 +356,7 @@ def check(Mo, names=None, donors=None):
                 if moves.sum() >= max(3, 0.05 * len(v)):
                     fig = moves & (a[v] < FROZEN * sk)
                     if fig.sum() > PART_FROZEN * moves.sum():
-                        L["figees"].append({"part_name": the_key, "vertices": int(fig.sum()), "on": int(moves.sum()),
+                        L["frozen"].append({"part_name": the_key, "vertices": int(fig.sum()), "on": int(moves.sum()),
                                             "skin": round(float(sk[moves].mean()), 4),
                                             "part_moves": round(float(a[v][moves].mean()), 4)})
             elif n in INTERIOR and a.max() > THRESHOLD:
@@ -369,7 +369,7 @@ def check(Mo, names=None, donors=None):
             for the_key, amp in donors[name].items():
                 got = max([v for k, v in L["materials"].items() if k.split("#")[0] == the_key] or [0.0])
                 if amp > THRESHOLD and got < (WEAK if the_key == "skin" else 0.2) * amp:
-                    L["vides"].append({"material": the_key, "donor": round(amp, 4), "here": got})
+                    L["empty"].append({"material": the_key, "donor": round(amp, 4), "here": got})
         lines.append(L)
     return lines
 
@@ -436,7 +436,7 @@ def project_oriented(q, nq, V, F, cos=0.3):
 
 def skin_common(Vd, Fd, pts, V, F, wear):
     """Skin under part vertices, on the donor (Vd, Fd) and here (V, F): the donor's point,
-    carried here (porter(x, est_vecteur)), then projected onto the faces oriented the same way.
+    carried here (wear(x, is_vector)), then projected onto the faces oriented the same way.
     Returns ((faces, bary) on the donor, (faces, bary) here)."""
     _, fd, bd, _ = G.plus_near(pts, Vd, Fd)
     q = wear((bd[:, :, None] * Vd[Fd[fd]]).sum(1), False)
@@ -544,7 +544,7 @@ def delta_composed(gifts, recipe, M, wv, n):
         sys.path.append(os.path.join(HERE, ".."))
     import games as games
     J = games.active()
-    PIVOT = J.value("abrege", J.title)
+    PIVOT = J.value("short_name", J.title)
     BASE = "base"
     game = lambda name: gifts[name][1].get("game", PIVOT)  # noqa: E731
     dA = gifts.skin_pivot(n)
@@ -657,8 +657,7 @@ class Done:
         self.kp_of_kc[inv_c] = kp
         # registration of the retarget_head visage pass: the one whose X lands on the 颜_A skin
         va = self.Mo.vertices(("颜_A",))
-        candidates = [registration] if registration else sorted(glob.glob(os.path.join(os.path.dirname(recipe_json), "on-*", "registration.npz"))
-                                                                 + glob.glob(os.path.join(os.path.dirname(recipe_json), "sur-*", "registration.npz")))   # fr-ok: older trial folders on disk
+        candidates = [registration] if registration else sorted(glob.glob(os.path.join(os.path.dirname(recipe_json), "on-*", "registration.npz")))
         self.rec = None
         for c in candidates:
             z = np.load(c)
@@ -679,7 +678,7 @@ class Done:
         self.skin_kc = np.concatenate([ja, jB[dB < 1e-5]])
         self.seeds = vB[dB < 1e-5]
         ids = [i for i, n in enumerate(self.Mo.names_mat) if n in SKINS]
-        self.Fpeau = self.Mo.t["faces"][np.isin(self.Mo.t["mat_face"], ids)]
+        self.F_skin = self.Mo.t["faces"][np.isin(self.Mo.t["mat_face"], ids)]
         # scale and local rotations of the face pass (like retarget_head)
         Xc = Xf[self.kp_of_kc]
         self.s = float(np.sqrt(((XA - XA.mean(0)) ** 2).sum() / ((Xc - Xc.mean(0)) ** 2).sum()))
@@ -748,7 +747,7 @@ class Done:
             sR, tR = pc["sR"], pc["tR"]
             wear = lambda x, vec: np.einsum("nij,nj->ni", sR, x) + (0 if vec else tR)
             pc["under_d"], pc["under"] = skin_common(Dt.pos, Dt.faces[Dt.skin_faces_raw],
-                                                    Dt.pos[pc["vd"]], self.Mo.pos, self.Fpeau, wear)
+                                                    Dt.pos[pc["vd"]], self.Mo.pos, self.F_skin, wear)
         return pc
 
     def skin_under(self, pc, D):
@@ -827,7 +826,7 @@ def repair(finished, log=print):
                 d = e if d is None else d + e
             if d is not None and pc["name"] in INTERIOR:
                 p0 = Fi.Mo.pos[pc["vf"]]
-                d, k = keep(Fi.Mo.pos, Fi.Mo.pos + D, Fi.Fpeau, p0, d)
+                d, k = keep(Fi.Mo.pos, Fi.Mo.pos + D, Fi.F_skin, p0, d)
                 if k:
                     what += ", %d pushed back" % k
             if d is not None and np.linalg.norm(d, axis=1).max() >= THRESHOLD:
@@ -915,15 +914,15 @@ def display(lines):
     for L in lines:
         mat = " ".join("%s %.3f" % (k, v) for k, v in L["materials"].items() if v > THRESHOLD)
         sheet = []
-        if L["vides"]:
-            sheet.append("EMPTY " + ",".join(x["material"] for x in L["vides"]))
-        if L["figees"]:
-            sheet.append("FROZEN " + ",".join("%s(%d/%d)" % (x["part_name"], x["vertices"], x["on"]) for x in L["figees"]))
+        if L["empty"]:
+            sheet.append("EMPTY " + ",".join(x["material"] for x in L["empty"]))
+        if L["frozen"]:
+            sheet.append("FROZEN " + ",".join("%s(%d/%d)" % (x["part_name"], x["vertices"], x["on"]) for x in L["frozen"]))
         if L["percent"]:
             sheet.append("PIERCES " + ",".join("%s(%d, %.3f)" % (x["part_name"], x["vertices"], x["progress_max"])
                                              for x in L["percent"]))
         print("%-8s t%s  %-60s %s" % (L["morph"], L["type"], mat or "(nothing moves)", "  ".join(sheet)))
-    n = sum(1 for L in lines if L["vides"] or L["figees"] or L["percent"])
+    n = sum(1 for L in lines if L["empty"] or L["frozen"] or L["percent"])
     print("check: %d morphs, %d with defects" % (len(lines), n))
     return n
 
@@ -1270,7 +1269,7 @@ def keep_eyebrows(P, gap_min=None, path=None, folders=(), log=print):
 
 
 def deform_eyebrows(P, length=1.0, thickness=1.0, arc=0.0, rise=0.0, tilt=0.0, eps=1e-4):
-    """Deforms the eyebrow vertices (眉, 眉毛) of PMX P in place: longueur (length factor, from
+    """Deforms the eyebrow vertices (眉, 眉毛) of PMX P in place: length (length factor, from
     the middle), thickness (thickness factor, around the centre line), arc (rise of the middle,
     as a fraction of the half-length), rise (raise, same unit), tilt (tilt in degrees,
     outer end upwards).
@@ -1301,7 +1300,7 @@ def deform_eyebrows(P, length=1.0, thickness=1.0, arc=0.0, rise=0.0, tilt=0.0, e
             e = np.zeros(3)
             e[j] = eps
             J[k, :, j] = (so.f(pos[k] + e, **per) - so.f(pos[k] - e, **per)) / (2 * eps)
-        info["sides"][name] = {"vertices": int(len(k)), "half_length": so.L, "skin_ajustee": so.n_skin}
+        info["sides"][name] = {"vertices": int(len(k)), "half_length": so.L, "skin_fitted": so.n_skin}
     # vertex morphs
     pos_of = {int(v): i for i, v in enumerate(vs)}
     side_of = np.zeros(len(vs), dtype=object)
@@ -1336,11 +1335,11 @@ def deform_eyebrows(P, length=1.0, thickness=1.0, arc=0.0, rise=0.0, tilt=0.0, e
         S["nor"][v] = tuple(float(x) for x in n)
     disp = np.linalg.norm(new - pos, axis=1)
     info.update({"vertices": int(len(vs)), "shift_max": float(disp.max()), "morphs": touched,
-                 "offset_max": dmax, "gap_jacobienne": err})
+                 "offset_max": dmax, "gap_jacobian": err})
     print("eyebrows: %d vertices, moved by %.3f at most; %d morphs carried by the Jacobian; "
           "error |f(p+d)-f(p)-J d| %.4f for an offset of %.3f" % (len(vs), disp.max(), len(touched), err, dmax))
     for name, c in info["sides"].items():
-        print("  %s: %d vertices, half-length %.3f, skin fitted on %d vertices" % (name, c["vertices"], c["half_length"], c["skin_ajustee"]))
+        print("  %s: %d vertices, half-length %.3f, skin fitted on %d vertices" % (name, c["vertices"], c["half_length"], c["skin_fitted"]))
     return info
 
 

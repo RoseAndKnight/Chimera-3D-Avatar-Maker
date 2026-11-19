@@ -1,17 +1,14 @@
 {
  "_readme": "Our own heads and parts (not a game), described as a game so that the core names none of them: Maelys (house character), Orpheya (head made from an image, Keijo) and the clothes built in the workshop. Their files are in the data ({data}), not in the repository. The material names (内裤, 针织…) are those of the common language of the parts (see tools/games/README.md).",
  "_fr_ok": {
-  "Maëlys": "the house character's name, shown as written",
-  "{data}/face-library/essais/maelys/coupe-neuve/result.pmx": "research folders of the owner's data, not renamed by the format-2 migration",
-  "{data}/essais/orpheya/image-3/result.pmx": "same: research folder of the owner's data",
-  "{data}/clothes/tenue-maelys-2/result.pmx": "same: folder of a built outfit in the owner's data"
+  "Maëlys": "the house character's name, shown as written"
  },
  "title": "Homemade",
  "format": "pmx",
  "heads": {
   "_note": "Heads computed separately (no folder in the face library): pmx = the measured model, name = displayed name.",
-  "Maelys": {"pmx": "{data}/face-library/essais/maelys/coupe-neuve/result.pmx", "name": "Maëlys"},
-  "Orpheya": {"pmx": "{data}/essais/orpheya/image-3/result.pmx", "name": "Orpheya"}
+  "Maelys": {"pmx": "{data}/face-library/trials/maelys/new-cut/result.pmx", "name": "Maëlys"},
+  "Orpheya": {"pmx": "{data}/trials/orpheya/image-3/result.pmx", "name": "Orpheya"}
  },
  "catalog": {
   "_note": "Offered by Chimera before those of the active game; small: the trial level of catalog.py prepare --level small.",
@@ -20,15 +17,15 @@
   "small": {"heads": ["Maelys", "Orpheya"], "hairstyles": ["Maelys"]}
  },
  "built": [
-  {"character": "Maelys", "id": "underwear", "type": "underwear", "mats": ["内裤"], "pmx": "{data}/clothes/tenue-maelys-2/result.pmx",
+  {"character": "Maelys", "id": "underwear", "type": "underwear", "mats": ["内裤"], "pmx": "{data}/clothes/outfit-maelys-2/result.pmx",
    "workshop": {"tab": "bottom", "slot": "under", "rank": 10, "name": "underwear"}},
-  {"character": "Maelys", "id": "debardeur", "type": "top", "mats": ["针织"], "pmx": "{data}/clothes/tenue-maelys-2/result.pmx",
+  {"character": "Maelys", "id": "tank_top", "type": "top", "mats": ["针织"], "pmx": "{data}/clothes/outfit-maelys-2/result.pmx",
    "workshop": {"tab": "top", "slot": "top", "rank": 20, "name": "tank top"}},
-  {"character": "Maelys", "id": "skirt", "type": "skirt", "mats": ["裙"], "pmx": "{data}/clothes/tenue-maelys-2/result.pmx",
+  {"character": "Maelys", "id": "skirt", "type": "skirt", "mats": ["裙"], "pmx": "{data}/clothes/outfit-maelys-2/result.pmx",
    "workshop": {"tab": "bottom", "slot": "bottom", "rank": 32, "name": "skirt"}},
-  {"character": "Maelys", "id": "belt", "type": "belt", "mats": ["腰带"], "pmx": "{data}/clothes/tenue-maelys-2/result.pmx",
+  {"character": "Maelys", "id": "belt", "type": "belt", "mats": ["腰带"], "pmx": "{data}/clothes/outfit-maelys-2/result.pmx",
    "workshop": {"tab": "accessories", "slot": "belt", "rank": 70, "name": "belt"}},
-  {"character": "Maelys", "id": "necklace", "type": "necklace", "mats": ["项链", "吊坠"], "pmx": "{data}/clothes/tenue-maelys-2/result.pmx",
+  {"character": "Maelys", "id": "necklace", "type": "necklace", "mats": ["项链", "吊坠"], "pmx": "{data}/clothes/outfit-maelys-2/result.pmx",
    "workshop": {"tab": "accessories", "slot": "necklace", "rank": 78, "name": "necklace"}},
   {"character": "Atelier", "id": "tshirt", "type": "top", "mats": ["T恤"], "pmx": "{data}/clothes/tshirt/result.pmx",
    "workshop": {"tab": "top", "slot": "top", "rank": 20, "name": "t-shirt"}},

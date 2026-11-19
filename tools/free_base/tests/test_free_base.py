@@ -83,7 +83,7 @@ class ModeFree(unittest.TestCase):
             for f in ("body.pmx", "head.pmx", "hairstyle.pmx"):
                 open(os.path.join(base, f), "w").close()
             r = launch()
-            self.assertEqual(r.stdout.strip(), "True ['Libre'] ['Libre'] False", r.stderr)   # fr-ok: "Libre" is the id of the free head and hairstyle, a folder name in installed caches
+            self.assertEqual(r.stdout.strip(), "True ['Free'] ['Free'] False", r.stderr)
 
 
 if __name__ == "__main__":

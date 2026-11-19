@@ -31,7 +31,7 @@ CM = RF.CM
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 import settings as _R  # noqa: E402
 DATA = _R.path("paths.data")   # the user's data folder (tools/settings.py)
-REFERENCE = os.path.join(DATA, "clothes", "tenue", "corps", "corps.pmx")   # fr-ok: folders of the owner's data
+REFERENCE = os.path.join(DATA, "clothes", "outfit", "body", "body.pmx")   # the owner's outfit: its body
 SMOOTHING_WEIGHT = 4                       # weight averaging passes between neighbours
 ZONE_FOLDS = (70.0, 115.0, 25.0)       # min y, max y, max |x|: where the reference has folds to remove
 
@@ -263,7 +263,7 @@ def measure(g, R, T, boxes, W):
         "reference_angle_max_except_feet": round(float(angr[top(R.V_brut, arr)].max()), 1),
         "reference_gap_mm": {"median": round(float(np.median(d)), 2), "p95": round(float(np.percentile(d, 95)), 2),
                                "p99": round(float(np.percentile(d, 99)), 2), "max": round(float(d.max()), 2)},
-        "symetrie_mm": round(float(np.abs(P - P[g["sym"]] * [-1, 1, 1]).max() * 10), 4),
+        "symmetry_mm": round(float(np.abs(P - P[g["sym"]] * [-1, 1, 1]).max() * 10), 4),
         "maps_uv_cm": boxes,
         "bones_per_vertex_max": int((W[1] > 0).sum(1).max()),
         "construction": g["info"],
@@ -291,7 +291,7 @@ def main():
     if os.path.isdir(tex) and os.path.abspath(tex) != os.path.abspath(os.path.join(a.output, "tex")):
         shutil.copytree(tex, os.path.join(a.output, "tex"), dirs_exist_ok=True)
     m = measure(g, R, T, boxes, W)
-    m["curseurs"] = {k: round(float(np.linalg.norm(D, axis=1).max() * 10), 1) for k, D in morphs.items()}
+    m["sliders"] = {k: round(float(np.linalg.norm(D, axis=1).max() * 10), 1) for k, D in morphs.items()}
     json.dump(m, open(os.path.join(a.output, "measures.json"), "w"), ensure_ascii=False, indent=1)
     print(json.dumps(m, ensure_ascii=False, indent=1))
 

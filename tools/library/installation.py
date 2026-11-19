@@ -416,7 +416,7 @@ def install(source, replace=False, keep=False, yes=False):
                 n_json += _adapt(f, rt, stale)
     say("  %d records adapted" % n_json)
     if not os.path.exists(os.path.join(data, FMT.MARKER)):
-        write_json(os.path.join(data, FMT.MARKER), {"format": FORMAT, "revision": FMT.REVISION})
+        write_json(os.path.join(data, FMT.MARKER), {"format": FORMAT, "revision": index.get("revision", 1)})   # an older package: the code asks for migrate
     write_json(manifest, {
         "format": FORMAT, "version": index.get("version"), "source": source, "date": date, "units": index["units"]})
     shutil.rmtree(extracted)

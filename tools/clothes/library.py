@@ -1059,7 +1059,7 @@ def kind_accessory(T, pc, g):
     reg = region_axe(T, g.os_axe)
     # seeded turn: only around the limbs and the neck, where bands of large quads fool the
     # per-vertex turn; around the trunk it would take flaps and clips for rings
-    # (Nicole strap-12, Soldat11 ornament-21, Remielle strap-15: seen on the thumbnails)
+    # (Nicole strap-12, "Soldier 11" ornament-21, Remielle strap-15: seen on the thumbnails)
     girth = g.girth
     if reg in ("thigh", "leg", "foot", "arm", "forearm", "hand", "neck") and girth < LOOP_PERIMETER:
         girth = max(girth, perimeter_seeded(T, pc["faces"], g.os_axe))
@@ -1089,7 +1089,7 @@ def kind_accessory(T, pc, g):
         return "ears", "ear bone (%s)" % pc["own_bones"][0][0]
     if any(x.startswith("hair") for x in pc.get("reason", [])):
         return "hair", pc["reason"][0]
-    if any(x.startswith("coiffe") for x in pc.get("reason", [])):
+    if any(x.startswith("headwear") for x in pc.get("reason", [])):
         return "headwear", pc["reason"][0]
     if any(x.startswith("bands") for x in pc.get("reason", [])):
         return ("harness" if reg in ("trunk_top", "chest", "belly", "pelvis") else "strap"), "bands"
@@ -1287,9 +1287,9 @@ def describe(T, parts, info):
         elif ear:
             pc["reason"] = ["ear bones (skull coverage %s)" % tcs]
         elif all(mat_generic(n) for n in pc["materials"]):
-            pc["reason"] = ["coiffe: rigid on the head, no own bones, does not wrap around the skull (%s)" % tcs]
+            pc["reason"] = ["headwear: rigid on the head, no own bones, does not wrap around the skull (%s)" % tcs]
         else:
-            pc["reason"] = ["coiffe: named material, does not wrap around the skull (%s)" % tcs]
+            pc["reason"] = ["headwear: named material, does not wrap around the skull (%s)" % tcs]
     garment = [pc for pc in parts if pc["class"] == "garment"]
     accessory = [pc for pc in parts if pc["class"] == "accessory"]
     cs, _ = layers(T, garment)
@@ -1849,9 +1849,9 @@ def extract_character(character, output, path=None):
     base = os.path.join(output, character)
     if os.path.exists(base):
         # previous cutting: moved aside (not erased), so that no stale parts are kept
-        corb = os.path.join(output, ".corbeille")   # same disk as the output: a plain rename
-        os.makedirs(corb, exist_ok=True)
-        put_of_side(base, os.path.join(corb, "%s-%d" % (character, time.time() * 1000)))
+        trash = os.path.join(output, ".trash")   # same disk as the output: a plain rename
+        os.makedirs(trash, exist_ok=True)
+        put_of_side(base, os.path.join(trash, "%s-%d" % (character, time.time() * 1000)))
     os.makedirs(os.path.join(base, "tex"), exist_ok=True)
     copied = {}
     cards = []
@@ -1977,7 +1977,7 @@ def trim_character(character, output, T=None):
             continue
         own = np.concatenate([np.asarray(offset["parts"][pid][k], int) for k in ("faces", "layer_faces")])
         faces = np.unique(np.concatenate([own] + [m for _, m in g]))
-        pmx, st = part_pmx(T, faces, "%s %s garni" % (character, pid), "../tex", copied)
+        pmx, st = part_pmx(T, faces, "%s %s trimmed" % (character, pid), "../tex", copied)
         name = pid + "+trims.pmx"
         ecr.write(pmx, os.path.join(d, name + ".tmp"))
         os.replace(os.path.join(d, name + ".tmp"), os.path.join(d, name))

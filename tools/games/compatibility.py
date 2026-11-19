@@ -90,13 +90,6 @@ def _text(v):
     return v.replace("|", "\\|").replace("\n", " ")
 
 
-def _marked(line, J):
-    """A line that names a string of the description's "_fr_ok" (e.g. a file name set by a third-party tool) carries
-    the same exception for the French check of COMPATIBILITY.md."""
-    ok = J.d.get("_fr_ok") or {}
-    return line + " <!-- fr-ok: see _fr_ok in the game description -->" if any(k in line for k in ok) else line
-
-
 def section(name):
     """The Markdown section of a game, drawn from its description (no information specific to the machine)."""
     J = games.load(name)
@@ -118,7 +111,7 @@ def section(name):
     L += ["%d. %s" % (i + 1, e) for i, e in enumerate(c["steps"])]
     L += ["", "**Known limits**", ""]
     L += ["- %s" % e for e in c["limits"]]
-    return "\n".join(_marked(x, J) for x in L) + "\n"
+    return "\n".join(L) + "\n"
 
 
 def array():
@@ -129,8 +122,8 @@ def array():
         J = games.load(n)
         c = J.d["compatibility"]
         p = c["support"]
-        L.append(_marked("| %s | `%s` | %s | %s | %s |" % (J.title, n, ", ".join(c["formats"]), LEVELS[c["level"]], " | ".join(
-            LEVELS[p[r]["level"]] for r in ("heads", "hairstyles", "clothes"))), J))
+        L.append("| %s | `%s` | %s | %s | %s |" % (J.title, n, ", ".join(c["formats"]), LEVELS[c["level"]], " | ".join(
+            LEVELS[p[r]["level"]] for r in ("heads", "hairstyles", "clothes"))))
     return "\n".join(L) + "\n\n" + "\n".join(section(n) for n in declared())
 
 

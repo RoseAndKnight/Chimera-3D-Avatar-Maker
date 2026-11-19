@@ -4,7 +4,7 @@ physics rules of ZZZ hairstyles (CONSTRUCTION.md, P1-P16), without simulating.
 Input: Godot scene and resource files containing SpringBoneSimulator3D nodes and their
 SpringBoneCollision{Sphere,Capsule,Plane}3D children, or a JSON in the format of `lire()`:
 
-    {"simulateurs": [{"name": "...", "settings": [{"root_bone_name": "...", "end_bone_name": "...",
+    {"simulators": [{"name": "...", "settings": [{"root_bone_name": "...", "end_bone_name": "...",
        "radius": 0.02, "stiffness": 1.0, "drag": 0.4, "gravity": 0.0,
        "gravity_direction": [0, -1, 0], "extend_end_bone": false, "end_bone_length": 0.0,
        "enable_all_child_collisions": true, "exclude_collisions": [], "collisions": [],
@@ -116,7 +116,7 @@ def _slice(a):
 
 
 def _sections(text):
-    """Sections of a .tscn/.tres: [(header, header attributes, {key: value})]."""   # fr-ok: .tres is a Godot file extension
+    """Sections of a .tscn/.tres: [(header, header attributes, {key: value})]."""
     secs, cur, buffer = [], None, ""
     for line in text.splitlines():
         if buffer:
@@ -231,7 +231,7 @@ def read(paths):
         if ch.endswith(".json"):
             with open(ch, encoding="utf-8") as fh:
                 d = json.load(fh)
-            for s in d.get("simulateurs", []):
+            for s in d.get("simulators", []):
                 s.setdefault("file", ch)
                 for r in s.get("settings", []):
                     r.setdefault("defaults", [k for k in DEFAULTS if k not in r])
@@ -376,7 +376,7 @@ def measure(c, paths):
                 io is None and f[0] != "plane" and np.linalg.norm(f[1] - c.C) < c.R)
             shapes[collar["name"]] = (f, on_head, collar, io)
             all_collisions.append({
-                "simulateur": s["name"], "name": collar["name"], "shape": collar["type"],
+                "simulator": s["name"], "name": collar["name"], "shape": collar["type"],
                 "bones": c.names_os[io] if io is not None else collar.get("bone_name"),
                 "on_head": bool(on_head), "rayon_H": round(f[3] / H, 3),
                 "length_H": round(float(np.linalg.norm(f[2] - f[1])) / H, 3),
@@ -387,7 +387,7 @@ def measure(c, paths):
             ie = _find_os(c, r.get("end_bone_name"), index_norm)
             if ir is None or ie is None:
                 not_found += [n for n, i in ((r.get("root_bone_name"), ir), (r.get("end_bone_name"), ie)) if i is None]
-                settings_out.append({"simulateur": s["name"], "racine": r.get("root_bone_name"),
+                settings_out.append({"simulator": s["name"], "racine": r.get("root_bone_name"),
                                      "done": r.get("end_bone_name"), "error": "bone not found in the GLB"})
                 continue
             ch, k = [ie], ie
@@ -396,7 +396,7 @@ def measure(c, paths):
                 ch.append(k)
             ch = ch[::-1]
             if ch[0] != ir:
-                settings_out.append({"simulateur": s["name"], "racine": c.names_os[ir], "done": c.names_os[ie],
+                settings_out.append({"simulator": s["name"], "racine": c.names_os[ir], "done": c.names_os[ie],
                                      "error": "the end bone does not descend from the root"})
                 continue
             covered.update(ch[1:] if len(ch) > 1 else ch)
@@ -449,7 +449,7 @@ def measure(c, paths):
                 under += [x for x in children.get(under[kk], []) if x not in under]
                 kk += 1
             settings_out.append({
-                "simulateur": s["name"], "racine": c.names_os[ir], "done": c.names_os[ie],
+                "simulator": s["name"], "racine": c.names_os[ir], "done": c.names_os[ie],
                 "bones": [c.names_os[i] for i in ch], "chain_links": len(seg), "length_H": round(L / H, 3),
                 "spacing_H": [round(float(x) / H, 3) for x in seg],
                 "root_dist_skull_H": round(float((np.linalg.norm(pos[0] - c.C) - c.R) / H), 3),
@@ -457,9 +457,9 @@ def measure(c, paths):
                 "rayon_H": _q(list(rad / H)), "radius_on_half_width": _q(reports, 2),
                 "stiffness": _q(list(k_)), "drag": _q(list(dr)), "gravity": _q(list(g_)),
                 "gravity_direction": r.get("gravity_direction"),
-                "amort_bullet_equiv": _q(list(1 - (1 - np.clip(dr, 0, 1)) ** STEP_PER_SECOND), 4),
-                "vitesse_kept_per_s": _q(list((1 - np.clip(dr, 0, 1)) ** STEP_PER_SECOND), 4),
-                "affaissement_rest_deg": _q([math.degrees(math.atan2(g, k)) for g, k in zip(g_, k_)], 1),
+                "damping_bullet_equiv": _q(list(1 - (1 - np.clip(dr, 0, 1)) ** STEP_PER_SECOND), 4),
+                "speed_kept_per_s": _q(list((1 - np.clip(dr, 0, 1)) ** STEP_PER_SECOND), 4),
+                "sag_rest_deg": _q([math.degrees(math.atan2(g, k)) for g, k in zip(g_, k_)], 1),
                 "recall_rad_s": _q(list(k_ / np.maximum(seg_godot, 1e-9)), 2),
                 "collisions": actives, "collisions_head": head_act, "touched_head": bool(head_act),
                 "overlap_rest_min_H": round(min(rec), 3) if rec else None,
@@ -488,12 +488,12 @@ def measure(c, paths):
     ok = [x for x in settings_out if "error" not in x]
     return {
         "files": sorted({s["file"] for s in sims}),
-        "simulateurs": [s["name"] for s in sims], "settings": settings_out, "count_settings": len(ok),
+        "simulators": [s["name"] for s in sims], "settings": settings_out, "count_settings": len(ok),
         "collisions": all_collisions, "os_not_found": sorted(set(not_found)),
         "hairstyle_bones_covered_part": round(cov_os, 3) if cov_os is not None else None,
         "vertices_on_spring_part": round(float(dyn_v.mean()), 3),
-        "settings_touchant_head_part": round(float(np.mean([x["touched_head"] for x in ok])), 3) if ok else None,
+        "settings_touching_head_part": round(float(np.mean([x["touched_head"] for x in ok])), 3) if ok else None,
         "hair_in_collision_head_part": inside, "cap_gap_collision_head_H": gap,
         "step_per_second_suppose": STEP_PER_SECOND,
-        "scale_skeleton_supposee": 1.0,
+        "scale_skeleton_assumed": 1.0,
         "non_comparable": NON_COMPARABLE}

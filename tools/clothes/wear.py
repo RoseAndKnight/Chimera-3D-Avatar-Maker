@@ -2,7 +2,7 @@
 
     bin/blender-queue -b --factory-startup --python tools/clothes/wear.py -- \
         --part <library>/<Character>/<part> --body BODY.pmx --output DIR [--name NAME]
-        [--marge-mm 3] [--skin keep|remove] [--render]
+        [--margin-mm 3] [--skin keep|remove] [--render]
 
 The body may be a PMX that is already dressed (output of a previous fitting): the part is then
 placed over the garment (a belt over a skirt). Output: DIR/NAME.pmx (body + part, textures in
@@ -91,7 +91,7 @@ def euler_mmd(R):
     return (x, math.atan2(R[0, 2], R[2, 2]), math.atan2(R[1, 0], R[1, 1]))
 
 
-def rotation_minimale(a, b):
+def minimal_rotation(a, b):
     a = a / np.linalg.norm(a)
     b = b / np.linalg.norm(b)
     v = np.cross(a, b)
@@ -161,7 +161,7 @@ class Registration:
             self.angles[o["name"]] = round(ang, 1)
             u = ds / ls
             sa = min(1.2, max(0.85, lt / ls))
-            self.R[i] = rotation_minimale(ds, dt)
+            self.R[i] = minimal_rotation(ds, dt)
             self.A[i] = s_global * np.eye(3) + (sa - s_global) * np.outer(u, u)
         # a deformation duplicate with no tail of its own (ひざD) moves like the bone it copies: inheriting
         # its parent's (足D, the thigh) would map the shin away from the ankle, and a boot shaft weighted
@@ -596,7 +596,7 @@ def hook_loop(card, P, src, Y, s_glob, C, Fc, mfc, fdes, tree_under, margin, on_
     names_c = [m["name"] for m in C["materials"]]
     Pc = np.asarray(C["vertices"]["pos"], float)
     fabric_c = ~np.array([bool(MD.SKIN.match(nm)) for nm in names_c])[mfc[fdes]]
-    Q = rotation_minimale(n_s, n_y)
+    Q = minimal_rotation(n_s, n_y)
     c_t = c_y
     border_t = None
     if carrier_s is not None and on_fabric:
@@ -616,8 +616,8 @@ def hook_loop(card, P, src, Y, s_glob, C, Fc, mfc, fdes, tree_under, margin, on_
             # The source's relative tilt is not kept: it was measured against another garment
             # (Lucy: belt tilted 7° on the edge of her shorts), and carried over to another edge
             # it would tilt the ring on it; a ring held by an edge follows that edge.
-            c_t = cb_t + s_glob * (rotation_minimale(nb_s, nb_t) @ (c_s - cb_s))
-            Q = rotation_minimale(n_s, nb_t)
+            c_t = cb_t + s_glob * (minimal_rotation(nb_s, nb_t) @ (c_s - cb_s))
+            Q = minimal_rotation(n_s, nb_t)
             info["carrier_target"] = "%s (edge %s, %d %% of the circumference)" % (nm, direction, round(100 * cov_t))
             info["displacement_border_mm"] = round(float(np.linalg.norm(c_t - c_y)) / MM, 1)
             info["tilt_border_deg"] = round(math.degrees(math.acos(max(-1, min(1, nb_s @ nb_t)))), 1)
@@ -1751,7 +1751,7 @@ def render(res, path_png):
 def main(argv):
     val = lambda o, d=None: argv[argv.index(o) + 1] if o in argv else d  # noqa: E731
     res = wear(val("--part"), val("--body"), val("--output"), val("--name"),
-                 float(val("--marge-mm", 3.0)), val("--skin", "remove"))
+                 float(val("--margin-mm", 3.0)), val("--skin", "remove"))
     if "--render" in argv:
         render(res, os.path.join(val("--output"), "render.png"))
     print(json.dumps(res, ensure_ascii=False, indent=1))

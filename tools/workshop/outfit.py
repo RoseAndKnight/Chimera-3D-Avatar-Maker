@@ -353,7 +353,7 @@ class Layer:
             outside = (np.cross(T[:, 1] - T[:, 0], T[:, 2] - T[:, 0]) * rad).sum(1) > 0
             self.fl = np.where(outside, COVERING | OUTER, COVERING).astype(np.uint8)
         self.Fext = p.F[(self.fl & OUTER) > 0]
-        self.Fcouvre = p.F[((self.fl & COVERING) == COVERING) & ((self.fl & OUTER) > 0)]
+        self.F_covering = p.F[((self.fl & COVERING) == COVERING) & ((self.fl & OUTER) > 0)]
         self.outfit = (self.fl & OUTFIT) > 0
         Fw = p.inv[p.F]
         self.E = np.unique(np.sort(np.concatenate([Fw[:, [0, 1]], Fw[:, [1, 2]], Fw[:, [2, 0]]]), axis=1), axis=0)
@@ -552,7 +552,7 @@ def tuck(L, U, cp=None):
 
 def hide(L, U, cp=None):
     """Marks the faces of L fully under a covering, body-held area of U."""
-    if not len(U.Fcouvre) or not _box(U.Z, L.Z, REACH_MASK):
+    if not len(U.F_covering) or not _box(U.Z, L.Z, REACH_MASK):
         return
     a_see = np.where(L.outfit & ~L.mask)[0]
     if not len(a_see):
@@ -562,7 +562,7 @@ def hide(L, U, cp=None):
     near = _probes(pts, U.Z, REACH_MASK)
     ok = np.zeros(len(pts), bool)
     if near.any():
-        s, _, d, q = nearest(pts[near], U.Z, U.Fcouvre, U.nor, REACH_MASK)
+        s, _, d, q = nearest(pts[near], U.Z, U.F_covering, U.nor, REACH_MASK)
         v = np.isfinite(d) & (s < TOLERANCE_MASK)
         v[v] &= to_over(pts[near][v], q[v], s[v], d[v], cp)
         ok[near] = v
@@ -974,7 +974,7 @@ def combine(ids, hairdo=None, head=None):
     "masques" {id: uint8 bytes per face}, "retirees" {id: why}, "notes", "signal",
     "coiffure": Float32 bytes of the offset of the hair `coif` placed on `head`, or None}."""
     the_key = "|".join("%s@%d" % (i, _date(i)) for i in sorted(ids))   # once re-fitted, a part changes key
-    the_key += "|cheveux:%s:%s" % (hairdo, head) if hairdo else ""   # fr-ok: part of the cache key, kept so caches stay valid
+    the_key += "|hair:%s:%s" % (hairdo, head) if hairdo else ""
     with _lock:
         if the_key in _combos:
             return _combos[the_key]

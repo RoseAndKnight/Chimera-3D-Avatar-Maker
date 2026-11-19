@@ -200,7 +200,7 @@ class Site_:
         axe_z = 3.0
         # --- armhole ring: cut of the arm at S_EMM, first point at the top, towards the back
         r = CP.loop(V, self.Fc, c_armhole, n_armhole, [0, 1, 0], NA)
-        assert r is not None, "emmanchure"
+        assert r is not None, "armhole"
         armhole, per = r
         self.info["armhole_cm"] = round(per, 1)
         self.armhole = armhole
@@ -271,7 +271,7 @@ class Site_:
         for k in range(1, Z):
             M.s(("T", J_TOP, ci - k), crest[k], True)
             M.s(("T", J_TOP, (NT - ci + k) % NT), mirror(crest[k]), True)
-        # --- rows above the armpit: left free (placed by ajuster), between the armhole, the
+        # --- rows above the armpit: left free (placed by the fitting step), between the armhole, the
         # armpit row, the seam and the neckline
         for j in range(J_A + 1, J_TOP):
             for i in range(NT):
@@ -539,7 +539,7 @@ class Site_:
         for i in range(1, NP + 1):
             if i in (2, 3):                 # where the reference's hand is a single clean contour
                 rr = CP.loop(V, Fm, wrist + (1.6 + (i - 2) * 1.0) * ax, ax, [0, 1, 0], NA)
-                assert rr is not None, ("paume", i)
+                assert rr is not None, ("palm", i)
                 for c in range(NA):
                     M.s(the_key(n0 + i, c), rr[0][c], True, "hand")
             else:

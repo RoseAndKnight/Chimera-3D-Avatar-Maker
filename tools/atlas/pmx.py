@@ -33,7 +33,7 @@ OS_PARENT_EXTERNAL = 0x2000
 MAT_DOUBLE_FACE = 0x01
 MAT_SHADE_GROUND = 0x02
 MAT_PROJECTED = 0x04
-MAT_RECOIT = 0x08
+MAT_RECEIVES = 0x08
 MAT_OUTLINE = 0x10
 MAT_COLOR_VERTEX = 0x20  # 2.1
 MAT_POINTS = 0x40  # 2.1
@@ -41,8 +41,8 @@ MAT_LINES = 0x80  # 2.1
 
 TYPES_WEIGHT = {0: "BDEF1", 1: "BDEF2", 2: "BDEF4", 3: "SDEF", 4: "QDEF"}
 TYPES_MORPH = {0: "group", 1: "vertex", 2: "bones", 3: "uv", 4: "uv1", 5: "uv2",
-                6: "uv3", 7: "uv4", 8: "material", 9: "bascule", 10: "impulsion"}
-PANELS = {0: "systeme", 1: "eyebrows", 2: "eyes", 3: "mouth", 4: "other"}
+                6: "uv3", 7: "uv4", 8: "material", 9: "flip", 10: "impulsion"}
+PANELS = {0: "system", 1: "eyebrows", 2: "eyes", 3: "mouth", 4: "other"}
 MODES_PHYSICS = {0: "suit_os", 1: "physics", 2: "physics_position_os"}
 SHAPES_RIGID = {0: "sphere", 1: "box", 2: "capsule"}
 
@@ -92,7 +92,7 @@ def read(path):
     n_glob = r.un("B")
     glob = list(r.lit("%dB" % n_glob))
     encoding, n_uv_add, t_vert, t_tex, t_mat, t_os, t_morph, t_rig = glob[:8]
-    enc = "utf-16-le" if encoding == 0 else "utf-8"   # fr-ok: codec name
+    enc = "utf-16-le" if encoding == 0 else "utf-8"
 
     def text():
         n = r.un("i")

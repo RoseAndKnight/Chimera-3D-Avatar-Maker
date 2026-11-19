@@ -396,7 +396,7 @@ def sew(R, skin, log, source=None):
     for b in holes:
         for k in range(1, len(b) - 1):
             mouth.append((b[0], b[k + 1], b[k]))
-    log["holes_bouches"] = len(holes)
+    log["holes_mouths"] = len(holes)
 
     # body skin under the piece
     Fc_all = np.where(mf == i_skin)[0]
@@ -582,7 +582,7 @@ def sew(R, skin, log, source=None):
         new_type[v] = True
     zone_c = np.r_[interior, free]
     log["weight_neck"] = {"vertices": int(len(zone_c)), "resumed_of_head": n_src,
-                            "harmoniques": int(len(free)), "rays_mm": list(RADIUS_WEIGHT_NECK_MM)}
+                            "harmonics": int(len(free)), "rays_mm": list(RADIUS_WEIGHT_NECK_MM)}
     for border_c, border_p in ((bottom, loop), (top, skull))[:1 if closed else 2]:
         vz = keep_v[np.linalg.norm(P[keep_v][:, None] - P[border_c][None], axis=2).min(1) < rp] if len(keep_v) else []
         q, i, j, u, dist = point_polyline(P[vz], P[border_p])

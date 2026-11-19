@@ -9,7 +9,7 @@ import os
 import re
 
 FORMAT = 2
-REVISION = 1                          # format 2, revision 1: names inside the files (see REVISED below)
+REVISION = 2                          # format 2, revision 2: names format 2 forgot (see REVISED below)
 MARKER = "chimera-data.json"          # in the data folder: {"format": 2}
 MIGRATE = "python3 -I tools/library/library.py migrate"
 
@@ -436,6 +436,120 @@ SHAPE_INFO = {"emmanchure_cm": "armhole_cm", "y_aisselle": "y_armpit", "y_base_c
               "orteils_z": "toes_z", "pouce": "thumb"}
 
 
+
+# ---------------------------------------------------------------- revision 2 (19/11/2026)
+# Names the first conversions forgot: the id of the free base's own head and hairstyle, the folder of the
+# workshop's built parts, one built part of the house description, the owner's outfit and trial folders, the
+# prefix of the shape morphs of the rebuilt bodies. A folder of revision 1 gets them once (migrate.py).
+REVISED_IDS = {"Libre": "Free"}       # heads/, hairstyles/, library/ folders, <head>.bin files, keys and values
+REVISED_DIRS = {"fabriquees": "built", "tenue": "outfit", "corps_maison": "own-rig-body",
+                "corps_refait": "rebuilt-body", "essais": "trials", "coupe-neuve": "new-cut"}
+REVISED_DIR_PATTERNS = [(re.compile(r"^tenue-(.+)$"), r"outfit-\1"),
+                        (re.compile(r"^sur-(.+)-cheveux-(.+)$"), r"on-\1-hair-\2"),   # face trials: on-<head>[-hair-<hair>]
+                        (re.compile(r"^sur-(.+)$"), r"on-\1")]
+REVISED_FILE_PATTERNS = [(re.compile(r"^atelier-base-(.+\.json)$"), r"workshop-base-\1"),        # batches left by format 1
+                         (re.compile(r"^atelier-tetes-(.+\.json)$"), r"workshop-heads-\1")]
+# inside a workshop cache only: the built part of the house description (built/<character>/<id>, <character>__<id>)
+REVISED_BUILT = {"debardeur": "tank_top"}
+REVISED_BUILT_KEYS = {"atelier": "workshop"}                    # built/<character>/<id>/record.json
+MORPH_PREFIX = ("forme_", "shape_")                              # shape morphs of a rebuilt body (.pmx)
+_SIGNATURE = re.compile(r"^(v\d+:)([^:]*)(:[0-9a-f]{16})?$")    # "v9:<head ids>[:<fingerprint>]" of a hairstyle
+
+
+def revised_name(name, folder, cache=False):
+    """Revision-2 name of a folder or file outside the sources (cache: inside a workshop cache)."""
+    if folder:
+        if name in REVISED_IDS:
+            return REVISED_IDS[name]
+        if name in REVISED_DIRS:
+            return REVISED_DIRS[name]
+        for pattern, to in REVISED_DIR_PATTERNS:
+            if pattern.match(name):
+                return pattern.sub(to, name)
+        if cache:
+            if name in REVISED_BUILT:
+                return REVISED_BUILT[name]
+            character, sep, ident = name.rpartition("__")
+            if sep and ident in REVISED_BUILT:
+                return character + sep + REVISED_BUILT[ident]
+        return name
+    stem, ext = os.path.splitext(name)
+    if ext == ".bin" and stem in REVISED_IDS:
+        return REVISED_IDS[stem] + ext
+    if cache and ext == ".pmx" and stem in REVISED_BUILT:
+        return REVISED_BUILT[stem] + ext
+    for pattern, to in REVISED_FILE_PATTERNS:
+        if pattern.match(name):
+            return pattern.sub(to, name)
+    return name
+
+
+def revised_path(p, cache=False):
+    """A path with the revision-2 names (nothing inside a model's sources)."""
+    if not isinstance(p, str) or not p:
+        return p
+    sep = "\\" if ("\\" in p and "/" not in p) else "/"
+    parts = p.split(sep)
+    out = []
+    for i, c in enumerate(parts):
+        if c == "sources" or "sources" in out:
+            out.append(c)
+            continue
+        last = i == len(parts) - 1
+        out.append(revised_name(c, not (last and "." in c[1:]), cache))
+    return sep.join(out)
+
+
+def _former_names(c):
+    """The revision-1 names a path component may have had (itself included)."""
+    out = {c}
+    stem, ext = os.path.splitext(c)
+    for table in (REVISED_IDS, REVISED_DIRS, REVISED_BUILT):
+        for old, new in table.items():
+            if c == new:
+                out.add(old)
+            if stem == new:
+                out.add(old + ext)
+            if c.endswith("__" + new):
+                out.add(c[:-len(new)] + old)
+    for new, old in (("outfit-", "tenue-"), ("workshop-base-", "atelier-base-"), ("workshop-heads-", "atelier-tetes-")):
+        if c.startswith(new):
+            out.add(old + c[len(new):])
+    m = re.match(r"^on-(.+?)(?:-hair-(.+))?$", c)
+    if m:
+        out.add("sur-" + m.group(1) + ("-cheveux-" + m.group(2) if m.group(2) else ""))
+    return {o for o in out if o == c or c in (revised_name(o, True, True), revised_name(o, False, True))}
+
+
+def former_paths(p):
+    """Every path `p` may have had before revision 2 (`p` included), for the fingerprints computed on them."""
+    out, sources = [""], False
+    for i, c in enumerate(p.split("/")):
+        sources = sources or c == "sources"
+        names = [c] if sources else sorted(_former_names(c))
+        out = [(o + "/" + n) if i else n for o in out for n in names]
+    return out
+
+
+def revised_word(v, cache=False):
+    """A word value (an id, a part id, a hairstyle signature) with its revision-2 name."""
+    if v in REVISED_IDS:
+        return REVISED_IDS[v]
+    m = _SIGNATURE.match(v)
+    if m and any(x in REVISED_IDS for x in m.group(2).split(",")):
+        ids = sorted(REVISED_IDS.get(x, x) for x in m.group(2).split(","))   # catalog.py plan_next: sorted ids
+        return m.group(1) + ",".join(ids) + (m.group(3) or "")
+    if cache:
+        character, sep, ident = v.rpartition("__")
+        if ident in REVISED_BUILT:
+            return character + sep + REVISED_BUILT[ident]
+        stem, ext = os.path.splitext(v)
+        if ext == ".pmx" and stem in REVISED_BUILT:
+            return REVISED_BUILT[stem] + ext
+    if ("/" in v or "\\" in v) and (not re.search(r"\s", v) or v.startswith("/")):    # a path, not a sentence
+        return revised_path(v, cache)
+    return v
+
 def house_bone(name):
     """racine -> root, avant_bras_torsion2_G -> forearm_twist2_L, petit_doigt3_D -> little3_R."""
     if not isinstance(name, str):
@@ -477,8 +591,8 @@ def refused_format1(data, cache=None):
                       "(or install the library again into an empty folder)." % (data, MIGRATE, data))
     for d in (data, cache):
         if d and os.path.isdir(d) and format_of(d) == FORMAT and revision_of(d) < REVISION:
-            raise Format1("%s is in format 2 but before revision %d (names inside the .npz files and the house "
-                          "skeleton). Convert it once more: %s %s" % (d, REVISION, MIGRATE, d))
+            raise Format1("%s is in format 2 but before revision %d (names format 2 forgot: the free base's id Libre, "
+                          "built parts, the arrays of the .npz files...). Convert it once more: %s %s" % (d, REVISION, MIGRATE, d))
     if cache and os.path.isdir(cache) and format_of(cache) == 1:
         raise Format1("%s is a format-1 workshop cache (French names). Convert it once: %s %s\n"
                       "(and its data folder the same way)." % (cache, MIGRATE, cache))

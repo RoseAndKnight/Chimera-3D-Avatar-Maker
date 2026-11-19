@@ -61,7 +61,7 @@ class Package(unittest.TestCase):
             ("base/body.pmx", b"body"),
             ("clothes/A/top/top.pmx", b"part"),
         ]
-        self.index = {"format": I.FORMAT, "code": 1, "version": "test",
+        self.index = {"format": I.FORMAT, "revision": I.FMT.REVISION, "code": 1, "version": "test",
                       "counts": {"models": 1, "heads": 1, "hairstyles": 1, "parts": 0},
                       "units": ["base", "cache/hairstyles/A", "cache/heads/A", "mmd_extracted/A", "clothes/A", "face/A"],
                       "shared": ["cache/labels.json"], "catalog": "cache/catalog.json",

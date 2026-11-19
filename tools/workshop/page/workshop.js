@@ -10,7 +10,8 @@ const ech=t=>String(t??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&
 const recall=(key,fallback)=>{ try{ return localStorage.getItem(key)??fallback; }catch(e){ return fallback; } };
 const store=(key,v)=>{ try{ localStorage.setItem(key,v); }catch(e){} };
 // Keys written by earlier versions under French names: moved once to their English names.
-for(const [o,n] of [["chimera.langue","chimera.language"],["chimera.nom","chimera.name"],["chimera.rendu","chimera.render"],["chimera.prereglage","chimera.preset"]]){ try{ const v=localStorage.getItem(o); if(v!==null&&localStorage.getItem(n)===null) localStorage.setItem(n,v); localStorage.removeItem(o); }catch(e){} }   // fr-ok: the French keys of earlier versions, read once to move them
+const V1_NAMES={keys:[["chimera.langue","chimera.language"],["chimera.nom","chimera.name"],["chimera.rendu","chimera.render"],["chimera.prereglage","chimera.preset"]],renderParam:"rendu"};   // fr-ok: names of earlier versions (localStorage keys, ?rendu= links), read once to move them
+for(const [o,n] of V1_NAMES.keys){ try{ const v=localStorage.getItem(o); if(v!==null&&localStorage.getItem(n)===null) localStorage.setItem(n,v); localStorage.removeItem(o); }catch(e){} }
 
 // Interface texts: [English, French]. The server speaks English; its closed labels are translated below (SERVER).
 // french-labels: begin (the French texts of the page, next to their English ones)
@@ -215,6 +216,54 @@ const REASONS=[
   [/^Content-Type application\/octet-stream expected\.$/,()=>"Content-Type application/octet-stream attendu."],
   [/^Unreadable file size\.$/,()=>"Taille du fichier illisible."],
 ];
+// the assembly steps: [English, French, progress %]
+const STEPS={waiting:["Blender…","Blender…",3],hairstyle:["Fitting the hair…","Pose de la coiffure…",12],graft:["Grafting the head…","Greffe de la tête…",24],parts:["Outfit parts…","Pièces de la tenue…",50],color:["Hair colour…","Couleur des cheveux…",62],checks:["Checks…","Contrôles…",74],skeleton:["Skeleton…","Skeleton…",79],vrm:["VRM export…","Export VRM…",83],render:["Rendering the views…","Rendu des vues…",90],done:["Done","Terminé",100]};
+// The studio in French: the settings carry their English name in viewer.js (RENDER_SETTINGS), the French is here, by key.
+const FR_GROUPS={"Light":"Lumière","Shadows":"Ombres","Skin":"Peau","Materials":"Matières","Outline":"Trait","Background and floor":"Fond et sol","Finish":"Fin d'image"};
+const FR_RENDER={
+  "light.angle":["Angle","Côté d'où vient la lumière, en degrés, compté depuis la caméra (0 : de face ; 90 : de côté ; 180 : à contre-jour). Elle tourne avec la vue."],
+  "light.height":["Hauteur","Hauteur de la lumière au-dessus de l'horizon, en degrés (négatif : par en dessous)."],
+  "light.color":["Couleur","Couleur de la lumière principale, sur les parties éclairées."],
+  "light.force":["Force","Force de la lumière principale : écart entre le clair et l'ombre."],
+  "light.rim":["Couleur du contour","Couleur de la lumière de contour, venue de derrière, qui détache la silhouette du fond."],
+  "light.forceRim":["Lumière de contour","Force de la lumière de contour (0 : aucune)."],
+  "light.sky":["Ciel dans l'ombre","Lumière du ciel renvoyée dans l'ombre, sur les surfaces tournées vers le haut."],
+  "light.ground":["Sol dans l'ombre","Lumière du sol renvoyée dans l'ombre, sur les surfaces tournées vers le bas."],
+  "shadow.threshold":["Seuil","Où passe la limite de l'ombre sur les vêtements et les cheveux : plus haut, plus d'ombre."],
+  "shadow.softness":["Douceur","Largeur du passage de la lumière à l'ombre (petite : limite nette)."],
+  "shadow.tint":["Teinte des vêtements","Couleur par laquelle la couleur d'un vêtement est multipliée dans l'ombre."],
+  "shadow.tintHair":["Teinte des cheveux","Couleur par laquelle la couleur des cheveux est multipliée dans l'ombre."],
+  "shadow.saturation":["Saturation","Couleur plus vive (au-dessus de 1) ou plus grise dans l'ombre des vêtements et des cheveux."],
+  "shadow.edgeBand":["Liseré","Bande plus saturée le long de la limite d'ombre, comme la lumière qui traverse la peau."],
+  "shadow.crevices":["Creux","Ombre des creux (aisselles, plis, sous les mèches), tirée des cartes d'ouverture."],
+  "shadow.casts":["Ombres portées","Ce qui est devant la lumière fait de l'ombre (cheveux sur le visage, bras sur le corps, personnage sur le sol)."],
+  "shadow.castStrength":["Force des ombres portées","Noirceur des ombres portées (1 : aussi sombres que l'ombre propre)."],
+  "shadow.contact":["Ombre de contact","Ce qui est posé tout près d'une surface l'assombrit : col, ceinture, mèche sur l'épaule (0 : aucune)."],
+  "skin.threshold":["Seuil","Où passe la limite de l'ombre sur la peau et le visage."],
+  "skin.softness":["Douceur","Largeur du passage de la lumière à l'ombre sur la peau."],
+  "skin.tint":["Teinte de l'ombre","Couleur par laquelle la peau est multipliée dans l'ombre (les yeux et la bouche en suivent une version plus froide)."],
+  "skin.transmission":["Lumière qui traverse","À contre-jour, la lumière traverse la peau fine (oreilles, doigts) et les mèches fines : lueur chaude."],
+  "skin.blush":["Rose du visage","Rose des joues, du nez et des lèvres, et petit reflet de la lèvre."],
+  "skin.shadowEyes":["Ombre sur les yeux","Bande sombre sur les yeux que portent certaines expressions (0 : jamais)."],
+  "material.clothes":["Matières des vêtements","Reflets selon la matière lue dans le nom du vêtement (tissu, tricot, cuir, collant, soie, verre, métal). Éteint : vêtements mats."],
+  "material.hair":["Reflets des cheveux","Bande de reflet en travers des mèches, racines plus sombres et pointes plus claires (0 : cheveux mats)."],
+  "outline.active":["Trait","Trait au bord des formes, de la couleur de la surface en plus sombre."],
+  "outline.thickness":["Épaisseur","Épaisseur du trait (il s'affine de loin)."],
+  "outline.opacity":["Opacité","Opacité du trait."],
+  "outline.color":["Couleur","Couleur fixe du trait, mêlée à la couleur tirée de la surface selon « Part de la couleur »."],
+  "outline.partColor":["Part de la couleur","0 : le trait prend la couleur de la surface, assombrie ; 1 : la couleur fixe partout."],
+  "background.center":["Fond au centre","Couleur du fond derrière le personnage."],
+  "background.border":["Fond au bord","Couleur du fond vers les bords de l'image."],
+  "floor.active":["Sol","Un rond de lumière sous les pieds, qui reçoit l'ombre du personnage."],
+  "floor.light":["Sol éclairé","Couleur du sol au centre du rond, en pleine lumière."],
+  "floor.shadow":["Sol dans l'ombre","Couleur de l'ombre du personnage sur le sol."],
+  "image.exposure":["Exposition","Clarté de toute l'image (sous 1, les clairs restent sous le blanc et le halo fait le reste)."],
+  "image.saturation":["Saturation","Couleur de toute l'image : 1 inchangée, 0 noir et blanc."],
+  "image.halo":["Halo","Lueur autour des parties claires (0 : aucune)."],
+  "image.blur":["Profondeur de champ","Flou de ce qui est loin du sujet, surtout en gros plan (0 : tout net)."],
+  "image.thumbnail":["Vignette","Assombrissement des coins de l'image."],
+  "image.grain":["Grain","Grain léger sur toute l'image."],
+};
 // french-labels: end
 const PAIRS=new Map();
 for(const x of [...SERVER,...Object.values(TYPES)]) for(const s of x) if(!PAIRS.has(s)) PAIRS.set(s,x);
@@ -249,7 +298,7 @@ const bubbleElement=it=>{ const e=it.label, s=sourceOf(it), o=s?`${s.name} ${t("
   if(!e) return [nameCode(it),o].filter(Boolean).join("\n");
   return [nameElement(it),e.description?.[L()],(e.tags?.[L()]||[]).map(x=>"#"+x).join(" "),nameCode(it),o].filter(Boolean).join("\n"); };
 // what the search box reads: names, description and tags, in both languages, and the code name
-const textSearch=it=>it._rech??=[nameCode(it),it.id,...(it.label?[...(it.label.name||[]),...(it.label.description||[]),...(it.label.tags||[]).flat()]:[])].join(" ").toLowerCase();
+const textSearch=it=>it._search??=[nameCode(it),it.id,...(it.label?[...(it.label.name||[]),...(it.label.description||[]),...(it.label.tags||[]).flat()]:[])].join(" ").toLowerCase();
 const nameExpression=n=>EXPRESSIONS[n]?EXPRESSIONS[n][L()]:n;
 function translate(){
   document.documentElement.lang=LANGUAGE;
@@ -314,7 +363,7 @@ async function init(){
   $("#assemble").onclick=assemble;
   $("#name").value=recall("chimera.name","");
   $("#name").oninput=e=>store("chimera.name",e.target.value);
-  $("#simplified").hidden=!view.logiciel;
+  $("#simplified").hidden=!view.software;
   pane("character"); connectLibrary();
   await initStudio();
   await readCatalog(); paintTabs();
@@ -449,7 +498,7 @@ function updateDots(){ for(const b of $("#dots").children) b.classList.toggle("a
 
 async function updateParts(){
   const g=++genCombo, ids=[...state.parts], skin=new Map();
-  document.body.dataset.layers="calcul";   // read by tests/session.py
+  document.body.dataset.layers="computing";   // read by tests/session.py
   const unionSkin=()=>{const f=[]; for(const a of skin.values()) for(const x of a) f.push(x); return f;};
   await withLoad(async()=>{
     for(const c of [...view.models.keys()]) if(c.startsWith("part:")&&!state.parts.has(c.slice(6))) view.remove(c);
@@ -526,9 +575,6 @@ async function assemble(){
   try{ const {id}=await json("/api/assemble",{method:"POST",headers:JSON_H,body:JSON.stringify(sel)}); state.work=id; follow(id); }
   catch(e){ $("#step").textContent=t("failure")+e.message; endAss(); }
 }
-// french-labels: begin
-const STEPS={waiting:["Blender…","Blender…",3],hairstyle:["Fitting the hair…","Pose de la coiffure…",12],graft:["Grafting the head…","Greffe de la tête…",24],parts:["Outfit parts…","Pièces de la tenue…",50],color:["Hair colour…","Couleur des cheveux…",62],checks:["Checks…","Contrôles…",74],skeleton:["Skeleton…","Skeleton…",79],vrm:["VRM export…","Export VRM…",83],render:["Rendering the views…","Rendu des vues…",90],done:["Done","Terminé",100]};
-// french-labels: end
 // download links of an assembled character: one per delivered format
 const outputs=(id,formats)=>`<div class="outputs">${(formats||[]).map(f=>`<a download href="/api/assemblies/${encodeURIComponent(id)}/${encodeURIComponent(f)}">${t("download")} <b>${ech(f.toUpperCase())}</b></a>`).join("")}<button data-open="${ech(id)}">${t("open_folder")}</button></div>`;
 document.addEventListener("click",e=>{ const id=e.target.dataset&&e.target.dataset.open; if(id) fetch("/api/open",{method:"POST",headers:JSON_H,body:JSON.stringify({id})}); });
@@ -554,7 +600,7 @@ function endAss(){ const b=$("#assemble"); b.disabled=false; b.textContent=t("as
 
 // ---------- Render studio: each setting of the viewer (RENDER_SETTINGS) has its control; a render is a JSON file ----------
 const SETTINGS=V.RENDER_SETTINGS||[];
-const studioReady=()=>!view.logiciel&&SETTINGS.length&&typeof view.adjust==="function";
+const studioReady=()=>!view.software&&SETTINGS.length&&typeof view.adjust==="function";
 const read=(o,key)=>key.split(".").reduce((a,k)=>a==null?a:a[k],o);
 const gam=(x,lin)=>lin?(x<=0.0031308?12.92*x:1.055*Math.pow(x,1/2.4)-0.055):x, dgam=(x,lin)=>lin?(x<=0.04045?x/12.92:Math.pow((x+0.055)/1.055,2.4)):x;
 const toHex=(c,lin)=>"#"+[0,1,2].map(i=>Math.round(255*Math.min(1,Math.max(0,gam(c[i]||0,lin)))).toString(16).padStart(2,"0")).join("");
@@ -564,60 +610,12 @@ async function initStudio(){
   try{ presets=await json("/page/presets/index.json"); }catch(e){ presets=[]; }
   buildStudio();
   if(!studioReady()) return;
-  const q=new URLSearchParams(location.search).get("render")??new URLSearchParams(location.search).get("rendu"), saved=recall("chimera.render","");   // fr-ok: old links used ?rendu=
+  const q=new URLSearchParams(location.search).get("render")??new URLSearchParams(location.search).get(V1_NAMES.renderParam), saved=recall("chimera.render","");
   try{
     if(q&&presets.some(p=>p.id===q)) await choosePreset(q);
     else if(saved){ const o=view.loadRender(JSON.parse(saved)); renderName=o.name||""; paintStudio(); }
   }catch(e){ console.warn("render",e); }
 }
-// The studio in French: the settings carry their English name in viewer.js (RENDER_SETTINGS), the French is here, by key.
-// french-labels: begin
-const FR_GROUPS={"Light":"Lumière","Shadows":"Ombres","Skin":"Peau","Materials":"Matières","Outline":"Trait","Background and floor":"Fond et sol","Finish":"Fin d'image"};
-const FR_RENDER={
-  "light.angle":["Angle","Côté d'où vient la lumière, en degrés, compté depuis la caméra (0 : de face ; 90 : de côté ; 180 : à contre-jour). Elle tourne avec la vue."],
-  "light.height":["Hauteur","Hauteur de la lumière au-dessus de l'horizon, en degrés (négatif : par en dessous)."],
-  "light.color":["Couleur","Couleur de la lumière principale, sur les parties éclairées."],
-  "light.force":["Force","Force de la lumière principale : écart entre le clair et l'ombre."],
-  "light.rim":["Couleur du contour","Couleur de la lumière de contour, venue de derrière, qui détache la silhouette du fond."],
-  "light.forceRim":["Lumière de contour","Force de la lumière de contour (0 : aucune)."],
-  "light.sky":["Ciel dans l'ombre","Lumière du ciel renvoyée dans l'ombre, sur les surfaces tournées vers le haut."],
-  "light.ground":["Sol dans l'ombre","Lumière du sol renvoyée dans l'ombre, sur les surfaces tournées vers le bas."],
-  "shadow.threshold":["Seuil","Où passe la limite de l'ombre sur les vêtements et les cheveux : plus haut, plus d'ombre."],
-  "shadow.softness":["Douceur","Largeur du passage de la lumière à l'ombre (petite : limite nette)."],
-  "shadow.tint":["Teinte des vêtements","Couleur par laquelle la couleur d'un vêtement est multipliée dans l'ombre."],
-  "shadow.tintHair":["Teinte des cheveux","Couleur par laquelle la couleur des cheveux est multipliée dans l'ombre."],
-  "shadow.saturation":["Saturation","Couleur plus vive (au-dessus de 1) ou plus grise dans l'ombre des vêtements et des cheveux."],
-  "shadow.edgeBand":["Liseré","Bande plus saturée le long de la limite d'ombre, comme la lumière qui traverse la peau."],
-  "shadow.crevices":["Creux","Ombre des creux (aisselles, plis, sous les mèches), tirée des cartes d'ouverture."],
-  "shadow.casts":["Ombres portées","Ce qui est devant la lumière fait de l'ombre (cheveux sur le visage, bras sur le corps, personnage sur le sol)."],
-  "shadow.castStrength":["Force des ombres portées","Noirceur des ombres portées (1 : aussi sombres que l'ombre propre)."],
-  "shadow.contact":["Ombre de contact","Ce qui est posé tout près d'une surface l'assombrit : col, ceinture, mèche sur l'épaule (0 : aucune)."],
-  "skin.threshold":["Seuil","Où passe la limite de l'ombre sur la peau et le visage."],
-  "skin.softness":["Douceur","Largeur du passage de la lumière à l'ombre sur la peau."],
-  "skin.tint":["Teinte de l'ombre","Couleur par laquelle la peau est multipliée dans l'ombre (les yeux et la bouche en suivent une version plus froide)."],
-  "skin.transmission":["Lumière qui traverse","À contre-jour, la lumière traverse la peau fine (oreilles, doigts) et les mèches fines : lueur chaude."],
-  "skin.blush":["Rose du visage","Rose des joues, du nez et des lèvres, et petit reflet de la lèvre."],
-  "skin.shadowEyes":["Ombre sur les yeux","Bande sombre sur les yeux que portent certaines expressions (0 : jamais)."],
-  "material.clothes":["Matières des vêtements","Reflets selon la matière lue dans le nom du vêtement (tissu, tricot, cuir, collant, soie, verre, métal). Éteint : vêtements mats."],
-  "material.hair":["Reflets des cheveux","Bande de reflet en travers des mèches, racines plus sombres et pointes plus claires (0 : cheveux mats)."],
-  "outline.active":["Trait","Trait au bord des formes, de la couleur de la surface en plus sombre."],
-  "outline.thickness":["Épaisseur","Épaisseur du trait (il s'affine de loin)."],
-  "outline.opacity":["Opacité","Opacité du trait."],
-  "outline.color":["Couleur","Couleur fixe du trait, mêlée à la couleur tirée de la surface selon « Part de la couleur »."],
-  "outline.partColor":["Part de la couleur","0 : le trait prend la couleur de la surface, assombrie ; 1 : la couleur fixe partout."],
-  "background.center":["Fond au centre","Couleur du fond derrière le personnage."],
-  "background.border":["Fond au bord","Couleur du fond vers les bords de l'image."],
-  "floor.active":["Sol","Un rond de lumière sous les pieds, qui reçoit l'ombre du personnage."],
-  "floor.light":["Sol éclairé","Couleur du sol au centre du rond, en pleine lumière."],
-  "floor.shadow":["Sol dans l'ombre","Couleur de l'ombre du personnage sur le sol."],
-  "image.exposure":["Exposition","Clarté de toute l'image (sous 1, les clairs restent sous le blanc et le halo fait le reste)."],
-  "image.saturation":["Saturation","Couleur de toute l'image : 1 inchangée, 0 noir et blanc."],
-  "image.halo":["Halo","Lueur autour des parties claires (0 : aucune)."],
-  "image.blur":["Profondeur de champ","Flou de ce qui est loin du sujet, surtout en gros plan (0 : tout net)."],
-  "image.thumbnail":["Vignette","Assombrissement des coins de l'image."],
-  "image.grain":["Grain","Grain léger sur toute l'image."],
-};
-// french-labels: end
 const nameSetting=r=>LANGUAGE==="fr"&&FR_RENDER[r.key]?FR_RENDER[r.key][0]:r.name, helpSetting=r=>LANGUAGE==="fr"&&FR_RENDER[r.key]?FR_RENDER[r.key][1]:r.help;
 const nameGroup=g=>LANGUAGE==="fr"&&FR_GROUPS[g]||g, namePreset=p=>PRESETS[p.id]?PRESETS[p.id][L()]:p.name;
 function buildStudio(){

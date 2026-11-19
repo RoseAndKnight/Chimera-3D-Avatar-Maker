@@ -41,6 +41,7 @@ import head_glb as TG  # noqa: E402
 # heads left out of the spectrum (excluded) and MMD names of its morphs (morphs_mmd)
 OP = games.load("outerplane")
 RAW = OP.path("people")
+MODEL_GLB, RENDER_JSON = "controle.glb", "rendu.json"   # fr-ok: file names set by the third-party extraction
 EXCLUDED = OP.value("excluded")
 # pivot head of the active game (description: base_head): distance between the eye centres and midpoint of the
 # eyes (MMD units). The thresholds of head.Head (eye radius 0.35, mouth at |x| < 0.05) are absolute, tuned to
@@ -59,7 +60,7 @@ HALVES = [("まばたき", "ウィンク", "ウィンク右"), ("笑い", "ウ�
 
 def normalize_morph(name):
     n = name.strip().upper().replace("MOUTHE_", "MOUTH_")
-    n = re.sub(r"SM[A-Z]*LE|SMAILE|SMIALE", "SMILE", n)   # fr-ok: typos of SMILE in the game files
+    n = re.sub(r"SM[A-Z]*LE|SMAILE|SMIALE", "SMILE", n)   # typos of SMILE in the game files
     n = re.sub(r"SU[A-Z]*PR[A-Z]*", "SURPRISE", n)
     return n
 
@@ -83,7 +84,7 @@ def _role(name_mat):
 
 def read(folder):
     """Useful primitives of the check GLB (glTF scene frame)."""
-    j, b = TG.read_glb(os.path.join(folder, "controle.glb"))   # fr-ok: file name set by the third-party extraction
+    j, b = TG.read_glb(os.path.join(folder, MODEL_GLB))
     worlds = TG._world(j)
     prims = []
     for i, nd in enumerate(j.get("nodes", [])):
@@ -118,7 +119,7 @@ def read(folder):
                     targets[names_c[k]] = d
             prims.append({"role": role, "material": nm, "P": P, "N": N, "UV": UV, "I": I,
                           "targets": targets, "mesh": nd["mesh"], "primitive": ip})
-    with open(os.path.join(folder, "rendu.json"), encoding="utf-8") as fh:   # fr-ok: file name set by the third-party extraction
+    with open(os.path.join(folder, RENDER_JSON), encoding="utf-8") as fh:
         rendered = json.load(fh)["materials"]
     for p in prims:
         tx = rendered.get(p["material"], {}).get("textures", {})
@@ -180,9 +181,9 @@ def orient(F):
                     continue
                 a, b = u[e]
                 # consistent if the two faces traverse the edge in opposite directions
-                memef = dir_(f, a, b) != (direction[f] < 0)
-                memeg = dir_(g, a, b)
-                direction[g] = -1 if memef == memeg else 1
+                same_f = dir_(f, a, b) != (direction[f] < 0)
+                same_g = dir_(g, a, b)
+                direction[g] = -1 if same_f == same_g else 1
                 comp.append(g)
                 pile.append(g)
         if (direction[comp] < 0).sum() * 2 > len(comp):
@@ -452,7 +453,7 @@ class Head:
         for s0, s1 in ((0.0, 9.0), (0.1, 0.3), (0.2, 0.2), (0.3, 0.15), (0.5, 0.1)):
             remove = zone & (((a0 <= 1e-6 * med)) | ((a0 < s0 * med) & (am > s1 * med)))
             if self._hole_mouth(Q2, F[~remove]):
-                self.mouth = {"vertices_discarded": n_discarded, "faces_otees": int(remove.sum()),
+                self.mouth = {"vertices_discarded": n_discarded, "faces_removed": int(remove.sum()),
                                "thresholds": [s0, s1]}
                 return skin[remove], offset
         raise ValueError("%s: mouth closed (no mouth hole even after removing the curtain)" % self.name)
@@ -600,7 +601,7 @@ def candidates(names_taken=()):
     readable name (2000068_Dahlia, 2000090_Dahlia) each get "-<identifier>"."""
     guard, discarded = [], {}
     for d in sorted(os.listdir(RAW)):
-        if not os.path.exists(os.path.join(RAW, d, "controle.glb")):   # fr-ok: file name set by the third-party extraction
+        if not os.path.exists(os.path.join(RAW, d, MODEL_GLB)):
             continue
         if d in EXCLUDED:
             discarded[d] = EXCLUDED[d]

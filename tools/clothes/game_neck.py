@@ -381,7 +381,7 @@ def _tuck(pos, nor, faces, fm, i_skin, i_vis, frozen):
     pos = pos.copy()
     moves = (d > -TUCKED_MM * MM) & (d < FLUSH_MM * MM)
     pos[vp[moves]] -= ((d[moves] + TUCKED_MM * MM)[:, None]) * n[moves]
-    return pos, {"vertices_rentres": int(moves.sum())}
+    return pos, {"vertices_tucked": int(moves.sum())}
 
 
 def _unify_normals(s, faces, fm, i_face):
@@ -615,7 +615,7 @@ def apply(s, faces, mat_face, materials, i_skin, i_face, neck_head, axis, i_isla
             neck_head = np.vstack([np.asarray(neck_head, float).reshape(-1, 3),
                                   pos0[first[seeds]] + np.array([0.0, COVERS_MM * MM, 0.0])])
     remove, border, lim, assessment = cut(pos0, faces, mat_face, i_skin, i_face, neck_head, axis, frozen)
-    assessment["vertices_figes"] = int(frozen.sum())
+    assessment["vertices_frozen"] = int(frozen.sum())
     guard = ~remove
     for v, p in zip(border.tolist(), _on_cut(pos0, faces[guard & (mat_face == i_skin)], border, lim)):
         s["pos"][v] = tuple(float(x) for x in p)

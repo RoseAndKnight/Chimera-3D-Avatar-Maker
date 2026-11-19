@@ -59,7 +59,7 @@ def q_mirror_x(q):
     return np.array([q[0], q[1], -q[2], -q[3]])
 
 
-def order_topologique(parents, sources_addition):
+def topological_order(parents, sources_addition):
     """Order in which each bone comes after its parent and after the source of its append."""
     n = len(parents)
     deps = [set() for _ in range(n)]
@@ -104,7 +104,7 @@ def kinematics(heads, parents, addition_source, addition_factor, addition_rot, a
     d_eff = [np.zeros(3) for _ in range(n)]
     R = np.zeros((n, 3, 3))
     t = np.zeros((n, 3))
-    for b in order_topologique(parents, addition_source):
+    for b in topological_order(parents, addition_source):
         q = np.asarray(rotations.get(b, IDENTITY), dtype=np.float64)
         d = np.asarray(displacements.get(b, np.zeros(3)), dtype=np.float64)
         s = addition_source[b]
@@ -130,7 +130,7 @@ def kinematics(heads, parents, addition_source, addition_factor, addition_rot, a
 def skinning(pos, idx, weight, heads, R, t, normalize=True):
     """Linear skinning. idx, weight: (n, K) with idx = -1 for an empty slot.
 
-    normaliser=True reproduces Blender's Armature modifier (division by the
+    normalize=True reproduces Blender's Armature modifier (division by the
     sum of the weights, vertices with a zero sum left in place); False reproduces MMD.
     """
     pos = np.asarray(pos, dtype=np.float64)
