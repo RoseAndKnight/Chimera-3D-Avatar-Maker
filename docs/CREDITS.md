@@ -4,6 +4,11 @@ Every character in these images is assembled by Chimera 3D Avatar Maker from par
 Each model listed below is an original character by its author, published on VRoid Hub under the VRM licence terms quoted with it.
 No model based on an existing work, a real person or an uncertain source was used.
 
+The face-tracking expressions (the 52 Perfect Sync / ARKit shapes and their extras) are copied onto every face from
+[hinzka/52blendshapes-for-VRoid-face](https://github.com/hinzka/52blendshapes-for-VRoid-face) v1.1.3, made on the
+VRoid Studio V1.1.0 sample models: free for personal and commercial use, redistribution and sale of modified data
+allowed, no credit required, no warranty.
+
 ## header.jpg
 
 Five characters, left to right.

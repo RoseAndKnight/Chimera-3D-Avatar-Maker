@@ -127,7 +127,14 @@ The shortest path to characters of your own is **VRoid Studio**: a character exp
     python3 -I tools/vroid/importer.py <file.vrm>... --output <folder>
 
 Then, in `settings.json`, set `games.active` = `vroid` (the default) and `games.vroid.mmd_extracted` = that folder.
-The base head is the one of the base character. Next steps and limits: `COMPATIBILITY.md`,
+The base head is the one of the base character.
+
+Face-tracking expressions (optional): put `VRoid_V110_Female_v1.1.3.vrm` and `VRoid_V110_Male_v1.1.3.vrm` from
+https://github.com/hinzka/52blendshapes-for-VRoid-face (free for personal and commercial use) in
+`<data>/sources/vroid/perfect-sync` (or point `games.vroid.perfect_sync` at their folder). The importer then gives
+every face the 52 Perfect Sync (ARKit) shapes, calibrated to its eyes and lips, and the VRM export carries them as
+custom expressions for iPhone face-tracking apps; `--no-perfect-sync` leaves them out. Without the files, nothing
+changes. Next steps and limits: `COMPATIBILITY.md`,
 VRoid section.
 
 Once your models are in place, prepare the catalogue (Blender, several minutes):
@@ -141,6 +148,7 @@ If the base body or the base head is missing, `prepare` says so and runs nothing
 
     python3 -I tools/workshop/tests/test_workshop.py
     python3 -I tools/vroid/tests/test_importer.py
+    python3 -I tools/vroid/tests/test_perfect_sync.py
     python3 -I tools/vroid_base/tests/test_vroid_base.py
 
 (`python3` always means a Python with numpy, for instance Blender's.)

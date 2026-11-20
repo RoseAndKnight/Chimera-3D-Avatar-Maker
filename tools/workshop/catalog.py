@@ -472,6 +472,7 @@ def build(write=True):
         return out
 
     heads, hairstyles, parts = cards("heads"), cards("hairstyles"), cards("parts")
+    hairstyles.sort(key=lambda m: m["id"] != FREE)   # the base hairstyle first: the one the page opens on
     for m, the_key in [(m, "head") for m in heads] + [(m, "hairstyle") for m in hairstyles]:
         if m["id"] == FREE:      # the base's own: today's name, not the one written when it was prepared
             m["name"] = NAMES_BASE[the_key]
@@ -481,8 +482,7 @@ def build(write=True):
         if m.get("kept") and n is not None and n > C.NOTE_REFUSALS:   # the record keeps kept: only the catalogue drops it
             m["kept"], m["reason"] = False, "shape damaged by fitting (review score %s, limit %s)" % (n, C.NOTE_REFUSALS)
     for m in hairstyles:   # the rule may have changed since posing: it is read again from the pairs
-        if "pairs" in m:
-            m["kept"], m["reason"] = C.hairstyle_kept(m["pairs"], m.get("own"))
+        m["kept"], m["reason"] = C.hairstyle_state(m)
     refusals = []
     for kind, items in (("face", heads), ("hairstyle", hairstyles), ("fraction", parts)):
         for m in items:

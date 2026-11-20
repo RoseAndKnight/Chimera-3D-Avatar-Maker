@@ -276,6 +276,16 @@ V_SKIN = 29   # version of the heads (face stitched onto the base head; older he
 V_FITTING = 16         # 16 = a posed shoe grows up to 30 % to hold the foot (was 15 %), sizes over 15 % only when none smaller holds it; 15 = the per-bone fit of every part but a shoe is that of 13 again (14's two rules are a shoe's), a shoe's shaft is fitted around the leg like a sleeve instead of pushed out vertex by vertex from the ankle up; 14 = for a shoe, a bone whose tail is another bone found on both bodies is measured to that bone's head on the target too (a VRoid knee's tail stops mid-shin), a deformation duplicate without a tail (ひざD) turns like the bone it copies, not like its parent (the thigh); a shoe's foot part is always kept in one block (a flat shoe too, and the last resort carries it flat with the bones, heel sunk) and never pushed out of the foot vertex by vertex; 13 = a shoe whose foot is posed less than 8° (no heel) keeps the flat fit, a posed shoe takes the smallest size that holds the foot, each shoe moves with its own side; 12 = a shoe with a heel is worn on feet posed into it (clothes/foot.py), sized and lowered as a whole onto its sole, the model raised by its height; 11 = a deformation duplicate missing from the target (足首D on a VRoid body) is placed with the bone it copies, not at the hips; 10 = on the trunk a part keeps its anatomical height (landmarks measured on both bodies); 9 = a lid (closed fan a limb goes through) stays hidden in the body instead of being pushed out; 8 = a ring accessory also tries the block and the transport, a piece held by a single bone keeps its shape; 7 = a fabric seen edge-on (backing that closes a hem) does not bound the body; 6 = a limb is measured only on its skin (no more fins at the armpits); 5 = under the crotch and far from the body, the part finds its place from what it surrounds
 
 
+def hairstyle_state(record):
+    """(kept, reason) of a hairstyle record. A record that carries "withdrawn" (a reason, written by hand in its
+    meta.json) is out of the catalogue and of the package whatever its fit; otherwise the fit decides."""
+    if record.get("withdrawn"):
+        return False, "withdrawn: %s" % record["withdrawn"]
+    if "pairs" in record:
+        return hairstyle_kept(record["pairs"], record.get("own"))
+    return record.get("kept"), record.get("reason")
+
+
 def hairstyle_kept(pairs, own):
     """(kept, reason) of a hairstyle placed on the catalogue's heads. A hairstyle that fits its
     own head is kept: the page reports, face by face, those where it does not sit cleanly.

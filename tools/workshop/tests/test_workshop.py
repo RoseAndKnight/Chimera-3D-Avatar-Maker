@@ -353,6 +353,19 @@ class TestVrm(unittest.TestCase):
         self.assertIn("VRMC_vrm", doc["extensions"])
         self.assertTrue(all("VRMC_materials_mtoon" in m["extensions"] for m in doc["materials"]))
 
+    def test_arkit_shapes_written_as_custom_expressions(self):
+        P = small_pmx()
+        P["morphs"].append({"name": "jawOpen", "type": 1, "offsets": [(0, (0.0, -0.1, 0.0))]})
+        with tempfile.TemporaryDirectory() as d:
+            ch = os.path.join(d, "x.vrm")
+            r = VR.write_vrm(P, ch, {})
+            self.assertEqual(VR.validate(ch), [])
+            doc, _ = VR.read(ch)
+        self.assertEqual(r["custom_expressions"], 1)
+        custom = doc["extensions"]["VRMC_vrm"]["expressions"]["custom"]
+        self.assertEqual(list(custom), ["jawOpen"])
+        self.assertEqual(doc["meshes"][0]["extras"]["targetNames"], ["まばたき", "jawOpen"])
+
     def test_arm_a_l_horizontal(self):
         S = VR.Skeleton(small_pmx())
         Pw, _ = S.tpose()

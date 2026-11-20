@@ -1,8 +1,9 @@
 """VRoid importer: a VRoid character (.vrm, VRM 0.x from VRoid Studio or VRM 1.0 from VRoid Hub) written as PMX in
 the common language.
 
-    python3 -I importer.py <file.vrm>... [--output <folder>]
-        writes <folder>/<Name>/<Name>.pmx and its textures (default: the `mmd_extracted` source of the "vroid" game)
+    python3 -I importer.py <file.vrm>... [--output <folder>] [--no-perfect-sync | --perfect-sync-donor female|male]
+        writes <folder>/<Name>/<Name>.pmx and its textures (default: the `mmd_extracted` source of the "vroid" game),
+        and perfect_sync.json (the Perfect Sync report)
     python3 -I importer.py show <file.vrm>
         says what the file contains, without writing anything
 
@@ -19,7 +20,9 @@ What the conversion does (tables in tools/games/vroid/game.json):
   - materials: translated by `materials` (颜 face skin, 肌 body skin, 目 iris, 髪 hair…), the original
     name kept as the English name; the primitives of the same material are merged;
   - expressions: the face shapes (Fcl_*) become vertex morphs, with the MMD names of `morphs_mmd`
-    when there is one, otherwise under their own name;
+    when there is one, otherwise under their own name; the face also receives the 52 Perfect Sync (ARKit) shapes
+    and the extra shapes of Hinzka's free models, under their own names (perfect_sync.py: matched by material and
+    UV, eyelids and lips calibrated, checked);
   - textures: the base colour of each material, taken from the file as it is.
   - erased faces: a material cut out by its texture (alphaMode MASK) loses the faces that the texture makes
     entirely transparent (`invisibles`): the legs of shorts, the sleeves of a tank top.
@@ -46,7 +49,7 @@ import sys
 import numpy as np
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-sys.path[:0] = [os.path.join(HERE, ".."), os.path.join(HERE, "..", "atlas"), os.path.join(HERE, "..", "head")]
+sys.path[:0] = [HERE, os.path.join(HERE, ".."), os.path.join(HERE, "..", "atlas"), os.path.join(HERE, "..", "head")]
 import pmx as PMX             # noqa: E402
 import pmx_write as pmx_write             # noqa: E402
 
@@ -342,9 +345,11 @@ def tails(bones, children):
             o["tail_offset"] = tuple(float(x) for x in 0.5 * d)
 
 
-def convert(path, folder, D=None, log=print, keep=()):
+def convert(path, folder, D=None, log=print, keep=(), perfect_sync="auto"):
     """Writes <folder>/<Name>.pmx and its textures. Returns a short summary. `keep`: common names (肌…) whose
-    faces stay even when their texture erases them (the VRoid base keeps all the skin and repaints it)."""
+    faces stay even when their texture erases them (the VRoid base keeps all the skin and repaints it).
+    `perfect_sync`: donor of the Perfect Sync shapes added to the face (perfect_sync.py: "auto", "female", "male"),
+    None for none."""
     D = D or description()
     M = Model(path)
     j, b = M.j, M.b
@@ -355,11 +360,14 @@ def convert(path, folder, D=None, log=print, keep=()):
     faces_mat = {}            # glTF material -> [faces]
     morphs = {}              # name -> (indices, offsets); a shape split over several primitives is put back together
     n_vert = 0
+    face_rows, face_faces = [], {}     # the face mesh (the one carrying the face skin): its vertices, its faces per material
     for node, mesh, skin in M.meshes():
+        keys = [translate(j["materials"][p["material"]].get("name", ""), D["materials"])[0] for p in mesh["primitives"]]
+        is_face = "颜" in keys
         to_os = np.array([rank[n] for n in skin["joints"]]) if skin else None
         B = M.bond(node, skin)
         seen, link = set(), {}
-        for pr in mesh["primitives"]:
+        for pr, common in zip(mesh["primitives"], keys):
             at = pr["attributes"]
             the_key = at["POSITION"]
             if the_key not in blocks:
@@ -387,9 +395,13 @@ def convert(path, folder, D=None, log=print, keep=()):
                 uv.append(accessory(j, b, at["TEXCOORD_0"]).astype(float) if "TEXCOORD_0" in at else np.zeros((len(p), 2)))
                 jo.append(o)
                 po.append(w)
+                if is_face:
+                    face_rows.append(np.arange(n_vert, n_vert + len(p)))
                 n_vert += len(p)
             offset = blocks[the_key]
             f = accessory(j, b, pr["indices"]).reshape(-1, 3).astype(np.int64) + offset
+            if is_face:
+                face_faces.setdefault(common or "?", []).append(f)
             faces_mat.setdefault(pr["material"], []).append(f[:, ::-1] if M.flips else f)
             names = pr.get("extras", {}).get("targetNames") or mesh.get("extras", {}).get("targetNames") or []
             for k, target in enumerate(pr.get("targets", [])):
@@ -405,6 +417,17 @@ def convert(path, folder, D=None, log=print, keep=()):
                     i0, d0 = morphs.get(nm, (np.zeros(0, np.int64), np.zeros((0, 3))))
                     morphs[nm] = (np.concatenate([i0, idx + offset]), np.concatenate([d0, d[idx] * M.S]))
     pos, nor, uv, jo, po = [np.concatenate(x) for x in (pos, nor, uv, jo, po)]
+    # --- Perfect Sync: the shapes of Hinzka's face that this face lacks (perfect_sync.py), offsets in the PMX frame
+    sync = None
+    if perfect_sync and face_rows:
+        import perfect_sync as PS
+        rows = np.concatenate(face_rows)
+        key = np.full(len(pos), "", object)
+        for k, lf in face_faces.items():
+            key[np.concatenate(lf).ravel()] = k
+        added, sync = PS.add(pos, uv, rows, key[rows], np.concatenate(face_faces.get("颜", [np.zeros((0, 3), np.int64)])),
+                             {name_court(x) for x in morphs}, perfect_sync, log=log)
+        morphs.update(added)
     # --- A-pose: the arms rotated around the shoulder, each vertex according to its weight on the arm
     angle = float(D["pose"]["arm"])
     children = {}
@@ -553,6 +576,17 @@ def convert(path, folder, D=None, log=print, keep=()):
     if invisible:
         assessment["faces_invisible"] = invisible
         log("%d faces erased by the transparency of their texture, removed" % invisible)
+    if sync is not None:
+        if sync.get("names"):       # the check of morphs.py on the added shapes: frozen parts, parts piercing the skin, empty
+            import perfect_sync as PS
+            bad, n_checked = PS.checked(output, sync["names"])
+            sync["check"] = {"checked": n_checked, "defects": bad}
+            log("perfect sync check: %d shapes, %d with a defect%s" % (n_checked, len(bad), (": " + ", ".join(
+                b["morph"] + (" (expected)" if b.get("expected") else "") for b in bad)) if bad else ""))
+        with open(os.path.join(folder, "perfect_sync.json"), "w", encoding="utf-8") as f:
+            json.dump(sync, f, ensure_ascii=False, indent=1)
+        assessment["perfect_sync"] = {k: sync[k] for k in ("donor", "vertices", "unmatched", "added", "skipped", "calibration", "check")
+                                      if k in sync}
     return assessment
 
 
@@ -582,6 +616,14 @@ def main(argv=None):
         for c in argv[1:]:
             see(c)
         return 0
+    sync = "auto"
+    if "--no-perfect-sync" in argv:
+        argv.remove("--no-perfect-sync")
+        sync = None
+    if "--perfect-sync-donor" in argv:
+        k = argv.index("--perfect-sync-donor")
+        sync = argv[k + 1]
+        del argv[k:k + 2]
     output = None
     if "--output" in argv:
         k = argv.index("--output")
@@ -593,7 +635,7 @@ def main(argv=None):
     for c in argv:
         name = os.path.splitext(os.path.basename(c))[0]
         try:
-            convert(c, os.path.join(output, name))
+            convert(c, os.path.join(output, name), perfect_sync=sync)
         except Refusals as e:      # said as is, on one line that the workshop relays (tools/workshop/inputs.py)
             print("refused: %s" % str(e).replace(c, "the file"), file=sys.stderr)
             return 2

@@ -50,6 +50,18 @@ EXPRESSIONS = {
     "blink": ["まばたき"], "blinkLeft": ["ウィンク", "ウィンク２"], "blinkRight": ["ウィンク右", "ウィンク２右"],
     "aa": ["あ"], "ih": ["い"], "ou": ["う"], "ee": ["え"], "oh": ["お"],   # VRM preset names
 }
+# The 52 ARKit shapes (Perfect Sync, added to VRoid faces by tools/vroid/perfect_sync.py): written as custom
+# expressions under the same names, where iPhone face-tracking apps look for them
+ARKIT = [
+    "browInnerUp", "browDownLeft", "browDownRight", "browOuterUpLeft", "browOuterUpRight",
+    "eyeLookUpLeft", "eyeLookUpRight", "eyeLookDownLeft", "eyeLookDownRight", "eyeLookInLeft", "eyeLookInRight",
+    "eyeLookOutLeft", "eyeLookOutRight", "eyeBlinkLeft", "eyeBlinkRight", "eyeSquintLeft", "eyeSquintRight",
+    "eyeWideLeft", "eyeWideRight", "cheekPuff", "cheekSquintLeft", "cheekSquintRight", "noseSneerLeft", "noseSneerRight",
+    "jawOpen", "jawForward", "jawLeft", "jawRight", "mouthFunnel", "mouthPucker", "mouthLeft", "mouthRight",
+    "mouthRollUpper", "mouthRollLower", "mouthShrugUpper", "mouthShrugLower", "mouthClose", "mouthSmileLeft",
+    "mouthSmileRight", "mouthFrownLeft", "mouthFrownRight", "mouthDimpleLeft", "mouthDimpleRight", "mouthUpperUpLeft",
+    "mouthUpperUpRight", "mouthLowerDownLeft", "mouthLowerDownRight", "mouthPressLeft", "mouthPressRight",
+    "mouthStretchLeft", "mouthStretchRight", "tongueOut"]
 
 
 def _to_gltf(v):
@@ -282,8 +294,9 @@ def write_vrm(P, output, images, name="Character", author="Chimera", twist=None,
             if c in morphs:
                 chosen[expr] = morphs[c]
                 break
+    custom = {n: morphs[n] for n in ARKIT if n in morphs}
     with_morph = set()
-    for m in chosen.values():
+    for m in list(chosen.values()) + list(custom.values()):
         with_morph.update(i for i, _ in m["offsets"])
     head = [i for i, f in enumerate(mats) if len(f) and any(int(x) in with_morph for x in np.unique(f))]
     others = [i for i, f in enumerate(mats) if len(f) and i not in head]
@@ -341,8 +354,8 @@ def write_vrm(P, output, images, name="Character", author="Chimera", twist=None,
         meshes.append(d)
         return len(meshes) - 1
 
-    targets = list(dict.fromkeys(id(m) for m in chosen.values()))
-    per_id = {id(m): m for m in chosen.values()}
+    targets = list(dict.fromkeys(id(m) for m in list(chosen.values()) + list(custom.values())))
+    per_id = {id(m): m for m in list(chosen.values()) + list(custom.values())}
     targets_m = [per_id[c] for c in targets]
     if head:
         i_head = mesh(head, "head", targets_m)
@@ -434,12 +447,17 @@ def write_vrm(P, output, images, name="Character", author="Chimera", twist=None,
         for expr, m in chosen.items():
             preset[expr] = {"morphTargetBinds": [{"node": i_node_head, "index": targets.index(id(m)), "weight": 1.0}], "isBinary": expr.startswith("blink"),
                             "overrideBlink": "none", "overrideLookAt": "none", "overrideMouth": "none"}
+    custom_e = {}
+    if head:
+        for expr, m in custom.items():
+            custom_e[expr] = {"morphTargetBinds": [{"node": i_node_head, "index": targets.index(id(m)), "weight": 1.0}], "isBinary": False,
+                              "overrideBlink": "none", "overrideLookAt": "none", "overrideMouth": "none"}
     ext = {"specVersion": "1.0", "meta": {
         "name": name, "version": "1.0", "authors": [author], "licenseUrl": "https://vrm.dev/licenses/1.0/", "avatarPermission": "onlyAuthor",
         "allowExcessivelyViolentUsage": False, "allowExcessivelySexualUsage": False, "commercialUsage": "personalNonProfit",
         "allowPoliticalOrReligiousUsage": False, "allowAntisocialOrHateUsage": False, "creditNotation": "required",
         "allowRedistribution": False, "modification": "prohibited"},
-        "humanoid": {"humanBones": human}, "expressions": {"preset": preset}}
+        "humanoid": {"humanBones": human}, "expressions": dict({"preset": preset}, **({"custom": custom_e} if custom_e else {}))}
     doc = {"asset": {"version": "2.0", "generator": "Chimera"}, "scene": 0, "scenes": [{"nodes": scene}], "nodes": nodes,
            "meshes": meshes, "skins": [skin], "materials": materials, "accessors": B.accessory, "bufferViews": B.views,
            "buffers": [{"byteLength": 0}], "samplers": [{"magFilter": 9729, "minFilter": 9729, "wrapS": 10497, "wrapT": 10497}],
@@ -460,7 +478,7 @@ def write_vrm(P, output, images, name="Character", author="Chimera", twist=None,
         f.write(struct.pack("<II", len(j), 0x4E4F534A) + j)
         f.write(struct.pack("<II", len(B.o), 0x004E4942) + bytes(B.o))
     os.replace(tmp, output)
-    return {"vertices": int(len(X)), "bones": n_joints, "humanoids": len(human), "constraints": constraints, "expressions": len(preset), "materials": len(materials), "bytes": total}
+    return {"vertices": int(len(X)), "bones": n_joints, "humanoids": len(human), "constraints": constraints, "expressions": len(preset), "custom_expressions": len(custom_e), "materials": len(materials), "bytes": total}
 
 
 def images_blender(P, folder, cap=2048):
@@ -569,7 +587,8 @@ def validate(path):
                 defaults.append("weights not summing to 1 (deviation %.4f)" % float(np.abs(w - 1).max()))
             if pr.get("targets"):
                 n_morph[mi] = len(pr["targets"])
-    for name, e in ext.get("expressions", {}).get("preset", {}).items():
+    expressions = ext.get("expressions", {})
+    for name, e in list(expressions.get("preset", {}).items()) + list(expressions.get("custom", {}).items()):
         for mb in e.get("morphTargetBinds", []):
             ni = doc["nodes"][mb["node"]].get("mesh")
             if ni is None or mb["index"] >= n_morph.get(ni, 0):

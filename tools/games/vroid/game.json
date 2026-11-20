@@ -4,7 +4,8 @@
  "format": "vrm",
  "sources": {
   "vrm": "{data}/sources/vroid/vrm",
-  "mmd_extracted": "{data}/sources/vroid/mmd-extracted"
+  "mmd_extracted": "{data}/sources/vroid/mmd-extracted",
+  "perfect_sync": "{data}/sources/vroid/perfect-sync"
  },
  "_models": "\"*\": every <Name>/ folder of mmd_extracted that holds <Name>.pmx is a character (what the importer writes). Everyone brings their own.",
  "models": "*",
@@ -188,7 +189,7 @@
   "Fcl_MTH_Sorrow": "への字",
   "Fcl_MTH_Surprised": "▲"
  },
- "_panels": "MMD panel of a morph, from its name: 1 eyebrows, 2 eyes, 3 mouth, 4 other.",
+ "_panels": "MMD panel of a morph, from its name: 1 eyebrows, 2 eyes, 3 mouth, 4 other (VRoid Fcl_ shapes, then the Perfect Sync ARKit shapes and their extras).",
  "panels": [
   [
    "Fcl_BRW_",
@@ -200,6 +201,18 @@
   ],
   [
    "Fcl_MTH_|Fcl_HA_",
+   3
+  ],
+  [
+   "^_?brow",
+   1
+  ],
+  [
+   "^_?eye",
+   2
+  ],
+  [
+   "^_?(mouth|jaw|tongue|cheek|nose)",
    3
   ]
  ],

@@ -118,4 +118,7 @@ change otherwise.
 Code: MIT, see [LICENSE](LICENSE). Personal and commercial use, modification and redistribution of the code are
 allowed, with no warranty. The licence covers the code only: the models, and the characters built from them, stay
 under their own terms (see "Your models, your responsibility"). The images in `docs/images` show characters built from third-party VRoid Hub
-models, credited in [docs/CREDITS.md](docs/CREDITS.md); the MIT licence does not cover those models.
+models, credited in [docs/CREDITS.md](docs/CREDITS.md); the MIT licence does not cover those models. The face-tracking
+(Perfect Sync) expressions are copied from hinzka's free
+[52blendshapes-for-VRoid-face](https://github.com/hinzka/52blendshapes-for-VRoid-face) v1.1.3 (personal and
+commercial use, redistribution of modified data allowed, no credit required).

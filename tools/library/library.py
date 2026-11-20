@@ -27,7 +27,7 @@ def _option(a, name, default=None):
 
 
 def main(a):
-    if not a or a[0] in ("-h", "--help"):
+    if not a or "-h" in a or "--help" in a:
         print(__doc__)
         return 0
     command, a = a[0], list(a[1:])

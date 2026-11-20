@@ -231,7 +231,7 @@ class Plan:
             if not m or i not in self.keep:
                 continue
             m["pairs"] = {t: p for t, p in (m.get("pairs") or {}).items() if t in heads}
-            ok, _ = C.hairstyle_kept(m["pairs"], m.get("own")) if "pairs" in m else (m.get("kept"), None)
+            ok, _ = C.hairstyle_state(m)
             u = "cache/hairstyles/" + i
             self.units.append(u)
             self.json_added("hairstyles", u + "/meta.json", m)
@@ -466,6 +466,9 @@ def credits(sources, usage):
               "",
               "Before using a character you assembled, read the terms of **each** model whose parts it carries "
               "(columns below; the full fields are in `sources.json`, the current terms on the model's page).",
+              "", "Face-tracking expressions (the 52 Perfect Sync / ARKit shapes and their extras, in every face): copied from "
+              "[hinzka/52blendshapes-for-VRoid-face](https://github.com/hinzka/52blendshapes-for-VRoid-face) v1.1.3, "
+              "free for personal and commercial use, redistribution and sale of modified data allowed, no credit required.",
               "", "Parts: F = face, H = hairstyle, P = clothes and accessories.", "",
               "| Id | Model | Author | Page | Parts | Credit | Commercial use | Not allowed | Other terms |",
               "|---|---|---|---|---|---|---|---|---|"]
